@@ -1,4 +1,3 @@
-
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -8,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Trash2, Printer, Save, Loader2, Info, Truck, MapPin, MessageCircle } from "lucide-react";
+import { PlusCircle, Trash2, Printer, Save, Loader2, Info, Truck, MapPin, MessageCircle, Image as ImageIcon } from "lucide-react";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useData } from "@/contexts/data-provider";
 import { useToast } from "@/hooks/use-toast";
@@ -59,43 +58,6 @@ interface Customer {
     name: string;
 }
 
-interface Warehouse {
-    id: string;
-    name: string;
-    autoStockUpdate?: boolean;
-}
-
-interface CashAccount {
-    id: string;
-    name: string;
-    userId?: string;
-}
-
-
-interface IssueToRep {
-    id: string;
-    salesRepId: string;
-    warehouseId: string; // The source warehouse
-    items: { id: string; qty: number; price: number; }[];
-}
-interface ReturnFromRep {
-    id: string;
-    salesRepId: string;
-    warehouseId: string; // The destination warehouse
-    items: { id: string; qty: number; price: number; }[];
-}
-
-interface SaleInvoice { 
-    id: string; 
-    warehouseId: string; 
-    salesRepId?: string;
-    items: { id: string; qty: number; }[];
-    status?: 'pending' | 'approved';
-    customer?: any; // To hold the customer object for the template
-    customerId: string; // Ensure customerId is here
-    invoiceNumber: string; // Ensure invoiceNumber is here
-}
-
 export default function SalesRepInvoicePage() {
     const { toast } = useToast();
     const router = useRouter();
@@ -129,6 +91,7 @@ export default function SalesRepInvoicePage() {
     const [invoiceToShare, setInvoiceToShare] = useState<any>(null);
 
 
+    const allDataContext = useData();
     const { 
         items: allItems, 
         customers, 
@@ -141,8 +104,12 @@ export default function SalesRepInvoicePage() {
         dbAction,
         getNextId,
         loading,
-        users 
-    } = useData();
+        users,
+        posSales,
+        customerPayments,
+        posReturns,
+        salesReturns
+    } = allDataContext;
     
     const companySettings = useMemo(() => settings?.main?.general || {}, [settings]);
     const deliveryStaff = useMemo(() => users.filter((u: any) => u.isDelivery), [users]);
@@ -172,19 +139,48 @@ export default function SalesRepInvoicePage() {
         );
     };
 
+    const calculateCustomerBalance = (cId: string) => {
+        const customer = customers.find((c: any) => c.id === cId);
+        if (!customer) return 0;
+
+        let balance = Number(customer.openingBalance) || 0;
+        
+        salesInvoices.filter((inv: any) => inv.customerId === cId && inv.status === 'approved')
+            .forEach((inv: any) => {
+                balance += (Number(inv.total) - Number(inv.paidAmount || 0));
+            });
+
+        posSales.filter((sale: any) => sale.customerId === cId)
+            .forEach((sale: any) => {
+                balance += (Number(sale.total) - Number(sale.paidAmount || 0));
+            });
+
+        customerPayments.filter((p: any) => p.customerId === cId && !p.invoiceId)
+            .forEach((p: any) => {
+                balance -= Number(p.amount);
+            });
+
+        salesReturns.filter((r: any) => r.customerId === cId)
+            .forEach((r: any) => {
+                balance -= Number(r.total);
+            });
+        
+        posReturns.filter((r: any) => r.customerId === cId)
+            .forEach((r: any) => {
+                balance -= Number(r.total);
+            });
+
+        return balance;
+    };
+
     const itemsInRepCustody = useMemo(() => {
         if (!isRep || !user?.id || !allItems.length) return [];
         
-        // Find the warehouse associated with this rep
         const repWarehouse = warehouses.find((w: any) => w.repId === user.id);
-        
-        // If rep warehouse is closed, they cannot sell anything
-        if (repWarehouse?.isClosed) {
-            return [];
-        }
+        if (repWarehouse?.isClosed) return [];
         
         const repStock = new Map<string, number>();
-        const sourceWarehouseMap = new Map<string, string>(); // itemId -> warehouseId
+        const sourceWarehouseMap = new Map<string, string>();
 
         issuesToReps
             .filter((issue: any) => issue.salesRepId === user.id)
@@ -198,7 +194,7 @@ export default function SalesRepInvoicePage() {
             });
 
         salesInvoices
-            .filter((sale: any) => sale.salesRepId === user.id) // Subtract both pending and approved
+            .filter((sale: any) => sale.salesRepId === user.id)
             .forEach((sale: any) => {
                 sale.items.forEach((item: any) => {
                     repStock.set(item.id, (repStock.get(item.id) || 0) - item.qty);
@@ -216,7 +212,7 @@ export default function SalesRepInvoicePage() {
         return allItems
             .map((item: any) => ({ ...item, stock: repStock.get(item.id) || 0, sourceWarehouseId: sourceWarehouseMap.get(item.id) }))
             .filter((item: any) => item.stock > 0);
-    }, [isRep, user?.id, allItems, issuesToReps, salesInvoices, returnsFromReps]);
+    }, [isRep, user?.id, allItems, issuesToReps, salesInvoices, returnsFromReps, warehouses]);
 
 
     const itemsForCombobox = useMemo(() => {
@@ -375,7 +371,7 @@ export default function SalesRepInvoicePage() {
         setIsLoadingShare(true);
         setInvoiceToShare(invoiceData);
     
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, 200));
     
         if (invoiceRef.current === null) {
             console.error('Invoice ref is not available.');
@@ -389,7 +385,7 @@ export default function SalesRepInvoicePage() {
             const blob = await (await fetch(dataUrl)).blob();
             const file = new File([blob], `${invoiceData.invoiceNumber}.png`, { type: blob.type });
     
-            if (navigator.share && navigator.canShare({ files: [file] })) {
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                 await navigator.share({
                     files: [file],
                     title: `فاتورة ${invoiceData.invoiceNumber}`,
@@ -423,7 +419,7 @@ export default function SalesRepInvoicePage() {
             return;
         }
         
-        const repCashAccount = cashAccounts.find((acc: CashAccount) => acc.userId === user?.id);
+        const repCashAccount = cashAccounts.find((acc: any) => acc.userId === user?.id);
         if (paidAmount > 0 && !repCashAccount) {
             toast({ variant: "destructive", title: "خطأ في الحسابات", description: `لم يتم العثور على حساب عهدة لهذا المندوب لاستلام الدفعة.` });
             return;
@@ -444,7 +440,7 @@ export default function SalesRepInvoicePage() {
             if (itemSources.size > 0) {
                  return [...itemSources.entries()].sort((a,b) => b[1] - a[1])[0][0];
             }
-            return user?.warehouseIds?.[0]; // Fallback to the first assigned warehouse
+            return user?.warehouseIds?.[0];
         };
         
         const warehouseId = findDominantSourceWarehouse();
@@ -481,7 +477,7 @@ export default function SalesRepInvoicePage() {
             const newInvoiceId = await dbAction(`salesInvoices`, 'add', invoiceData);
             if (!newInvoiceId) throw new Error("Failed to save invoice.");
             
-            toast({ title: 'تم الحفظ', description: 'جاري تجهيز الفاتورة للمشاركة...' });
+            toast({ title: 'تم الحفظ', description: 'جاري تجهيز الفاتورة للمشاركة كصورة...' });
             
             await shareInvoice({ ...invoiceData, id: newInvoiceId });
 
@@ -514,24 +510,6 @@ export default function SalesRepInvoicePage() {
                 </Card>
             </div>
         )
-    }
-
-    const repWarehouse = warehouses.find((w: any) => w.repId === user?.id);
-    if (repWarehouse?.isClosed) {
-        return (
-            <div className="container mx-auto py-10">
-                <Alert variant="destructive" className="max-w-2xl mx-auto">
-                    <Info className="h-4 w-4" />
-                    <AlertTitle>المخزن مغلق</AlertTitle>
-                    <AlertDescription>
-                        عذراً، مخزن العهدة الخاص بك مغلق حالياً. لا يمكنك إجراء عمليات بيع حتى يتم فتح المخزن من قبل الإدارة.
-                    </AlertDescription>
-                </Alert>
-                <div className="flex justify-center mt-6">
-                    <Button variant="outline" onClick={() => router.back()}>العودة</Button>
-                </div>
-            </div>
-        );
     }
 
   return (
@@ -726,20 +704,20 @@ export default function SalesRepInvoicePage() {
           </CardFooter>
         </Card>
       </main>
-      {/* Hidden div for generating image */}
-        <div style={{ position: 'fixed', top: '150vh', left: 0, zIndex: -100 }}>
-            <div ref={invoiceRef}>
-                {invoiceToShare && (
-                    <InvoiceTemplate 
-                        invoice={invoiceToShare} 
-                        company={companySettings} 
-                        customer={customers.find((c: any) => c.id === invoiceToShare.customerId)}
-                    />
-                )}
-            </div>
-        </div>
+      
+      {/* عنصر مخفي لتوليد الصورة */}
+      <div style={{ position: 'fixed', top: '200vh', left: 0, zIndex: -100 }}>
+          <div ref={invoiceRef} className="bg-white">
+              {invoiceToShare && (
+                  <InvoiceTemplate 
+                      invoice={invoiceToShare} 
+                      company={companySettings} 
+                      customer={customers.find((c: any) => c.id === invoiceToShare.customerId)}
+                      customerBalance={calculateCustomerBalance(invoiceToShare.customerId)}
+                  />
+              )}
+          </div>
+      </div>
     </>
   );
 }
-
-    

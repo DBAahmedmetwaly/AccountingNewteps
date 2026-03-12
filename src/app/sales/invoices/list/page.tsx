@@ -1,7 +1,6 @@
-
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PlusCircle, Loader2, MoreHorizontal, FileText, Undo2, Printer, Eye, Truck, FileCheck, MessageCircle } from "lucide-react";
+import { PlusCircle, Loader2, MoreHorizontal, FileText, Undo2, Printer, Eye, Truck, CheckCircle, MessageCircle, Image as ImageIcon } from "lucide-react";
 import { useRouter } from 'next/navigation';
 import {
   DropdownMenu,
@@ -36,6 +35,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { InvoiceTemplate } from '@/components/invoice-template';
 import { PosReceipt } from '@/components/pos-receipt';
 import { Combobox } from '@/components/ui/combobox';
+import { toPng } from 'html-to-image';
 
 
 interface SaleInvoice {
@@ -91,6 +91,7 @@ const InvoiceItemsDialog = ({ items }: { items: any[] }) => (
 export default function SalesInvoicesListPage() {
   const { salesInvoices: invoices, customers, warehouses, inventoryClosings, customerPayments, salesReturns, posSales, posReturns, settings, loading } = useData();
   const router = useRouter();
+  const shareRef = useRef<HTMLDivElement>(null);
   
   const [filters, setFilters] = useState({
     customerId: "all",
@@ -104,6 +105,9 @@ export default function SalesInvoicesListPage() {
     type: 'A4',
     invoice: null
   });
+
+  const [isSharing, setIsSharing] = useState(false);
+  const [sharingData, setSharingData] = useState<{ invoice: SaleInvoice, type: 'A4' | 'Thermal' } | null>(null);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -155,25 +159,21 @@ export default function SalesInvoicesListPage() {
 
     let balance = Number(customer.openingBalance) || 0;
     
-    // 1. إضافة المبالغ المتبقية من فواتير البيع المعتمدة
     invoices.filter((inv: any) => inv.customerId === customerId && inv.status === 'approved')
         .forEach((inv: any) => {
             balance += (Number(inv.total) - Number(inv.paidAmount || 0));
         });
 
-    // 2. إضافة المبالغ المتبقية من فواتير الكاشير
     posSales.filter((sale: any) => sale.customerId === customerId)
         .forEach((sale: any) => {
             balance += (Number(sale.total) - Number(sale.paidAmount || 0));
         });
 
-    // 3. طرح المدفوعات التي لم يتم ربطها بفاتورة (لأن المرتبطة تم طرحها بالفعل في الخطوات السابقة)
     customerPayments.filter((p: any) => p.customerId === customerId && !p.invoiceId)
         .forEach((p: any) => {
             balance -= Number(p.amount);
         });
 
-    // 4. طرح المرتجعات
     salesReturns.filter((r: any) => r.customerId === customerId)
         .forEach((r: any) => {
             balance -= Number(r.total);
@@ -191,33 +191,51 @@ export default function SalesInvoicesListPage() {
     setTimeout(() => window.print(), 100);
   };
 
-  const handleShare = (invoice: SaleInvoice) => {
-    const text = `
-*فاتورة بيع*
----------------------
-*رقم الفاتورة:* ${invoice.invoiceNumber}
-*التاريخ:* ${new Date(invoice.date).toLocaleDateString('ar-EG')}
-*العميل:* ${invoice.customerName}
-*إجمالي الفاتورة:* ${invoice.total.toLocaleString()} ج.م
-*المدفوع:* ${invoice.paidAmount?.toLocaleString() || 0} ج.م
-*المتبقي من الفاتورة:* ${(invoice.total - (invoice.paidAmount || 0)).toLocaleString()} ج.م
-*إجمالي مديونية الحساب:* ${calculateCustomerBalance(invoice.customerId).toLocaleString()} ج.م
+  const handleShareAsImage = async (invoice: SaleInvoice, type: 'A4' | 'Thermal') => {
+    setSharingData({ invoice, type });
+    setIsSharing(true);
 
-شكراً لتعاملكم معنا!
-    `;
-    const encodedText = encodeURIComponent(text.trim());
-    window.open(`https://wa.me/?text=${encodedText}`);
+    // Wait for the hidden component to render
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    if (!shareRef.current) {
+        setIsSharing(false);
+        setSharingData(null);
+        return;
+    }
+
+    try {
+        const dataUrl = await toPng(shareRef.current, { cacheBust: true, quality: 0.95 });
+        const blob = await (await fetch(dataUrl)).blob();
+        const file = new File([blob], `${invoice.invoiceNumber}.png`, { type: blob.type });
+
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+                files: [file],
+                title: `فاتورة ${invoice.invoiceNumber}`,
+                text: `فاتورة مبيعات من ${companySettings.companyName}`,
+            });
+        } else {
+            // Fallback: Download
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = `${invoice.invoiceNumber}.png`;
+            link.click();
+            toast({ title: 'تم التحميل', description: 'تم تحميل صورة الفاتورة لعدم دعم المشاركة المباشرة.' });
+        }
+    } catch (err) {
+        console.error('Sharing failed', err);
+        toast({ variant: 'destructive', title: 'فشلت المشاركة', description: 'حدث خطأ أثناء محاولة إنشاء صورة الفاتورة.' });
+    } finally {
+        setIsSharing(false);
+        setSharingData(null);
+    }
   };
 
 
   return (
     <>
-      <PageHeader title="سجل فواتير البيع">
-        <Button size="sm" className="gap-1" onClick={() => router.push('/sales/invoices')}>
-          <PlusCircle className="h-4 w-4" />
-          إضافة فاتورة جديدة
-        </Button>
-      </PageHeader>
+      <PageHeader title="سجل فواتير البيع" />
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
         <Card className="no-print">
             <CardHeader>
@@ -253,9 +271,10 @@ export default function SalesInvoicesListPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {loading ? (
-              <div className="flex justify-center items-center py-10">
+            {loading || isSharing ? (
+              <div className="flex flex-col justify-center items-center py-10 gap-4">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                {isSharing && <p className="text-sm font-semibold animate-pulse">جاري تجهيز صورة الفاتورة للمشاركة...</p>}
               </div>
             ) : (
               <div className="w-full overflow-auto border rounded-lg">
@@ -277,7 +296,6 @@ export default function SalesInvoicesListPage() {
                       filteredInvoices.map((invoice:any) => {
                         const paid = invoice.paidAmount || 0;
                         const remaining = invoice.total - paid;
-                        const customer = customers.find((c:any) => c.id === invoice.customerId);
                         return (
                            <Dialog key={invoice.id}>
                             <TableRow className={invoice.isLocked ? 'bg-muted/30' : ''}>
@@ -321,8 +339,14 @@ export default function SalesInvoicesListPage() {
                                             <Printer className="ml-2 h-4 w-4" /> طباعة إيصال (Thermal)
                                         </DropdownMenuItem>
 
-                                        <DropdownMenuItem onClick={() => handleShare(invoice)}>
-                                            <MessageCircle className="ml-2 h-4 w-4 text-green-600" /> مشاركة واتساب
+                                        <DropdownMenuSeparator />
+                                        
+                                        <DropdownMenuItem onClick={() => handleShareAsImage(invoice, 'A4')}>
+                                            <ImageIcon className="ml-2 h-4 w-4 text-primary" /> مشاركة كصورة (A4)
+                                        </DropdownMenuItem>
+                                        
+                                        <DropdownMenuItem onClick={() => handleShareAsImage(invoice, 'Thermal')}>
+                                            <ImageIcon className="ml-2 h-4 w-4 text-green-600" /> مشاركة كصورة (إيصال)
                                         </DropdownMenuItem>
 
                                         <DropdownMenuSeparator />
@@ -388,6 +412,33 @@ export default function SalesInvoicesListPage() {
             </div>
         </DialogContent>
       </Dialog>
+
+      {/* عنصر مخفي لتوليد الصور للمشاركة */}
+      <div style={{ position: 'fixed', top: '200vh', left: 0, zIndex: -100 }}>
+          <div ref={shareRef} className="bg-white">
+              {sharingData && (
+                  sharingData.type === 'A4' ? (
+                      <InvoiceTemplate 
+                          invoice={sharingData.invoice} 
+                          company={companySettings} 
+                          customer={customers.find(c => c.id === sharingData.invoice.customerId)} 
+                          customerBalance={calculateCustomerBalance(sharingData.invoice.customerId)}
+                      />
+                  ) : (
+                      <div className="p-4">
+                          <PosReceipt 
+                              invoice={sharingData.invoice} 
+                              company={companySettings} 
+                              design={posReceiptDesign}
+                              warehouse={warehouses.find(w => w.id === sharingData.invoice.warehouseId)}
+                              customer={customers.find(c => c.id === sharingData.invoice.customerId)}
+                              customerBalance={calculateCustomerBalance(sharingData.invoice.customerId)}
+                          />
+                      </div>
+                  )
+              )}
+          </div>
+      </div>
     </>
   );
 }

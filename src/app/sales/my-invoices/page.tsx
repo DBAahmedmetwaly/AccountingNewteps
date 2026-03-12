@@ -1,5 +1,3 @@
-
-
 "use client";
 
 import React, { useState, useMemo, useRef } from 'react';
@@ -23,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, Eye, CheckCircle, Clock, MoreHorizontal, MessageCircle } from "lucide-react";
+import { Loader2, Eye, CheckCircle, Clock, MoreHorizontal, MessageCircle, Image as ImageIcon } from "lucide-react";
 import { useData } from "@/contexts/data-provider";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from 'next/navigation';
@@ -45,6 +43,7 @@ interface SaleInvoice {
   items: any[];
   customer?: any; // Added for template
   location?: { latitude: number; longitude: number };
+  customerId: string;
 }
 
 const InvoiceItemsDialog = ({ items }: { items: any[] }) => (
@@ -83,7 +82,7 @@ const InvoiceItemsDialog = ({ items }: { items: any[] }) => (
 
 export default function MyInvoicesPage() {
     const { user, loading: authLoading } = useAuth();
-    const { salesInvoices, customers, loading: dataLoading, settings } = useData();
+    const { salesInvoices, customers, loading: dataLoading, settings, customerPayments, salesReturns, posSales, posReturns } = useData();
     const router = useRouter();
     const invoiceRef = useRef<HTMLDivElement>(null);
     const [isLoadingShare, setIsLoadingShare] = useState(false);
@@ -142,12 +141,46 @@ export default function MyInvoicesPage() {
 
     const companySettings = useMemo(() => settings?.main?.general || {}, [settings]);
 
+    const calculateCustomerBalance = (customerId: string) => {
+        const customer = customers.find((c: any) => c.id === customerId);
+        if (!customer) return 0;
+
+        let balance = Number(customer.openingBalance) || 0;
+        
+        salesInvoices.filter((inv: any) => inv.customerId === customerId && inv.status === 'approved')
+            .forEach((inv: any) => {
+                balance += (Number(inv.total) - Number(inv.paidAmount || 0));
+            });
+
+        posSales.filter((sale: any) => sale.customerId === customerId)
+            .forEach((sale: any) => {
+                balance += (Number(sale.total) - Number(sale.paidAmount || 0));
+            });
+
+        customerPayments.filter((p: any) => p.customerId === customerId && !p.invoiceId)
+            .forEach((p: any) => {
+                balance -= Number(p.amount);
+            });
+
+        salesReturns.filter((r: any) => r.customerId === customerId)
+            .forEach((r: any) => {
+                balance -= Number(r.total);
+            });
+        
+        posReturns.filter((r: any) => r.customerId === customerId)
+            .forEach((r: any) => {
+                balance -= Number(r.total);
+            });
+
+        return balance;
+    };
+
     const handleShare = async (invoice: SaleInvoice) => {
         setIsLoadingShare(true);
         setSelectedInvoice(invoice);
 
         // A small delay to allow React to render the hidden invoice component
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, 150));
     
         if (invoiceRef.current === null) {
             console.error('Invoice ref is not available.');
@@ -168,7 +201,7 @@ export default function MyInvoicesPage() {
                     text: `فاتورة مبيعات من ${companySettings.companyName}`,
                 });
             } else {
-                 // Fallback for browsers that don't support sharing files
+                 // Fallback: Download
                 const link = document.createElement('a');
                 link.href = dataUrl;
                 link.download = `${invoice.invoiceNumber}.png`;
@@ -177,7 +210,6 @@ export default function MyInvoicesPage() {
         } catch (err: any) {
             console.error('Share failed:', err);
              if (err.name !== 'AbortError') {
-                // Handle other errors, maybe show a toast
                 alert('فشلت المشاركة. قد لا يكون متصفحك مدعومًا.');
              }
         } finally {
@@ -281,7 +313,7 @@ export default function MyInvoicesPage() {
                                             <TableHead>العميل</TableHead>
                                             <TableHead>التاريخ</TableHead>
                                             <TableHead className="text-center">الحالة</TableHead>
-                                            <TableHead className="text-center">الإجمالي</TableHead>
+                                            <TableHead className="text-center">إجمالي</TableHead>
                                             <TableHead className="text-center">المدفوع</TableHead>
                                             <TableHead className="text-center">المتبقي</TableHead>
                                             <TableHead className="text-center">الموقع</TableHead>
@@ -325,8 +357,8 @@ export default function MyInvoicesPage() {
                                                                 </DropdownMenuItem>
                                                             </DialogTrigger>
                                                             <DropdownMenuItem onClick={() => handleShare(inv)} disabled={isLoadingShare && selectedInvoice?.id === inv.id}>
-                                                                {isLoadingShare && selectedInvoice?.id === inv.id ? <Loader2 className="ml-2 h-4 w-4 animate-spin"/> : <MessageCircle className="ml-2 h-4 w-4"/>}
-                                                                واتساب
+                                                                {isLoadingShare && selectedInvoice?.id === inv.id ? <Loader2 className="ml-2 h-4 w-4 animate-spin"/> : <ImageIcon className="ml-2 h-4 w-4"/>}
+                                                                مشاركة كصورة
                                                             </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
@@ -334,7 +366,7 @@ export default function MyInvoicesPage() {
                                             </TableRow>
                                         )) : (
                                             <TableRow>
-                                                <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">لا توجد فواتير لعرضها.</TableCell>
+                                                <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">لا توجد فواتير لعرضها.</TableCell>
                                             </TableRow>
                                         )}
                                     </TableBody>
@@ -346,9 +378,16 @@ export default function MyInvoicesPage() {
                 </Card>
             </main>
              {/* Hidden div for generating image */}
-             <div style={{ position: 'fixed', top: '150vh', left: 0, zIndex: -100 }}>
-                <div ref={invoiceRef}>
-                    {selectedInvoice && <InvoiceTemplate invoice={selectedInvoice} company={companySettings} customer={customers.find((c: any) => c.id === selectedInvoice.customer)} />}
+             <div style={{ position: 'fixed', top: '200vh', left: 0, zIndex: -100 }}>
+                <div ref={invoiceRef} className="bg-white">
+                    {selectedInvoice && (
+                        <InvoiceTemplate 
+                            invoice={selectedInvoice} 
+                            company={companySettings} 
+                            customer={customers.find((c: any) => c.id === selectedInvoice.customerId)} 
+                            customerBalance={calculateCustomerBalance(selectedInvoice.customerId)}
+                        />
+                    )}
                 </div>
             </div>
         </>
