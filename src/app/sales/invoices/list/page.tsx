@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo, useRef } from 'react';
@@ -10,6 +9,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import {
   Table,
@@ -32,13 +32,15 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useData } from '@/contexts/data-provider';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { InvoiceTemplate } from '@/components/invoice-template';
 import { PosReceipt } from '@/components/pos-receipt';
 import { Combobox } from '@/components/ui/combobox';
 import { toPng } from 'html-to-image';
 import { Badge } from '@/components/ui/badge';
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 interface SaleInvoice {
@@ -97,6 +99,7 @@ export default function SalesInvoicesListPage() {
   const { salesInvoices: invoices, customers, warehouses, inventoryClosings, customerPayments, salesReturns, posSales, posReturns, settings, loading } = useData();
   const router = useRouter();
   const shareRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
   
   const [filters, setFilters] = useState({
     customerId: "all",
@@ -145,6 +148,9 @@ export default function SalesInvoicesListPage() {
         const invoiceDate = new Date(invoice.date);
         const from = filters.fromDate ? new Date(filters.fromDate) : null;
         const to = filters.toDate ? new Date(filters.toDate) : null;
+
+        if (from) from.setHours(0,0,0,0);
+        if (to) to.setHours(23,59,59,999);
 
         if (from && invoiceDate < from) return false;
         if (to && invoiceDate > to) return false;
