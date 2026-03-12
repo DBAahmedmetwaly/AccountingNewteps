@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useRef } from 'react';
@@ -18,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PlusCircle, Loader2, MoreHorizontal, FileText, Undo2, Printer, Eye, Truck, CheckCircle, MessageCircle, Image as ImageIcon } from "lucide-react";
+import { PlusCircle, Loader2, MoreHorizontal, FileText, Undo2, Printer, Eye, Truck, CheckCircle, MessageCircle, Image as ImageIcon, Search } from "lucide-react";
 import { useRouter } from 'next/navigation';
 import {
   DropdownMenu,
@@ -36,6 +37,8 @@ import { InvoiceTemplate } from '@/components/invoice-template';
 import { PosReceipt } from '@/components/pos-receipt';
 import { Combobox } from '@/components/ui/combobox';
 import { toPng } from 'html-to-image';
+import { Badge } from '@/components/ui/badge';
+import { toast } from '@/hooks/use-toast';
 
 
 interface SaleInvoice {
@@ -60,30 +63,32 @@ interface InventoryClosing { id: string; warehouseId: string; closingDate: strin
 interface StockInRecord { id: string; purchaseInvoiceId?: string; }
 
 const InvoiceItemsDialog = ({ items }: { items: any[] }) => (
-    <DialogContent>
+    <DialogContent className="max-w-3xl">
         <DialogHeader>
             <DialogTitle>تفاصيل أصناف الفاتورة</DialogTitle>
         </DialogHeader>
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>الصنف</TableHead>
-                    <TableHead className="text-center">الكمية</TableHead>
-                    <TableHead className="text-center">سعر الوحدة</TableHead>
-                    <TableHead className="text-center">الإجمالي</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {items && items.map((item, idx) => (
-                    <TableRow key={idx}>
-                        <TableCell>{item.name}</TableCell>
-                        <TableCell className="text-center">{item.qty}</TableCell>
-                        <TableCell className="text-center">{item.price?.toLocaleString() || '-'}</TableCell>
-                        <TableCell className="text-center">{item.total?.toLocaleString() || '-'}</TableCell>
+        <div className="w-full overflow-x-auto border rounded-md">
+            <Table className="min-w-[500px]">
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>الصنف</TableHead>
+                        <TableHead className="text-center">الكمية</TableHead>
+                        <TableHead className="text-center">سعر الوحدة</TableHead>
+                        <TableHead className="text-center">الإجمالي</TableHead>
                     </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+                </TableHeader>
+                <TableBody>
+                    {items && items.map((item, idx) => (
+                        <TableRow key={idx}>
+                            <TableCell className="font-medium">{item.name}</TableCell>
+                            <TableCell className="text-center font-bold">{item.qty}</TableCell>
+                            <TableCell className="text-center">{item.price?.toLocaleString() || '-'}</TableCell>
+                            <TableCell className="text-center font-semibold">{item.total?.toLocaleString() || '-'}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
     </DialogContent>
 )
 
@@ -196,7 +201,7 @@ export default function SalesInvoicesListPage() {
     setIsSharing(true);
 
     // Wait for the hidden component to render
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 150));
 
     if (!shareRef.current) {
         setIsSharing(false);
@@ -235,56 +240,57 @@ export default function SalesInvoicesListPage() {
 
   return (
     <>
-      <PageHeader title="سجل فواتير البيع" />
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
+      <PageHeader title="سجل فواتير البيع">
+        <Button size="sm" className="gap-1" onClick={() => router.push('/sales/invoices')}>
+          <PlusCircle className="h-4 w-4" />
+          إضافة فاتورة جديدة
+        </Button>
+      </PageHeader>
+      <main className="flex flex-1 flex-col gap-4 p-2 md:p-6">
         <Card className="no-print">
-            <CardHeader>
-                <CardTitle>فلاتر البحث</CardTitle>
-            </CardHeader>
-            <CardContent>
+            <CardHeader className="p-4"><CardTitle className="text-lg flex items-center gap-2"><Search className="h-4 w-4"/> فلاتر البحث</CardTitle></CardHeader>
+            <CardContent className="p-4 pt-0">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                      <div className="space-y-2">
-                        <Label>العميل</Label>
-                        <Combobox options={customerOptions} value={filters.customerId} onValueChange={(v) => handleFilterChange("customerId", v)} placeholder="اختر عميلاً..." emptyMessage="لم يتم العثور على عميل."/>
+                        <Label className="text-xs">العميل</Label>
+                        <Combobox options={customerOptions} value={filters.customerId} onValueChange={(v) => handleFilterChange("customerId", v)} placeholder="كل العملاء" emptyMessage="لا يوجد عملاء."/>
                     </div>
                      <div className="space-y-2">
-                        <Label>الفرع</Label>
-                        <Combobox options={warehouseOptions} value={filters.warehouseId} onValueChange={(v) => handleFilterChange("warehouseId", v)} placeholder="اختر فرعًا..." emptyMessage="لم يتم العثور على فرع."/>
+                        <Label className="text-xs">الفرع</Label>
+                        <Combobox options={warehouseOptions} value={filters.warehouseId} onValueChange={(v) => handleFilterChange("warehouseId", v)} placeholder="كل الفروع" emptyMessage="لا توجد فروع."/>
                     </div>
                      <div className="space-y-2">
-                        <Label>من تاريخ</Label>
-                        <Input type="date" value={filters.fromDate} onChange={(e) => handleFilterChange("fromDate", e.target.value)} />
+                        <Label className="text-xs">من تاريخ</Label>
+                        <Input type="date" value={filters.fromDate} onChange={(e) => handleFilterChange("fromDate", e.target.value)} className="h-9"/>
                     </div>
                      <div className="space-y-2">
-                        <Label>إلى تاريخ</Label>
-                        <Input type="date" value={filters.toDate} onChange={(e) => handleFilterChange("toDate", e.target.value)} />
+                        <Label className="text-xs">إلى تاريخ</Label>
+                        <Input type="date" value={filters.toDate} onChange={(e) => handleFilterChange("toDate", e.target.value)} className="h-9" />
                     </div>
                 </div>
             </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>قائمة فواتير المبيعات</CardTitle>
-            <CardDescription>
-              عرض وتعديل جميع فواتير المبيعات الصادرة.
-            </CardDescription>
+          <CardHeader className="p-4 md:p-6">
+            <CardTitle className="text-xl">قائمة فواتير المبيعات</CardTitle>
+            <CardDescription>عرض وتتبع فواتير المبيعات مع خيارات الطباعة والمشاركة.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0 md:p-6 md:pt-0">
             {loading || isSharing ? (
               <div className="flex flex-col justify-center items-center py-10 gap-4">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                {isSharing && <p className="text-sm font-semibold animate-pulse">جاري تجهيز صورة الفاتورة للمشاركة...</p>}
+                {isSharing && <p className="text-sm font-semibold animate-pulse text-primary">جاري تحويل الفاتورة لصورة...</p>}
               </div>
             ) : (
-              <div className="w-full overflow-auto border rounded-lg">
-                <Table>
+              <div className="w-full overflow-x-auto border-t md:border border-muted-foreground/10 md:rounded-lg">
+                <Table className="min-w-[900px]">
                   <TableHeader>
-                    <TableRow>
+                    <TableRow className="bg-muted/50">
                       <TableHead>رقم الفاتورة</TableHead>
                       <TableHead>العميل</TableHead>
                       <TableHead>التاريخ</TableHead>
-                      <TableHead>ملاحظات</TableHead>
+                      <TableHead>النوع</TableHead>
                       <TableHead className="text-center">الإجمالي</TableHead>
                       <TableHead className="text-center">المدفوع</TableHead>
                       <TableHead className="text-center">المتبقي</TableHead>
@@ -298,35 +304,36 @@ export default function SalesInvoicesListPage() {
                         const remaining = invoice.total - paid;
                         return (
                            <Dialog key={invoice.id}>
-                            <TableRow className={invoice.isLocked ? 'bg-muted/30' : ''}>
-                            <TableCell className="font-mono">{invoice.invoiceNumber}</TableCell>
-                            <TableCell>{invoice.customerName}</TableCell>
-                            <TableCell>{new Date(invoice.date).toLocaleDateString('ar-EG')}</TableCell>
+                            <TableRow className={cn(invoice.isLocked ? 'bg-muted/30 opacity-80' : '', "hover:bg-muted/20")}>
+                            <TableCell className="font-mono font-bold">{invoice.invoiceNumber}</TableCell>
+                            <TableCell className="font-medium">{invoice.customerName}</TableCell>
+                            <TableCell className="text-xs">{new Date(invoice.date).toLocaleDateString('ar-EG')}</TableCell>
                             <TableCell>
-                                <div className="flex items-center gap-2 text-muted-foreground">
+                                <div className="flex items-center gap-2">
                                     {invoice.isDelivery ? (
-                                        <span className="flex items-center gap-1 text-blue-600"><Truck className="h-4 w-4"/> {invoice.deliveryPersonName || 'دليفري'}</span>
+                                        <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50/50"><Truck className="h-3 w-3 ml-1"/> دليفري</Badge>
                                     ) : (
-                                        <span className="flex items-center gap-1"><FileText className="h-4 w-4"/> {`${invoice.items?.length || 0} أصناف`}</span>
+                                        <Badge variant="outline" className="text-muted-foreground"><FileText className="h-3 w-3 ml-1"/> {invoice.items?.length || 0} صنف</Badge>
                                     )}
                                 </div>
                             </TableCell>
-                            <TableCell className="text-center font-semibold">{invoice.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                            <TableCell className="text-center font-bold">{invoice.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                             <TableCell className="text-center text-green-600">{paid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                            <TableCell className={`text-center font-bold ${remaining > 0 ? 'text-destructive' : ''}`}>{remaining.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                            <TableCell className={cn("text-center font-bold", remaining > 0.01 ? 'text-destructive' : 'text-muted-foreground')}>
+                                {remaining.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </TableCell>
                             <TableCell className="text-center">
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <Button aria-haspopup="true" size="icon" variant="ghost">
+                                        <Button aria-haspopup="true" size="icon" variant="ghost" className="h-8 w-8">
                                             <MoreHorizontal className="h-4 w-4" />
-                                            <span className="sr-only">قائمة</span>
                                         </Button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
+                                    <DropdownMenuContent align="end" className="w-56">
                                         <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
                                          <DialogTrigger asChild>
                                             <DropdownMenuItem>
-                                                <Eye className="ml-2 h-4 w-4"/>
+                                                <Eye className="ml-2 h-4 w-4 text-blue-500"/>
                                                 عرض الأصناف
                                             </DropdownMenuItem>
                                         </DialogTrigger>
@@ -336,23 +343,23 @@ export default function SalesInvoicesListPage() {
                                         </DropdownMenuItem>
                                         
                                         <DropdownMenuItem onSelect={() => setPrintModal({ open: true, type: 'Thermal', invoice })}>
-                                            <Printer className="ml-2 h-4 w-4" /> طباعة إيصال (Thermal)
+                                            <Printer className="ml-2 h-4 w-4" /> طباعة إيصال (حراري)
                                         </DropdownMenuItem>
 
                                         <DropdownMenuSeparator />
                                         
-                                        <DropdownMenuItem onClick={() => handleShareAsImage(invoice, 'A4')}>
-                                            <ImageIcon className="ml-2 h-4 w-4 text-primary" /> مشاركة كصورة (A4)
+                                        <DropdownMenuItem onClick={() => handleShareAsImage(invoice, 'A4')} className="text-primary font-semibold">
+                                            <ImageIcon className="ml-2 h-4 w-4" /> مشاركة كصورة (A4)
                                         </DropdownMenuItem>
                                         
-                                        <DropdownMenuItem onClick={() => handleShareAsImage(invoice, 'Thermal')}>
-                                            <ImageIcon className="ml-2 h-4 w-4 text-green-600" /> مشاركة كصورة (إيصال)
+                                        <DropdownMenuItem onClick={() => handleShareAsImage(invoice, 'Thermal')} className="text-green-600 font-semibold">
+                                            <ImageIcon className="ml-2 h-4 w-4" /> مشاركة كصورة (إيصال)
                                         </DropdownMenuItem>
 
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem onClick={() => router.push(`/sales/returns/new?invoiceId=${invoice.id}`)} disabled={invoice.isLocked}>
-                                            <Undo2 className="ml-2 h-4 w-4" />
-                                            مرتجع
+                                            <Undo2 className="ml-2 h-4 w-4 text-amber-600" />
+                                            إجراء مرتجع
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
@@ -364,8 +371,8 @@ export default function SalesInvoicesListPage() {
                       })
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
-                          لا توجد فواتير تطابق الفلاتر المحددة.
+                        <TableCell colSpan={8} className="text-center py-20 text-muted-foreground italic">
+                          لا توجد فواتير تطابق معايير البحث الحالية.
                         </TableCell>
                       </TableRow>
                     )}
@@ -379,22 +386,22 @@ export default function SalesInvoicesListPage() {
 
       {/* حوار الطباعة الموحد */}
       <Dialog open={printModal.open} onOpenChange={(open) => !open && setPrintModal({ ...printModal, open: false })}>
-        <DialogContent className={printModal.type === 'A4' ? "max-w-4xl p-0" : "max-w-md p-0"}>
-            <DialogHeader className="p-4">
+        <DialogContent className={cn("p-0 overflow-hidden flex flex-col max-h-[90vh]", printModal.type === 'A4' ? "max-w-4xl" : "max-w-sm")}>
+            <DialogHeader className="p-4 shrink-0 bg-muted/30">
                 <DialogTitle>طباعة الفاتورة {printModal.invoice?.invoiceNumber}</DialogTitle>
-                <DialogDescription>معاينة الفاتورة بصيغة {printModal.type}.</DialogDescription>
+                <DialogDescription>معاينة الفاتورة قبل الطباعة.</DialogDescription>
             </DialogHeader>
-            <div className="printable-area bg-white text-black max-h-[70vh] overflow-y-auto flex justify-center">
-                {printModal.invoice && (
-                    printModal.type === 'A4' ? (
-                        <InvoiceTemplate 
-                            invoice={printModal.invoice} 
-                            company={companySettings} 
-                            customer={customers.find(c => c.id === printModal.invoice!.customerId)} 
-                            customerBalance={calculateCustomerBalance(printModal.invoice!.customerId)}
-                        />
-                    ) : (
-                        <div className="p-4">
+            <ScrollArea className="flex-1 bg-white">
+                <div className="printable-area bg-white text-black p-4 flex justify-center">
+                    {printModal.invoice && (
+                        printModal.type === 'A4' ? (
+                            <InvoiceTemplate 
+                                invoice={printModal.invoice} 
+                                company={companySettings} 
+                                customer={customers.find(c => c.id === printModal.invoice!.customerId)} 
+                                customerBalance={calculateCustomerBalance(printModal.invoice!.customerId)}
+                            />
+                        ) : (
                             <PosReceipt 
                                 invoice={printModal.invoice} 
                                 company={companySettings} 
@@ -403,13 +410,14 @@ export default function SalesInvoicesListPage() {
                                 customer={customers.find(c => c.id === printModal.invoice!.customerId)}
                                 customerBalance={calculateCustomerBalance(printModal.invoice!.customerId)}
                             />
-                        </div>
-                    )
-                )}
-            </div>
-            <div className="p-4 border-t flex justify-end no-print">
-                <Button onClick={handlePrint}><Printer className="ml-2 h-4 w-4" />طباعة</Button>
-            </div>
+                        )
+                    )}
+                </div>
+            </ScrollArea>
+            <DialogFooter className="p-4 border-t bg-muted/10 shrink-0 flex gap-2 sm:justify-end">
+                <Button variant="ghost" onClick={() => setPrintModal({ ...printModal, open: false })}>إغلاق</Button>
+                <Button onClick={handlePrint} className="gap-2"><Printer className="h-4 w-4" />طباعة</Button>
+            </DialogFooter>
         </DialogContent>
       </Dialog>
 

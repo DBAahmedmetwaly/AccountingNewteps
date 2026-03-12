@@ -414,34 +414,40 @@ export default function SalesInvoicePage() {
   return (
     <>
       <PageHeader title="فاتورة بيع جديدة" />
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6 printable-area">
+      <main className="flex flex-1 flex-col gap-4 p-2 md:p-6 printable-area">
         <Card>
-          <CardHeader>
-            <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                <div>
-                    <CardTitle>فاتورة بيع</CardTitle>
+          <CardHeader className="p-4 md:p-6">
+            <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
+                <div className="w-full lg:w-auto">
+                    <CardTitle className="text-xl md:text-2xl">فاتورة بيع</CardTitle>
                     <CardDescription>
                         {settings?.main?.general?.companyName || 'اسم شركتك'}
                     </CardDescription>
                 </div>
-                <div className="text-left text-sm md:text-base grid grid-cols-2 gap-x-4 gap-y-1">
-                    <Label className="font-bold">رقم الفاتورة:</Label>
-                    <span>(سيتم إنشاؤه)</span>
-                    <Label htmlFor="invoiceDate" className="font-bold">تاريخ الفاتورة:</Label>
-                    <Input id="invoiceDate" type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="h-8"/>
-                    <Label htmlFor="dueDate" className="font-bold">تاريخ الاستحقاق:</Label>
-                    <Input id="dueDate" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="h-8"/>
+                <div className="w-full lg:w-auto text-right text-sm md:text-base grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                    <div className="flex items-center justify-between sm:justify-start gap-2">
+                        <Label className="font-bold shrink-0">رقم الفاتورة:</Label>
+                        <span className="font-mono text-muted-foreground">(تلقائي)</span>
+                    </div>
+                    <div className="flex items-center justify-between sm:justify-start gap-2">
+                        <Label htmlFor="invoiceDate" className="font-bold shrink-0">تاريخ الفاتورة:</Label>
+                        <Input id="invoiceDate" type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="h-8 w-full max-w-[150px]"/>
+                    </div>
+                    <div className="flex items-center justify-between sm:justify-start gap-2 sm:col-start-2">
+                        <Label htmlFor="dueDate" className="font-bold shrink-0">تاريخ الاستحقاق:</Label>
+                        <Input id="dueDate" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="h-8 w-full max-w-[150px]"/>
+                    </div>
                 </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 p-4 md:p-6">
             {loading ? (
                 <div className="flex justify-center items-center py-10">
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
             ) : (
                 <>
-                    <div className="grid md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                             <Label htmlFor="customer">العميل</Label>
                             <div className="flex flex-col gap-2">
@@ -484,7 +490,7 @@ export default function SalesInvoicePage() {
                             </Label>
                         </div>
                         {isDelivery && warehouseId !== 'all' && (
-                            <div className="grid md:grid-cols-2 gap-6 pl-8 rtl:pr-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-0 md:pl-8 rtl:md:pr-8">
                                 <div className="space-y-2">
                                     <Label htmlFor="delivery-person">موظف التوصيل (الطيار)</Label>
                                     <Combobox
@@ -500,31 +506,31 @@ export default function SalesInvoicePage() {
                     </div>
                     
                     <div>
-                    <Label>بنود الفاتورة</Label>
-                    <div className="w-full overflow-auto border rounded-lg">
-                        <Table>
+                    <Label className="mb-2 block font-bold">بنود الفاتورة</Label>
+                    <div className="w-full overflow-x-auto border rounded-lg">
+                        <Table className="min-w-[800px]">
                             <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[40%]">الصنف</TableHead>
+                                <TableHead className="w-[30%]">الصنف</TableHead>
                                 <TableHead>الباركود</TableHead>
-                                <TableHead className="text-center w-40">الوحدة</TableHead>
-                                <TableHead className="text-center w-24">الكمية</TableHead>
-                                <TableHead className="text-center w-32">سعر الوحدة</TableHead>
-                                <TableHead className="text-center">الإجمالي</TableHead>
-                                <TableHead className="text-center w-[100px] no-print">الإجراء</TableHead>
+                                <TableHead className="text-center w-32">الوحدة</TableHead>
+                                <TableHead className="text-center w-20">الكمية</TableHead>
+                                <TableHead className="text-center w-28">سعر الوحدة</TableHead>
+                                <TableHead className="text-center w-28">الإجمالي</TableHead>
+                                <TableHead className="text-center w-12 no-print"></TableHead>
                             </TableRow>
                             </TableHeader>
                             <TableBody>
                             {items.map((item) => (
                                 <TableRow key={item.uniqueId}>
-                                <TableCell>{item.name}</TableCell>
+                                <TableCell className="font-medium">{item.name}</TableCell>
                                 <TableCell className="font-mono text-xs">{item.code}</TableCell>
-                                <TableCell className="text-center">{item.unit}</TableCell>
-                                <TableCell className="text-center">{item.qty}</TableCell>
-                                <TableCell className="text-center">ج.م {item.price.toFixed(2)}</TableCell>
-                                <TableCell className="text-center">ج.م {item.total.toFixed(2)}</TableCell>
-                                <TableCell className="text-center no-print">
-                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.uniqueId)}>
+                                <TableCell className="text-center text-xs">{item.unit}</TableCell>
+                                <TableCell className="text-center font-bold">{item.qty}</TableCell>
+                                <TableCell className="text-center">{item.price.toFixed(2)}</TableCell>
+                                <TableCell className="text-center font-bold">{item.total.toFixed(2)}</TableCell>
+                                <TableCell className="text-center no-print p-1">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleRemoveItem(item.uniqueId)}>
                                     <Trash2 className="h-4 w-4 text-destructive" />
                                     </Button>
                                 </TableCell>
@@ -542,27 +548,26 @@ export default function SalesInvoicePage() {
                                         disabled={!warehouseId}
                                     />
                                 </TableCell>
-                                <TableCell className="p-2 w-40">
+                                <TableCell className="p-2">
                                      <Combobox
                                         options={availableUnits}
                                         value={selectedUnit}
                                         onValueChange={handleUnitChange}
-                                        placeholder="اختر وحدة..."
+                                        placeholder="الوحدة"
                                         emptyMessage="اختر صنفًا أولاً"
                                         disabled={!newItem.id}
                                     />
                                 </TableCell>
-                                <TableCell className="p-2 w-24">
-                                    <Input type="number" placeholder="الكمية" value={newItem.qty} onChange={e => setNewItem({...newItem, qty: parseInt(e.target.value) || 1})} onFocus={e => e.target.select()} className="text-center" />
+                                <TableCell className="p-1">
+                                    <Input type="number" placeholder="كمية" value={newItem.qty} onChange={e => setNewItem({...newItem, qty: parseInt(e.target.value) || 1})} onFocus={e => e.target.select()} className="text-center h-9" />
                                 </TableCell>
-                                <TableCell className="p-2 w-32">
-                                    <Input type="number" placeholder="السعر" value={newItem.price} onChange={e => setNewItem({...newItem, price: parseFloat(e.target.value) || 0})} onFocus={e => e.target.select()} className="text-center" readOnly={!can('edit', 'sales_invoices')} />
+                                <TableCell className="p-1">
+                                    <Input type="number" placeholder="سعر" value={newItem.price} onChange={e => setNewItem({...newItem, price: parseFloat(e.target.value) || 0})} onFocus={e => e.target.select()} className="text-center h-9 font-bold" readOnly={!can('edit', 'sales_invoices')} />
                                 </TableCell>
                                 <TableCell></TableCell>
-                                <TableCell className="text-center">
-                                    <Button onClick={handleAddItem} disabled={!warehouseId || !newItem.id}>
-                                        <PlusCircle className="ml-2 h-4 w-4" />
-                                        إضافة
+                                <TableCell className="text-center p-1">
+                                    <Button onClick={handleAddItem} size="icon" className="h-9 w-9" disabled={!warehouseId || !newItem.id}>
+                                        <PlusCircle className="h-5 w-5" />
                                     </Button>
                                 </TableCell>
                             </TableRow>
@@ -571,87 +576,84 @@ export default function SalesInvoicePage() {
                     </div>
                     </div>
                     
-                    <div className="flex flex-col-reverse md:flex-row justify-between items-start gap-8">
-                        <div className="w-full md:max-w-sm space-y-2 text-sm mt-4 md:mt-0">
+                    <div className="flex flex-col lg:flex-row justify-between items-start gap-8">
+                        <div className="w-full lg:max-w-sm space-y-2 text-sm mt-4 lg:mt-0">
                             <Alert>
                                 <Info className="h-4 w-4" />
                                 <AlertTitle>القيد المحاسبي المتوقع</AlertTitle>
                                 <AlertDescription>
                                     <ul className="list-disc pr-4 text-xs">
                                         <li>من ح/ حسابات العملاء (مدين بقيمة الفاتورة الإجمالية)</li>
-                                        <li>من ح/ خصم مسموح به (مدين بقيمة الخصم إن وجد)</li>
                                         <li>إلى ح/ إيرادات المبيعات (دائن بقيمة المبيعات الصافية)</li>
                                         <li>إلى ح/ ضريبة القيمة المضافة (دائن بقيمة الضريبة)</li>
-                                        <hr className="my-1"/>
-                                        <li>من ح/ تكلفة البضاعة المباعة (مدين بتكلفة الأصناف)</li>
-                                        <li>إلى ح/ المخزون (دائن بتكلفة الأصناف)</li>
                                     </ul>
                                 </AlertDescription>
                             </Alert>
                         </div>
-                        <div className="w-full md:max-w-sm space-y-4">
-                            <div className="space-y-2">
-                                <div className="flex justify-between">
+                        <div className="w-full lg:max-w-sm space-y-4">
+                            <div className="space-y-2 p-4 border rounded-lg bg-muted/30">
+                                <div className="flex justify-between text-sm">
                                     <span>الإجمالي الفرعي</span>
                                     <span>ج.م {subtotal.toFixed(2)}</span>
                                 </div>
-                                <div className="flex justify-between items-center">
+                                <div className="flex justify-between items-center text-sm">
                                     <span>الخصم</span>
-                                    <Input type="number" value={discount} onFocus={e => e.target.select()} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} className="h-8 max-w-[120px] text-left" placeholder="0.00"/>
+                                    <Input type="number" value={discount} onFocus={e => e.target.select()} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} className="h-8 max-w-[100px] text-left" placeholder="0.00"/>
                                 </div>
-                                <div className="flex justify-between items-center">
-                                    <span>تطبيق ضريبة القيمة المضافة ({settings?.main?.financial?.vatRate || 14}%)</span>
-                                    <Switch checked={applyTax} onCheckedChange={setApplyTax} />
-                                </div>
-                                {applyTax && (
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-muted-foreground">الأسعار شاملة الضريبة</span>
-                                        <Switch checked={isTaxIncluded} onCheckedChange={setIsTaxIncluded} />
+                                <div className="flex justify-between items-center text-sm">
+                                    <span>الضريبة ({settings?.main?.financial?.vatRate || 14}%)</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground">شاملة</span>
+                                        <Switch checked={isTaxIncluded} onCheckedChange={setIsTaxIncluded} className="scale-75" />
+                                        <Switch checked={applyTax} onCheckedChange={setApplyTax} />
                                     </div>
-                                )}
-                                <div className="flex justify-between">
-                                    <span>ضريبة القيمة المضافة</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span>قيمة الضريبة</span>
                                     <span>ج.م {tax.toFixed(2)}</span>
                                 </div>
-                                <div className="flex justify-between font-bold text-base border-t pt-2">
+                                <div className="flex justify-between font-bold text-lg border-t pt-2 mt-2 text-primary">
                                     <span>الإجمالي الكلي</span>
-                                    <span>ج.م {total.toFixed(2)}</span>
+                                    <span className="font-mono">ج.م {total.toFixed(2)}</span>
                                 </div>
                             </div>
-                            <div className="space-y-2 border-t pt-4">
+                            <div className="space-y-3 border-t pt-4">
                                 <div className="flex justify-between items-center">
-                                    <Label htmlFor="paidAmount" className="font-semibold">المبلغ المستلم</Label>
-                                    <Input id="paidAmount" type="number" value={paidAmount} onFocus={e => e.target.select()} onChange={e => setPaidAmount(parseFloat(e.target.value) || 0)} className="h-8 max-w-[120px] text-left" placeholder="0.00"/>
+                                    <Label htmlFor="paidAmount" className="font-bold">المبلغ المستلم الآن</Label>
+                                    <Input id="paidAmount" type="number" value={paidAmount} onFocus={e => e.target.select()} onChange={e => setPaidAmount(parseFloat(e.target.value) || 0)} className="h-10 max-w-[150px] text-left text-lg font-bold border-primary/50" placeholder="0.00"/>
                                 </div>
                                 {paidAmount > 0 && <div className="space-y-2">
-                                    <Label htmlFor="paidToAccount">استلام في</Label>
+                                    <Label htmlFor="paidToAccount" className="text-xs">استلام في حساب:</Label>
                                      <Combobox
                                         options={cashAccountOptions}
                                         value={paidToAccountId}
                                         onValueChange={setPaidToAccountId}
-                                        placeholder="اختر حساب الاستلام..."
-                                        emptyMessage="لم يتم العثور على حساب."
+                                        placeholder="اختر الخزينة..."
+                                        emptyMessage="لا يوجد خزائن."
                                     />
                                 </div>}
-                                <div className="flex justify-between font-bold text-base text-destructive">
-                                    <span>المبلغ المتبقي</span>
-                                    <span>ج.م {(total - paidAmount).toFixed(2)}</span>
+                                <div className="flex justify-between font-bold text-sm text-destructive">
+                                    <span>الباقي (مديونية)</span>
+                                    <span className="font-mono">ج.م {(total - paidAmount).toFixed(2)}</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="notes">ملاحظات</Label>
-                        <Textarea id="notes" placeholder="أضف أي ملاحظات هنا..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+                        <Label htmlFor="notes">ملاحظات الفاتورة</Label>
+                        <Textarea id="notes" placeholder="أضف أي ملاحظات تظهر في الفاتورة هنا..." value={notes} onChange={(e) => setNotes(e.target.value)} />
                     </div>
                 </>
             )}
           </CardContent>
-          <CardFooter className="flex justify-end no-print">
-            <Button size="lg" disabled={loading || isSaving} onClick={handleSaveInvoice}>
+          <CardFooter className="flex justify-end p-4 md:p-6 border-t gap-2 no-print">
+            <Button variant="outline" onClick={() => router.push('/sales/invoices/list')} className="flex-1 sm:flex-none">
+                إلغاء
+            </Button>
+            <Button size="lg" disabled={loading || isSaving} onClick={handleSaveInvoice} className="flex-1 sm:flex-none">
                 {isSaving ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Save className="ml-2 h-4 w-4" />}
-                {isSaving ? 'جارٍ الحفظ...' : 'حفظ وإصدار الفاتورة'}
+                {isSaving ? 'جارٍ الحفظ...' : 'حفظ الفاتورة'}
             </Button>
           </CardFooter>
         </Card>
