@@ -1,5 +1,4 @@
 
-
 "use client"
 
 import React, { useState, useEffect } from "react";
@@ -26,14 +25,9 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import useFirebase from "@/hooks/use-firebase"; // Assuming a hook for single object might be needed
-import { database } from "@/lib/firebase";
-import { ref, onValue, set } from "firebase/database";
-import { Loader2, KeyRound } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useData } from "@/contexts/data-provider";
-import { useAuth } from "@/contexts/auth-context";
-import { usePermissions } from "@/contexts/permissions-context";
 import { useNotifications } from "@/contexts/notification-context";
 import { Bell, BellRing } from "lucide-react";
 
@@ -41,6 +35,7 @@ import { Bell, BellRing } from "lucide-react";
 interface GeneralSettings {
     companyName: string;
     companyAddress: string;
+    logoUrl?: string;
     language: 'ar' | 'en';
     mobileFabPosition: 'bottom-right' | 'top-right' | 'bottom-left' | 'top-left' | 'middle-right' | 'middle-left';
     invoiceFooter?: string;
@@ -48,10 +43,6 @@ interface GeneralSettings {
     toastDuration?: number;
     welcomeMessage?: string;
     isClothingStore?: boolean;
-    hubPrimaryBorderColor?: string;
-    hubPrimaryTextColor?: string;
-    hubSecondaryBorderColor?: string;
-    hubSecondaryTextColor?: string;
     licenseKey?: string;
     licenseStatus?: 'active' | 'inactive' | 'expired';
 }
@@ -62,15 +53,15 @@ interface FinancialSettings {
     currency: 'EGP' | 'SAR' | 'USD';
     allowNegativeStock: boolean;
     scaleBarcodePrefix: string;
-    clothingBarcodePrefix: string; // New
-    standardItemBarcodePrefix: string; // New for standard items
+    clothingBarcodePrefix: string;
+    standardItemBarcodePrefix: string;
     purchaseWorkflow: 'direct' | 'manual';
     roundingDecimals: number;
-    vatRate: number; // New: Percentage (e.g., 14)
+    vatRate: number;
 }
 
 interface PosSettings {
-    workDay: string; // The current working day for POS operations
+    workDay: string;
     scaleItemDefaultFocus: 'weight' | 'price';
     cartColumns: {
         showBarcode: boolean;
@@ -91,7 +82,7 @@ interface PosSettings {
     showAllItemsInitially: boolean;
     autoPrintReceipt: boolean;
     showItemStock: boolean;
-    defaultApplyTax: boolean; // New
+    defaultApplyTax: boolean;
 }
 
 interface Settings {
@@ -108,31 +99,8 @@ const DEFAULT_WIDTHS = {
     widthTotal: 15,
 };
 
-const ColorPicker = ({ label, color, onChange }: { label: string; color?: string; onChange: (color: string) => void }) => (
-    <div className="space-y-2">
-        <Label>{label}</Label>
-        <div className="flex items-center gap-2">
-            <Input
-                type="color"
-                value={color || "#000000"}
-                onChange={(e) => onChange(e.target.value)}
-                className="p-1 h-10 w-14 cursor-pointer"
-            />
-            <Input
-                value={color || ""}
-                onChange={(e) => onChange(e.target.value)}
-                placeholder="#RRGGBB"
-                className="flex-1"
-            />
-             <div className="w-10 h-10 rounded-md border" style={{ backgroundColor: color || 'transparent' }}></div>
-        </div>
-    </div>
-);
-
-
 export default function SettingsPage() {
     const { toast } = useToast();
-    const { can } = usePermissions();
     const { notificationsEnabled, toggleNotifications } = useNotifications();
     const { settings: allData, licenses, dbAction, loading: dataLoading } = useData();
     const [settings, setSettings] = useState<Settings | null>(null);
@@ -142,7 +110,7 @@ export default function SettingsPage() {
         if (allData?.main) {
             const loadedSettings = allData.main;
             setSettings({
-                general: loadedSettings.general || { companyName: '', companyAddress: '', language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false },
+                general: loadedSettings.general || { companyName: '', companyAddress: '', logoUrl: '', language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false },
                 financial: loadedSettings.financial || { openingCapital: 0, fiscalYearStart: '', currency: 'EGP', allowNegativeStock: false, scaleBarcodePrefix: '21', clothingBarcodePrefix: '23', standardItemBarcodePrefix: '25', purchaseWorkflow: 'direct', roundingDecimals: 2, vatRate: 14 },
                 posSettings: {
                     workDay: loadedSettings.posSettings?.workDay || new Date().toISOString().split('T')[0],
@@ -163,7 +131,7 @@ export default function SettingsPage() {
         } else {
              const defaultWorkDay = new Date().toISOString().split('T')[0];
                 const defaultSettings: Settings = {
-                    general: { companyName: '', companyAddress: '', language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false, licenseKey: '', licenseStatus: 'inactive' },
+                    general: { companyName: '', companyAddress: '', logoUrl: '', language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false, licenseKey: '', licenseStatus: 'inactive' },
                     financial: { openingCapital: 0, fiscalYearStart: '', currency: 'EGP', allowNegativeStock: false, scaleBarcodePrefix: '21', clothingBarcodePrefix: '23', standardItemBarcodePrefix: '25', purchaseWorkflow: 'direct', roundingDecimals: 2, vatRate: 14 },
                     posSettings: { 
                         workDay: defaultWorkDay, 
@@ -319,6 +287,11 @@ export default function SettingsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="company-address">عنوان الشركة</Label>
                   <Textarea id="company-address" placeholder="أدخل عنوان الشركة" value={settings.general.companyAddress} onChange={e => handleGeneralChange('companyAddress', e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="logo-url">رابط شعار الشركة (URL)</Label>
+                  <Input id="logo-url" placeholder="أدخل رابط صورة الشعار (مثلاً من Google Drive أو موقع خارجي)" value={settings.general.logoUrl || ''} onChange={e => handleGeneralChange('logoUrl', e.target.value)} />
+                  <p className="text-xs text-muted-foreground">سيظهر هذا الشعار في الجزء العلوي من الفواتير والإيصالات.</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="welcome-message">الرسالة الترحيبية</Label>

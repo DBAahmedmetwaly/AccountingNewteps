@@ -104,9 +104,18 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     <div style={receiptStyle} className="bg-white text-black printable-area">
       {/* رأس الفاتورة */}
       <header style={headerStyle}>
-        <div>
-            <h1 style={h1Style}>{company?.companyName || 'اسم الشركة'}</h1>
-            <p style={pStyle}>{company?.companyAddress || 'عنوان الشركة'}</p>
+        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+            {company?.logoUrl && (
+                <img 
+                    src={company.logoUrl} 
+                    alt="Logo" 
+                    style={{ maxWidth: '100px', maxHeight: '80px', objectFit: 'contain' }} 
+                />
+            )}
+            <div>
+                <h1 style={h1Style}>{company?.companyName || 'اسم الشركة'}</h1>
+                <p style={pStyle}>{company?.companyAddress || 'عنوان الشركة'}</p>
+            </div>
         </div>
         <div style={{textAlign: 'left'}}>
             <h2 style={{...h1Style, fontSize: '20px', marginBottom: '10px'}}>{invoiceType}</h2>
