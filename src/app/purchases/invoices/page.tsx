@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { PlusCircle, Trash2, Save, Loader2, Info } from "lucide-react";
 import React, { useState, useEffect, useMemo } from "react";
@@ -40,6 +40,7 @@ interface SecondaryUnitOption {
     label: string;
     factor: number;
     price?: number;
+    barcode?: string;
 }
 
 interface Item {
@@ -459,7 +460,13 @@ export default function PurchaseInvoicePage() {
   const handleItemSelect = (itemId: string) => {
     const selectedItem = allItems.find((i: Item) => i.id === itemId);
     if (selectedItem) {
-        const baseUnitOption = { value: 'base', label: selectedItem.baseUnit || 'قطعة', factor: 1, price: selectedItem.price || 0 };
+        const baseUnitOption: SecondaryUnitOption = { 
+            value: 'base', 
+            label: selectedItem.baseUnit || 'قطعة', 
+            factor: 1, 
+            price: selectedItem.price || 0,
+            barcode: selectedItem.code || ''
+        };
         const secondaryUnitsOptions = (selectedItem.secondaryUnits || []).map((u: any) => ({
             value: u.name,
             label: u.name,
