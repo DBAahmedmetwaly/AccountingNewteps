@@ -1,8 +1,6 @@
-
-
 "use client";
 
-import React, { useState, useMemo, useEffect, useCallback, Dispatch, SetStateAction } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,7 +38,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { BarcodePrintDialog } from "@/components/barcode-print-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Info, PlusCircle, Trash2, Loader2, QrCode, Upload, TrendingUp, Search, ArrowUpDown, Component, ListPlus, Package, Layers3, RefreshCcw, Library, Ban, Shirt, FileCog, X, ArchiveRestore, Edit, MoreHorizontal, History, Save } from "lucide-react";
+import { PlusCircle, Trash2, Loader2, QrCode, TrendingUp, Search, Component, Save, History, Edit, MoreHorizontal, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Combobox } from "@/components/ui/combobox";
 import { useAuth } from "@/contexts/auth-context";
@@ -51,7 +49,6 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Checkbox } from "@/components/ui/checkbox";
 import { BarcodePreview } from "@/components/barcode-preview";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 
 
@@ -84,6 +81,49 @@ interface Item {
   defaultBinId?: string;
   secondaryUnits?: SecondaryUnit[];
   stock?: number; 
+}
+
+const QuickAddDialog = ({ open, onOpenChange, onConfirm, title, label }: { open: boolean, onOpenChange: (open: boolean) => void, onConfirm: (name: string) => void, title: string, label: string }) => {
+    const [name, setName] = useState('');
+
+    const handleConfirm = () => {
+        if (name) {
+            onConfirm(name);
+            setName('');
+            onOpenChange(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{title}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="quick-add-name">{label}</Label>
+                        <Input 
+                            id="quick-add-name" 
+                            value={name} 
+                            onChange={(e) => setName(e.target.value)} 
+                            autoFocus
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleConfirm();
+                                }
+                            }}
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => onOpenChange(false)}>إلغاء</Button>
+                    <Button onClick={handleConfirm}>حفظ</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
 }
 
 function PriceUpdateDialog({ items, onSave, onOpenChange }: { items: (Item | undefined)[]; onSave: (action: "increase" | "decrease", percentage: number) => void; onOpenChange: (open: boolean) => void; }) {
@@ -127,37 +167,7 @@ function PriceUpdateDialog({ items, onSave, onOpenChange }: { items: (Item | und
     )
 }
 
-const QuickAddDialog = ({ open, onOpenChange, onConfirm, title, label }: { open: boolean, onOpenChange: (open: boolean) => void, onConfirm: (name: string) => void, title: string, label: string }) => {
-    const [name, setName] = useState('');
-
-    const handleConfirm = () => {
-        if (name) {
-            onConfirm(name);
-            setName('');
-            onOpenChange(false);
-        }
-    };
-
-    return (
-        <AlertDialog open={open} onOpenChange={onOpenChange}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>{title}</AlertDialogTitle>
-                </AlertDialogHeader>
-                <div className="space-y-2">
-                    <Label htmlFor="quick-add-name">{label}</Label>
-                    <Input id="quick-add-name" value={name} onChange={(e) => setName(e.target.value)} />
-                </div>
-                <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => onOpenChange(false)}>إلغاء</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleConfirm}>حفظ</AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-    )
-}
-
-const MatrixGeneratorDialog = ({ onSave, onOpenChange, itemSections, itemCategories, itemGroups, itemSubCategories1, itemSubCategories2, allItems, settings, getNextId }: {
+const MatrixGeneratorDialog = ({ onSave, onOpenChange, itemSections, itemCategories, itemGroups, itemSubCategories1, itemSubCategories2, settings, getNextId }: {
     onSave: (items: any[]) => void;
     onOpenChange: (open: boolean) => void;
     itemSections: any[];
@@ -246,7 +256,7 @@ const MatrixGeneratorDialog = ({ onSave, onOpenChange, itemSections, itemCategor
                     const nextId = await getNextId('clothingItemCode', 1000);
                      if (nextId === null) {
                          alert("فشل في إنشاء كود فريد للصنف. يرجى المحاولة مرة أخرى.");
-                         return; // Stop the generation process
+                         return;
                     }
                     
                     const newItemData = {
@@ -366,10 +376,7 @@ const SecondaryUnitDialog = ({ unit, onSave, onClose }: { unit: Partial<Secondar
     });
 
     const handleSave = () => {
-        if (!formData.name || !formData.conversionFactor) {
-            // Add toast notification for error
-            return;
-        }
+        if (!formData.name || !formData.conversionFactor) return;
         onSave(formData as SecondaryUnit);
         onClose();
     };
@@ -483,7 +490,7 @@ const ComponentManagement = ({ item, onSave, allItems }: {
     );
 }
 
-function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGroups, itemSubCategories1, itemSubCategories2, allItems, itemColors, itemSizes, settings, inventorySections, dbAction, getNextId }: { 
+function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGroups, itemSubCategories1, itemSubCategories2, allItems, settings, inventorySections, dbAction, getNextId }: { 
     item?: Item, 
     onSave: (item: Omit<Item, 'id' | 'code'> & { id?: string, code?: string }) => Promise<void>,
     onClose: () => void, 
@@ -497,7 +504,7 @@ function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGro
     itemSizes: any[],
     settings: any,
     inventorySections: any[],
-    dbAction: (path: string, action: 'add' | 'update' | 'remove', payload?: any) => Promise<string | void>;
+    dbAction: (path: string, action: 'add' | 'update' | 'remove' | 'transaction', payload?: any) => Promise<string | void>;
     getNextId: (counterName: string, startFrom?: number) => Promise<number | null>;
 }) {
   const [formData, setFormData] = useState<Item>(item || { name: "", price: 0, cost: 0, reorderPoint: 0, baseUnit: 'piece', itemType: 'standard' });
@@ -523,7 +530,6 @@ function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGro
     useEffect(() => {
         const { itemGroupId, categoryId, sectionId } = formData;
         
-        // Auto-fill parents if child is set but parents are missing
         if (itemGroupId && (!categoryId || !sectionId)) {
             const group = itemGroups.find(g => g.id === itemGroupId);
             if (group && group.parentCategoryId) {
@@ -564,11 +570,7 @@ function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGro
   const subCategory1Options = useMemo(() => itemSubCategories1.map(s => ({ value: s.id, label: s.name })), [itemSubCategories1]);
   const subCategory2Options = useMemo(() => itemSubCategories2.map(s => ({ value: s.id, label: s.name })), [itemSubCategories2]);
   
-  const colorOptions = useMemo(() => itemColors.map(c => ({value: c.id, label: c.name})), [itemColors]);
-  const sizeOptions = useMemo(() => itemSizes.map(s => ({value: s.id, label: s.name})), [itemSizes]);
   const binOptions = useMemo(() => inventorySections.map(s => ({value: s.id, label: `${s.name} (${s.mainWarehouseName || 'N/A'})`})), [inventorySections]);
-
-  const isClothingStore = settings?.main?.general?.isClothingStore || false;
 
   const calculateEan13CheckDigit = (barcodeWithoutCheckDigit: string): string => {
     if (barcodeWithoutCheckDigit.length !== 12) return '0';
@@ -661,13 +663,13 @@ function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGro
             return Math.max(...codes) + 1;
         };
 
-        if (level === 1) { // Section
+        if (level === 1) { 
             const codes = itemSections.map(i => parseInt(i.code || '0', 10)).filter(n => !isNaN(n));
             const currentMax = (codes.length > 0 ? Math.max(...codes) : 0) + 1;
             
             const nextNum = await getNextId('itemSectionCode', currentMax);
             if (nextNum) newCodeData.code = String(nextNum).padStart(2, '0');
-        } else if (level === 2 && formData.sectionId) { // Category
+        } else if (level === 2 && formData.sectionId) { 
             const siblings = itemCategories.filter(c => c.sectionId === formData.sectionId);
             const currentMax = calculateNextCodePart(siblings);
             
@@ -676,7 +678,7 @@ function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGro
             
             const nextNum = await getNextId(`itemCategoryCode_${formData.sectionId}`, currentMax);
             if (nextNum) newCodeData.code = `${parentCode}-${nextNum}`;
-        } else if (level === 3 && formData.categoryId) { // Group
+        } else if (level === 3 && formData.categoryId) { 
             const siblings = itemGroups.filter(g => g.parentCategoryId === formData.categoryId);
             const currentMax = calculateNextCodePart(siblings);
             
@@ -692,7 +694,6 @@ function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGro
         
         toast({ title: 'تمت الإضافة بنجاح', description: newCodeData.code ? `تم إنشاء الكود: ${newCodeData.code}` : undefined });
         
-        // Update form data with the new ID
          if (level === 1) setFormData(prev => ({...prev, sectionId: newId as string}));
          if (level === 2) setFormData(prev => ({...prev, categoryId: newId as string}));
          if (level === 3) setFormData(prev => ({...prev, itemGroupId: newId as string}));
@@ -897,13 +898,11 @@ export default function ItemsPage() {
                          await dbAction('priceChangeLogs', 'add', {
                             itemId: itemId,
                             itemName: item.name,
-                            // userId: user?.id,
-                            // userName: user?.name,
                             timestamp: new Date().toISOString(),
                             oldPrice: oldPrice,
                             newPrice: newPrice,
                             oldCost: item.cost || 0,
-                            newCost: item.cost || 0, // Cost is not changing here
+                            newCost: item.cost || 0, 
                             source: 'Bulk Price Update'
                         });
                     }
@@ -939,7 +938,6 @@ export default function ItemsPage() {
     const handleSave = async (itemData: Omit<Item, 'id' | 'code'> & { id?: string, code?: string }) => {
         const { id, ...dataToSave } = itemData;
         
-        // Clean dataToSave to only include fields we want to persist
         const cleanData: any = {};
         const allowedFields = [
             'code', 'name', 'baseUnit', 'price', 'cost', 'reorderPoint', 
@@ -986,7 +984,7 @@ export default function ItemsPage() {
                             if (nextId === null) throw new Error("Failed to get next ID for standard item");
                             const uniquePart = String(nextId).padStart(10, '0');
                             const baseCode = `${standardPrefix}${uniquePart}`;
-                            const checkDigit = '0'; // Placeholder
+                            const checkDigit = '0'; 
                             codeToSave = `${baseCode}${checkDigit}`;
                         }
                     }
@@ -1036,13 +1034,6 @@ export default function ItemsPage() {
     
     let itemsToFilter = activeItems;
 
-    // This filtering logic seems incorrect, let's simplify and fix.
-    // The stock is not directly on the item, so filtering by it here is problematic.
-    // We will remove the stock filter for now to fix potential errors and can re-add if needed correctly.
-    // if (filters.hideZeroStock) {
-    //     itemsToFilter = itemsToFilter.filter((item: any) => (item.stock || 0) > 0);
-    // }
-    
     const filterFunctions: ((item: any) => boolean)[] = [];
 
     if (searchTerm) {
@@ -1291,9 +1282,3 @@ export default function ItemsPage() {
     </>
   );
 }
-
-    
-
-
-
-

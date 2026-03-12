@@ -1,4 +1,3 @@
-
 "use client"
 
 // استيراد React والمكونات الأساسية من مكتبة Radix UI Toast
@@ -22,10 +21,9 @@ const ToastViewport = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Viewport
     ref={ref}
-    // تطبيق أنماط لتحديد موضع منفذ العرض على الشاشة
-    // تم خفض z-index لضمان عدم حجب القوائم المنسدلة (z-150)
+    // وضع الإشعارات في طبقة علوية جداً ولكن بدون حجب النقرات
     className={cn(
-      "fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px] pointer-events-none",
+      "fixed top-0 z-[200] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px] pointer-events-none",
       className
     )}
     {...props}

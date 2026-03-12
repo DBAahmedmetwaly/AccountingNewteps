@@ -1,8 +1,6 @@
-
-
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useEffect } from "react";
 import { AppLayoutContent } from "@/components/app-layout";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/auth-context";
@@ -29,37 +27,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             document.documentElement.style.removeProperty('--zoom-level');
         }
     }, [user?.themeSettings?.zoomLevel]);
-
-    useEffect(() => {
-        const reset = () => {
-            const body = document.body;
-            const html = document.documentElement;
-            if (body) {
-                body.style.pointerEvents = 'auto';
-                if (getComputedStyle(body).overflow === 'hidden') {
-                    body.style.overflow = '';
-                }
-            }
-            if (html && getComputedStyle(html).pointerEvents === 'none') {
-                html.style.pointerEvents = 'auto';
-            }
-        };
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                setTimeout(reset, 50);
-            }
-        };
-        const onClick = () => setTimeout(reset, 50);
-        const obs = new MutationObserver(() => setTimeout(reset, 50));
-        obs.observe(document.body, { attributes: true, attributeFilter: ['style', 'class'] });
-        document.addEventListener('keydown', onKey, true);
-        document.addEventListener('click', onClick, true);
-        return () => {
-            obs.disconnect();
-            document.removeEventListener('keydown', onKey, true);
-            document.removeEventListener('click', onClick, true);
-        };
-    }, []);
 
     if (authLoading || dataLoading) {
       return (

@@ -1,4 +1,3 @@
-
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -15,12 +14,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from 'next/navigation';
 import { Combobox } from "@/components/ui/combobox";
 import { useAuth } from "@/contexts/auth-context";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 
 interface OrderItem {
-  id: string; // Will be a composite ID for local state management
-  itemId: string; // The original item ID from the database
+  id: string; 
+  itemId: string; 
   name: string;
   unit: string;
   qty: number;
@@ -41,21 +40,34 @@ const QuickAddDialog = ({ open, onOpenChange, onConfirm, title, label }: { open:
     };
 
     return (
-        <AlertDialog open={open} onOpenChange={onOpenChange}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>{title}</AlertDialogTitle>
-                </AlertDialogHeader>
-                <div className="space-y-2">
-                    <Label htmlFor="quick-add-name">{label}</Label>
-                    <Input id="quick-add-name" value={name} onChange={(e) => setName(e.target.value)} />
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{title}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="quick-add-name">{label}</Label>
+                        <Input 
+                            id="quick-add-name" 
+                            value={name} 
+                            onChange={(e) => setName(e.target.value)} 
+                            autoFocus
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleConfirm();
+                                }
+                            }}
+                        />
+                    </div>
                 </div>
-                <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => onOpenChange(false)}>إلغاء</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleConfirm}>حفظ</AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => onOpenChange(false)}>إلغاء</Button>
+                    <Button onClick={handleConfirm}>حفظ</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     )
 }
 
@@ -158,7 +170,7 @@ export default function NewPurchaseOrderPage() {
                     total: item.total,
                 })),
                 total,
-                status: 'pending', // Initial status
+                status: 'pending', 
                 notes,
                 createdById: user?.id,
                 createdByName: user?.name,

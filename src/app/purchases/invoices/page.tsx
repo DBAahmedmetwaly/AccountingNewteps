@@ -1,5 +1,3 @@
-
-
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -18,11 +16,12 @@ import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/auth-context";
 import { Combobox } from "@/components/ui/combobox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 
 interface InvoiceItem {
-  itemId: string; // The original item ID
+  itemId: string; 
   name: string;
   qty: number;
   cost: number;
@@ -31,7 +30,7 @@ interface InvoiceItem {
   unit: string;
   code?: string;
   expiryDate?: string;
-  uniqueId: string; // A unique ID for the list key
+  uniqueId: string; 
   conversionFactor: number;
   originalUnit: string;
 }
@@ -41,7 +40,6 @@ interface SecondaryUnitOption {
     label: string;
     factor: number;
     price?: number;
-    barcode?: string;
 }
 
 interface Item {
@@ -59,18 +57,6 @@ interface Supplier {
     name: string;
     openingBalance?: number;
     items?: string[];
-}
-
-interface Customer {
-    id: string;
-    name: string;
-    openingBalance?: number;
-}
-
-interface Warehouse {
-    id: string;
-    name: string;
-    isMain?: boolean; // To distinguish main warehouses
 }
 
 interface CashAccount {
@@ -93,21 +79,34 @@ const QuickAddDialog = ({ open, onOpenChange, onConfirm, title, label }: { open:
     };
 
     return (
-        <AlertDialog open={open} onOpenChange={onOpenChange}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>{title}</AlertDialogTitle>
-                </AlertDialogHeader>
-                <div className="space-y-2">
-                    <Label htmlFor="quick-add-name">{label}</Label>
-                    <Input id="quick-add-name" value={name} onChange={(e) => setName(e.target.value)} />
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{title}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="quick-add-name">{label}</Label>
+                        <Input 
+                            id="quick-add-name" 
+                            value={name} 
+                            onChange={(e) => setName(e.target.value)} 
+                            autoFocus
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleConfirm();
+                                }
+                            }}
+                        />
+                    </div>
                 </div>
-                <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => onOpenChange(false)}>إلغاء</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleConfirm}>حفظ</AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => onOpenChange(false)}>إلغاء</Button>
+                    <Button onClick={handleConfirm}>حفظ</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     )
 }
 
@@ -122,7 +121,6 @@ export default function PurchaseInvoicePage() {
   const [selectedUnit, setSelectedUnit] = useState('base');
   const [availableUnits, setAvailableUnits] = useState<SecondaryUnitOption[]>([]);
   
-  // State for dialogs
   const [isQuickSupplierOpen, setIsQuickSupplierOpen] = useState(false);
   
   const [subtotal, setSubtotal] = useState(0);
@@ -190,7 +188,7 @@ export default function PurchaseInvoicePage() {
                 code: allItems.find((i:any) => i.id === item.id)?.code || '',
                 expiryDate: '',
                 uniqueId: `${item.id}-${Date.now()}-${Math.random()}`,
-                conversionFactor: 1, // Assume base unit when converting from PO
+                conversionFactor: 1, 
                 originalUnit: allItems.find((i:any) => i.id === item.id)?.baseUnit || 'قطعة',
             }));
             setItems(orderItems);
@@ -207,7 +205,7 @@ export default function PurchaseInvoicePage() {
   }, [suppliers, purchaseInvoices, supplierPayments]);
   
    const allWarehouses = useMemo(() => [...warehouses, ...inventoryZones], [warehouses, inventoryZones]);
-   const warehouseOptions = useMemo(() => allWarehouses.map((w: Warehouse) => ({ value: w.id, label: w.name })), [allWarehouses]);
+   const warehouseOptions = useMemo(() => allWarehouses.map((w: any) => ({ value: w.id, label: w.name })), [allWarehouses]);
 
    const itemsForCombobox = useMemo(() => {
     return allItems.map((item: Item) => ({ 
@@ -220,7 +218,6 @@ export default function PurchaseInvoicePage() {
         const balances = new Map<string, number>();
         cashAccounts.forEach((account:any) => {
             let balance = account.openingBalance || 0;
-            // Add other transactions to calculate current balance
              customerPayments.forEach((p: any) => { if(p.paidToAccountId === account.id) balance += p.amount });
              salesInvoices.filter((s:any) => s.status === 'approved').forEach((s: any) => { if (s.paidToAccountId === account.id) balance += (s.paidAmount || 0) });
              exceptionalIncomes.forEach((i: any) => { if (i.paidToAccountId === account.id) balance += i.amount });
@@ -237,14 +234,14 @@ export default function PurchaseInvoicePage() {
     
     const availableCashAccounts = useMemo(() => {
         if (warehouseId && warehouseId !== 'all') {
-            const branchAccount = cashAccounts.find((acc: CashAccount) => acc.warehouseId === warehouseId);
+            const branchAccount = cashAccounts.find((acc: any) => acc.warehouseId === warehouseId);
             if (branchAccount) return [branchAccount];
         }
-        return cashAccounts.filter((acc: CashAccount) => !acc.warehouseId);
+        return cashAccounts.filter((acc: any) => !acc.warehouseId);
     }, [warehouseId, cashAccounts]);
 
     const cashAccountOptions = React.useMemo(() => {
-        return availableCashAccounts.map((acc: CashAccount) => ({
+        return availableCashAccounts.map((acc: any) => ({
             value: acc.id,
             label: `${acc.name} (الرصيد: ${(accountBalances.get(acc.id) || 0).toLocaleString()})`
         }))
@@ -321,7 +318,7 @@ export default function PurchaseInvoicePage() {
         unit: selectedItem.baseUnit || 'قطعة',
         code: newItem.code,
         expiryDate: newItem.expiryDate,
-        total: newItem.qty * newItem.cost, // Total is based on the purchase unit
+        total: newItem.qty * newItem.cost, 
         uniqueId: `${newItem.id}-${Date.now()}`,
         conversionFactor: selectedUnitInfo.factor,
         originalUnit: selectedUnitInfo.label
@@ -378,7 +375,6 @@ export default function PurchaseInvoicePage() {
         }
 
         setIsSaving(true);
-        // No await here, let it run in the background
         saveInvoiceAsync(updatePrices);
         toast({ title: 'جاري الحفظ...', description: `سيتم حفظ فاتورة الشراء في الخلفية.` });
         router.push('/purchases/invoices/list');
@@ -421,7 +417,6 @@ export default function PurchaseInvoicePage() {
             batchNumber: batchNumberToSave, fromPoId: originalPoId, isTaxIncluded,
         };
 
-        const dateString = finalInvoiceDate.toISOString().split('T')[0];
         const path = `purchaseInvoices`;
 
         const newInvoiceId = await dbAction(path, 'add', invoiceData);
@@ -445,10 +440,6 @@ export default function PurchaseInvoicePage() {
             }
         }
         
-        const targetWarehouse = allWarehouses.find((w: any) => w.id === warehouseId);
-        const isMainWarehouse = targetWarehouse?.isMain || false;
-
-        // Determine stock-in record creation and status based on purchase workflow
         if (purchaseWorkflow === 'direct') {
             await dbAction('stockInRecords', 'add', {
                 warehouseId: warehouseId, date: finalInvoiceDate.toISOString(),
@@ -456,12 +447,8 @@ export default function PurchaseInvoicePage() {
                 reason: 'purchase', notes: `استلام مباشر من فاتورة شراء رقم ${invoiceData.invoiceNumber}`,
                 receiptNumber: `إذ-د-${await getNextId('stockIn')}`,
                 purchaseInvoiceId: newInvoiceId, batchNumber: batchNumberToSave,
-                status: 'completed', // Direct receipt is always completed to avoid GIT screen
+                status: 'completed', 
             });
-        } else {
-            // In 'manual' workflow, we don't create a stockInRecord here.
-            // This will make the invoice appear in the "Goods in Transit" screen.
-            console.log("Manual workflow: skipping immediate stock-in creation.");
         }
         
     } catch (error) {
@@ -472,8 +459,8 @@ export default function PurchaseInvoicePage() {
   const handleItemSelect = (itemId: string) => {
     const selectedItem = allItems.find((i: Item) => i.id === itemId);
     if (selectedItem) {
-        const baseUnitOption: SecondaryUnitOption = { value: 'base', label: selectedItem.baseUnit || 'قطعة', factor: 1, price: selectedItem.price || 0, barcode: selectedItem.code || '' };
-        const secondaryUnitsOptions: SecondaryUnitOption[] = (selectedItem.secondaryUnits || []).map((u: any) => ({
+        const baseUnitOption = { value: 'base', label: selectedItem.baseUnit || 'قطعة', factor: 1, price: selectedItem.price || 0 };
+        const secondaryUnitsOptions = (selectedItem.secondaryUnits || []).map((u: any) => ({
             value: u.name,
             label: u.name,
             factor: u.conversionFactor,
@@ -737,10 +724,3 @@ export default function PurchaseInvoicePage() {
     </>
   );
 }
-    
-
-
-
-
-
-
