@@ -43,7 +43,6 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-
 interface SaleInvoice {
   id: string;
   invoiceNumber: string;
@@ -59,11 +58,8 @@ interface SaleInvoice {
   subtotal: number;
   discount: number;
   tax?: number;
+  isLocked?: boolean;
 }
-interface Customer { id: string; name: string; openingBalance?: number; }
-interface Warehouse { id: string; name: string; }
-interface InventoryClosing { id: string; warehouseId: string; closingDate: string; }
-interface StockInRecord { id: string; purchaseInvoiceId?: string; }
 
 const InvoiceItemsDialog = ({ items, open, onOpenChange }: { items: any[], open: boolean, onOpenChange: (open: boolean) => void }) => (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -95,8 +91,7 @@ const InvoiceItemsDialog = ({ items, open, onOpenChange }: { items: any[], open:
             </div>
         </DialogContent>
     </Dialog>
-)
-
+);
 
 export default function SalesInvoicesListPage() {
   const { salesInvoices: invoices, customers, warehouses, inventoryClosings, customerPayments, salesReturns, posSales, posReturns, settings, loading } = useData();
@@ -126,14 +121,13 @@ export default function SalesInvoicesListPage() {
   const [sharingData, setSharingData] = useState<{ invoice: SaleInvoice, type: 'A4' | 'Thermal' } | null>(null);
 
   useEffect(() => {
-    // Aggressive cleanup to prevent frozen screen
     const cleanup = () => {
-        document.body.style.pointerEvents = 'auto';
-        document.body.style.overflow = 'auto';
+        if (!printModal.open && !isSharing && !itemsModal.open) {
+            document.body.style.pointerEvents = 'auto';
+            document.body.style.overflow = 'auto';
+        }
     };
-    if (!printModal.open && !isSharing && !itemsModal.open) {
-        cleanup();
-    }
+    cleanup();
   }, [printModal.open, isSharing, itemsModal.open]);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
@@ -142,10 +136,10 @@ export default function SalesInvoicesListPage() {
   
   const lastClosingDates = useMemo(() => {
     const dates = new Map<string, Date>();
-    warehouses.forEach((wh: Warehouse) => {
-        const closings = inventoryClosings.filter((c: InventoryClosing) => c.warehouseId === wh.id);
+    warehouses.forEach((wh: any) => {
+        const closings = inventoryClosings.filter((c: any) => c.warehouseId === wh.id);
         if (closings.length > 0) {
-            const lastDate = new Date(Math.max(...closings.map(c => new Date(c.closingDate).getTime())));
+            const lastDate = new Date(Math.max(...closings.map((c: any) => new Date(c.closingDate).getTime())));
             dates.set(wh.id, lastDate);
         }
     });
@@ -155,10 +149,9 @@ export default function SalesInvoicesListPage() {
   const customerOptions = useMemo(() => ([{value: 'all', label: 'كل العملاء'}, ...customers.map((c:any) => ({ value: c.id, label: c.name }))]), [customers]);
   const warehouseOptions = useMemo(() => ([{value: 'all', label: 'كل الفروع'}, ...warehouses.map((w:any) => ({ value: w.id, label: w.name }))]), [warehouses]);
 
-
   const filteredInvoices = useMemo(() => {
     return invoices
-      .map((invoice: SaleInvoice) => {
+      .map((invoice: any) => {
         const lastClosingDate = lastClosingDates.get(invoice.warehouseId);
         const isLocked = lastClosingDate && new Date(invoice.date) <= lastClosingDate;
         return { ...invoice, isLocked };
@@ -225,8 +218,7 @@ export default function SalesInvoicesListPage() {
     setSharingData({ invoice, type });
     setIsSharing(true);
 
-    // Wait for the hidden component to render
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     if (!shareRef.current) {
         setIsSharing(false);
@@ -235,7 +227,12 @@ export default function SalesInvoicesListPage() {
     }
 
     try {
-        const dataUrl = await toPng(shareRef.current, { cacheBust: true, quality: 0.95 });
+        const dataUrl = await toPng(shareRef.current, { 
+            cacheBust: true, 
+            quality: 0.95,
+            pixelRatio: 2,
+            backgroundColor: '#ffffff'
+        });
         const blob = await (await fetch(dataUrl)).blob();
         const file = new File([blob], `${invoice.invoiceNumber}.png`, { type: blob.type });
 
@@ -246,7 +243,6 @@ export default function SalesInvoicesListPage() {
                 text: `فاتورة مبيعات من ${companySettings.companyName}`,
             });
         } else {
-            // Fallback: Download
             const link = document.createElement('a');
             link.href = dataUrl;
             link.download = `${invoice.invoiceNumber}.png`;
@@ -261,7 +257,6 @@ export default function SalesInvoicesListPage() {
         setSharingData(null);
     }
   };
-
 
   return (
     <>
@@ -408,14 +403,12 @@ export default function SalesInvoicesListPage() {
         </Card>
       </main>
 
-      {/* حوار عرض الأصناف */}
       <InvoiceItemsDialog 
         items={itemsModal.items} 
         open={itemsModal.open} 
         onOpenChange={(open) => setItemsModal({ ...itemsModal, open })} 
       />
 
-      {/* حوار الطباعة الموحد */}
       <Dialog open={printModal.open} onOpenChange={(open) => !open && setPrintModal({ ...printModal, open: false })}>
         <DialogContent className={cn("p-0 overflow-hidden flex flex-col max-h-[90vh]", printModal.type === 'A4' ? "max-w-4xl" : "max-w-sm")}>
             <DialogHeader className="p-4 shrink-0 bg-muted/30">
@@ -452,7 +445,6 @@ export default function SalesInvoicesListPage() {
         </DialogContent>
       </Dialog>
 
-      {/* عنصر مخفي لتوليد الصور للمشاركة */}
       <div style={{ position: 'fixed', top: '200vh', left: 0, zIndex: -100 }}>
           <div ref={shareRef} className="bg-white">
               {sharingData && (

@@ -1,31 +1,26 @@
 
-// استيراد React للسماح باستخدام JSX
 import React from 'react';
-// استيراد مكون Barcode لإنشاء الباركود
 import Barcode from 'react-barcode';
 
-// تعريف واجهة الخصائص (Props) لمكون قالب الفاتورة
 interface InvoiceTemplateProps {
-  invoice: any; // بيانات الفاتورة
-  company: any; // بيانات الشركة
-  customer?: any; // بيانات العميل أو المورد
-  isPurchase?: boolean; // علامة لتحديد ما إذا كانت الفاتورة فاتورة شراء
-  customerBalance?: number; // إجمالي مديونية العميل بالكامل
+  invoice: any; 
+  company: any; 
+  customer?: any; 
+  isPurchase?: boolean; 
+  customerBalance?: number; 
 }
 
-// تعريف مكون قالب الفاتورة كدالة وظيفية
 export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, company, customer, isPurchase = false, customerBalance }) => {
     
-  // تعريف الأنماط المضمنة (Inline Styles) للتحكم الدقيق في شكل الطباعة
   const receiptStyle: React.CSSProperties = {
-    width: '210mm', // عرض ورق A4
-    minHeight: '297mm', // طول ورق A4
+    width: '210mm', 
+    minHeight: '297mm', 
     fontFamily: '"Noto Kufi Arabic", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
     fontSize: '12px',
     color: '#000',
     padding: '20mm',
     boxSizing: 'border-box',
-    direction: 'rtl', // تحديد اتجاه النص من اليمين لليسار
+    direction: 'rtl', 
     textAlign: 'right',
     display: 'flex',
     flexDirection: 'column',
@@ -102,7 +97,6 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
 
   return (
     <div style={receiptStyle} className="bg-white text-black printable-area">
-      {/* رأس الفاتورة */}
       <header style={headerStyle}>
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
             {company?.logoUrl && (
@@ -125,7 +119,6 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
         </div>
       </header>
       
-      {/* بيانات العميل/المورد */}
       <div style={{marginBottom: '20px'}}>
         <h3 style={{borderBottom: '1px solid #ccc', paddingBottom: '5px', marginBottom: '10px'}}>بيانات {partyLabel}:</h3>
         <p style={pStyle}><strong>الاسم:</strong> {partyName}</p>
@@ -133,7 +126,6 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
         {customer?.phone && <p style={pStyle}><strong>الهاتف:</strong> {customer.phone}</p>}
       </div>
       
-      {/* جدول الأصناف */}
       <table style={tableStyle}>
         <thead>
           <tr>
@@ -157,7 +149,6 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
         </tbody>
       </table>
 
-      {/* قسم الإجماليات */}
       <div style={totalsContainerStyle}>
         <div style={totalsRowStyle}><span>الإجمالي الفرعي</span> <span>{invoice.subtotal?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
         <div style={totalsRowStyle}><span>الخصم</span> <span>{invoice.discount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
@@ -166,7 +157,6 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
         <div style={totalsRowStyle}><span>المدفوع</span> <span>{invoice.paidAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
         <div style={{...totalsRowStyle, fontWeight: 'bold'}}><span>باقي المستحق على هذه الفاتورة</span> <span>{(invoice.total - (invoice.paidAmount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
         
-        {/* إجمالي مديونية العميل بالكامل */}
         {!isPurchase && customerBalance !== undefined && (
             <div style={{...totalsRowStyle, marginTop: '10px', borderTop: '1px double #000', paddingTop: '5px', color: '#d00', fontWeight: 'bold' }}>
                 <span>إجمالي المديونية السابقة والحالية</span>
@@ -175,7 +165,6 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
         )}
       </div>
 
-       {/* تذييل الفاتورة */}
        <footer style={footerStyle}>
          {invoice.invoiceNumber && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', marginBottom: '10px', minHeight: '40px' }}>

@@ -20,7 +20,7 @@ import { useData } from "@/contexts/data-provider";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface ReturnItem {
-  id: string; // original item id
+  id: string; 
   name: string;
   qty: number;
   price: number;
@@ -28,7 +28,9 @@ interface ReturnItem {
   total: number;
   unit: string;
   code?: string;
-  uniqueId: string; // for list key
+  uniqueId: string;
+  soldQty: number;
+  returnedBefore: number;
 }
 
 interface Item { id: string; name: string; unit: string; price?: number; cost?: number; code?: string; }
@@ -46,7 +48,7 @@ export default function NewSalesReturnPage() {
   const { 
     salesReturns, cashAccounts, customerPayments, salesInvoices: allSales, posSales, posReturns, 
     exceptionalIncomes, treasuryTransactions, expenses, supplierPayments, employeeAdvances, 
-    profitDistributions, dbAction, getNextId, loading 
+    profitDistributions, dbAction, getNextId, loading, items: allItemsData, customers: allCustomersData, warehouses: allWarehousesData
   } = useData();
   
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(searchParams.get('invoiceId'));
@@ -68,19 +70,14 @@ export default function NewSalesReturnPage() {
     date: ''
   });
   
-  const { data: availableItems } = useFirebase<Item>('items');
-  const { data: customers } = useFirebase<Customer>('customers');
-  const { data: warehouses } = useFirebase<Warehouse>('warehouses');
-  const { data: invoices } = useFirebase<SaleInvoice>('salesInvoices');
-
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
     setReturnDate(today);
   }, []);
 
   const filteredInvoices = useMemo(() => {
-    if (!invoices) return [];
-    return invoices.filter((inv: any) => {
+    if (!allSales) return [];
+    return allSales.filter((inv: any) => {
         const invDate = new Date(inv.date).toISOString().split('T')[0];
         const filterDate = filters.date ? new Date(filters.date).toISOString().split('T')[0] : '';
         
@@ -88,7 +85,7 @@ export default function NewSalesReturnPage() {
                (filters.warehouseId && filters.warehouseId !== 'all' ? inv.warehouseId === filters.warehouseId : true) &&
                (filters.date ? invDate === filterDate : true);
     });
-  }, [invoices, filters]);
+  }, [allSales, filters]);
 
   const invoiceOptions = useMemo(() => {
       return filteredInvoices.map((inv: any) => ({
@@ -98,33 +95,49 @@ export default function NewSalesReturnPage() {
   }, [filteredInvoices]);
 
   useEffect(() => {
-    if (selectedInvoiceId && invoices.length > 0 && availableItems.length > 0) {
-      const invoice = invoices.find((inv: any) => inv.id === selectedInvoiceId);
+    if (selectedInvoiceId && allSales.length > 0 && allItemsData.length > 0) {
+      const invoice = allSales.find((inv: any) => inv.id === selectedInvoiceId);
       if (invoice) {
         setCustomerId(invoice.customerId);
         setWarehouseId(invoice.warehouseId);
+
+        // Calculate previous returns
+        const previousReturns = (salesReturns || []).filter((r: any) => r.originalInvoiceId === selectedInvoiceId);
+        const prevReturnedByItem = new Map<string, number>();
+        previousReturns.forEach((r: any) => {
+            (r.items || []).forEach((it: any) => {
+                const key = String(it.id || it.itemId);
+                prevReturnedByItem.set(key, (prevReturnedByItem.get(key) || 0) + (it.qty || 0));
+            });
+        });
+
         const invoiceItems = invoice.items.map((item: any, index: any) => {
-          const master = availableItems.find((i: any) => i.id === item.id);
+          const master = allItemsData.find((i: any) => i.id === item.id);
+          const returnedBefore = prevReturnedByItem.get(String(item.id)) || 0;
+          const remaining = Math.max(0, item.qty - returnedBefore);
+
           return {
             id: item.id,
             name: item.name,
-            qty: item.qty,
+            qty: remaining, // Default to remaining
+            soldQty: item.qty,
+            returnedBefore: returnedBefore,
             price: item.price,
             cost: item.cost || master?.cost || 0,
-            total: item.qty * item.price,
+            total: remaining * item.price,
             unit: master?.unit || 'قطعة',
             code: master?.code,
             uniqueId: `${item.id}-${Date.now()}-${index}`
           };
         });
-        setItems(invoiceItems);
+        setItems(invoiceItems.filter((i: any) => i.soldQty > i.returnedBefore));
       }
     } else {
         setItems([]);
-        setSupplierId("");
+        setCustomerId("");
         setWarehouseId("");
     }
-  }, [selectedInvoiceId, invoices, availableItems]);
+  }, [selectedInvoiceId, allSales, allItemsData, salesReturns]);
   
   useEffect(() => {
     const newTotal = items.reduce((acc, item) => acc + item.total, 0);
@@ -153,7 +166,7 @@ export default function NewSalesReturnPage() {
         balances.set(account.id, balance);
     });
     return balances;
-  }, [cashAccounts, customerPayments, allSales, exceptionalIncomes, treasuryTransactions, posSales, expenses, supplierPayments, employeeAdvances]);
+  }, [cashAccounts, customerPayments, allSales, exceptionalIncomes, treasuryTransactions, posSales, expenses, supplierPayments, employeeAdvances, profitDistributions]);
 
   const availableCashAccounts = useMemo(() => {
     if (warehouseId) {
@@ -190,30 +203,27 @@ export default function NewSalesReturnPage() {
         return;
     }
 
-    const invoice = invoices.find((inv: any) => inv.id === selectedInvoiceId);
+    const invoice = allSales.find((inv: any) => inv.id === selectedInvoiceId);
     if (!invoice) {
         toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم العثور على الفاتورة الأصلية.' });
         return;
     }
 
-    // كميات الأصناف في الفاتورة الأصلية
     const soldQtyByItem = new Map<string, number>();
     invoice.items.forEach((it: any) => {
         const key = String(it.id || it.itemId);
         soldQtyByItem.set(key, (soldQtyByItem.get(key) || 0) + (it.qty || 0));
     });
 
-    // كميات المرتجعات السابقة لنفس الفاتورة
-    const previousReturns = (salesReturns as SalesReturnRecord[] || []).filter(r => String(r.originalInvoiceId) === String(selectedInvoiceId));
+    const previousReturns = (salesReturns || []).filter((r: any) => String(r.originalInvoiceId) === String(selectedInvoiceId));
     const prevReturnedByItem = new Map<string, number>();
-    previousReturns.forEach(r => {
+    previousReturns.forEach((r: any) => {
         (r.items || []).forEach((it: any) => {
             const key = String(it.id || it.itemId);
             prevReturnedByItem.set(key, (prevReturnedByItem.get(key) || 0) + (it.qty || 0));
         });
     });
 
-    // التحقق من أن الكمية الجديدة + السابقة لا تتجاوز الكمية المباعة
     const overReturnedItems: string[] = [];
     items.forEach(retItem => {
         const baseId = String(retItem.id);
@@ -276,8 +286,8 @@ export default function NewSalesReturnPage() {
     setFilters(prev => ({...prev, [key]: value}));
   };
   
-  const customerOptions = useMemo(() => ([{value: 'all', label: 'كل العملاء'}, ...customers.map((c:any) => ({value: c.id, label: c.name}))]), [customers]);
-  const warehouseOptions = useMemo(() => ([{value: 'all', label: 'كل المخازن'}, ...warehouses.map((w:any) => ({value: w.id, label: w.name}))]), [warehouses]);
+  const customerOptions = useMemo(() => ([{value: 'all', label: 'كل العملاء'}, ...allCustomersData.map((c:any) => ({value: c.id, label: c.name}))]), [allCustomersData]);
+  const warehouseOptions = useMemo(() => ([{value: 'all', label: 'كل المخازن'}, ...allWarehousesData.map((w:any) => ({value: w.id, label: w.name}))]), [allWarehousesData]);
 
 
   const ReturnForm = () => (
@@ -285,11 +295,11 @@ export default function NewSalesReturnPage() {
         <div className="grid md:grid-cols-3 gap-6">
             <div className="space-y-2">
                 <Label htmlFor="customer">العميل</Label>
-                <Input value={customers.find(c => c.id === customerId)?.name} disabled className="bg-muted" />
+                <Input value={allCustomersData.find((c: any) => c.id === customerId)?.name} disabled className="bg-muted" />
             </div>
             <div className="space-y-2">
                 <Label htmlFor="warehouse">إلى مخزن</Label>
-                <Input value={warehouses.find(w => w.id === warehouseId)?.name} disabled className="bg-muted" />
+                <Input value={allWarehousesData.find((w: any) => w.id === warehouseId)?.name} disabled className="bg-muted" />
             </div>
              <div className="space-y-2">
                 <Label htmlFor="return-date">تاريخ المرتجع</Label>
@@ -298,14 +308,15 @@ export default function NewSalesReturnPage() {
         </div>
 
         <div>
-        <Label>الأصناف المرتجعة</Label>
+        <Label className="mb-2 block font-bold">الأصناف المرتجعة</Label>
         <div className="w-full overflow-auto border rounded-lg">
             <Table>
                 <TableHeader>
-                <TableRow>
-                    <TableHead className="w-[40%]">الصنف</TableHead>
-                    <TableHead className="text-center">الوحدة</TableHead>
-                    <TableHead className="text-center">الكمية</TableHead>
+                <TableRow className="bg-muted/50">
+                    <TableHead className="w-[30%]">الصنف</TableHead>
+                    <TableHead className="text-center">المباع</TableHead>
+                    <TableHead className="text-center">المرتجع سابقاً</TableHead>
+                    <TableHead className="text-center">الكمية المراد إرجاعها</TableHead>
                     <TableHead className="text-center">سعر الوحدة</TableHead>
                     <TableHead className="text-center">الإجمالي</TableHead>
                     <TableHead className="text-center w-[100px]">الإجراء</TableHead>
@@ -314,11 +325,12 @@ export default function NewSalesReturnPage() {
                 <TableBody>
                 {items.map((item) => (
                     <TableRow key={item.uniqueId}>
-                    <TableCell>{item.name}</TableCell>
-                    <TableCell className="text-center">{item.unit}</TableCell>
-                    <TableCell><Input type="number" value={item.qty} onChange={e => setItems(items.map(i => i.uniqueId === item.uniqueId ? {...i, qty: Number(e.target.value), total: Number(e.target.value) * i.price} : i))} className="text-center h-8" /></TableCell>
+                    <TableCell className="font-medium">{item.name}</TableCell>
+                    <TableCell className="text-center">{item.soldQty}</TableCell>
+                    <TableCell className="text-center text-muted-foreground">{item.returnedBefore}</TableCell>
+                    <TableCell><Input type="number" value={item.qty} onChange={e => setItems(items.map(i => i.uniqueId === item.uniqueId ? {...i, qty: Number(e.target.value), total: Number(e.target.value) * i.price} : i))} className="text-center h-8 w-24 mx-auto font-bold" /></TableCell>
                     <TableCell className="text-center">ج.م {item.price.toFixed(2)}</TableCell>
-                    <TableCell className="text-center">ج.م {item.total.toFixed(2)}</TableCell>
+                    <TableCell className="text-center font-bold">ج.م {item.total.toFixed(2)}</TableCell>
                     <TableCell className="text-center">
                         <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.uniqueId)}>
                         <Trash2 className="h-4 w-4 text-destructive" />

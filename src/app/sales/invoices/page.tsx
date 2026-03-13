@@ -23,15 +23,15 @@ import { Badge } from "@/components/ui/badge";
 
 
 interface InvoiceItem {
-  id: string; // Will be a composite ID for local state management, e.g., 'itemId-uniqueId'
-  itemId: string; // The original item ID from the database
+  id: string; 
+  itemId: string;
   name: string;
   qty: number;
   price: number;
   cost: number;
   total: number;
-  unit: string; // Display name of the unit being sold (e.g., 'كرتونة')
-  baseUnit: string; // The smallest unit (e.g., 'قطعة')
+  unit: string; 
+  baseUnit: string; 
   conversionFactor: number;
   code?: string;
   uniqueId: string;
@@ -103,9 +103,10 @@ export default function SalesInvoicePage() {
     
     const [invoiceDate, setInvoiceDate] = useState<string>('');
     const [dueDate, setDueDate] = useState<string>('');
+    const [location, setLocation] = useState<{ latitude: number, longitude: number } | null>(null);
+    const [locationError, setLocationError] = useState<string | null>("لم يتم تحديد الموقع بعد");
 
     useEffect(() => {
-        // Aggressive cleanup to prevent frozen screen
         const cleanup = () => {
             document.body.style.pointerEvents = 'auto';
             document.body.style.overflow = 'auto';
@@ -274,7 +275,7 @@ export default function SalesInvoicePage() {
             return;
         }
         if (paidAmount > 0 && !paidToAccountId) {
-            toast({ variant: "destructive", title: "بيانات غير مكتملة", description: "يرجى تحديد حساب الخزينة/البنك لاستلام الدفعة." });
+            toast({ variant: "destructive", title: "بيانات غير مكتملة", description: "يرجى تحديد حساب الخزينة/البنك لاستلاف الدفعة." });
             return;
         }
 

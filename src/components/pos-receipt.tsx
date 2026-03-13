@@ -1,17 +1,13 @@
 
 "use client";
 
-// استيراد React للسماح باستخدام JSX
 import React, { useEffect, useRef } from 'react';
-// استيراد مكتبة jsbarcode لإنشاء الباركود
 import JsBarcode from 'jsbarcode';
 
-// تعريف واجهة الخصائص (Props) لمكون قالب الفاتورة
 export const PosReceipt = ({ invoice, company, design, warehouse, customer, customerBalance }: { invoice: any, company: any, design: any, warehouse?: any, customer?: any, customerBalance?: number }) => {
   
-  // تعريف الأنماط المضمنة (Inline Styles) للتحكم الدقيق في شكل الطباعة
   const receiptStyle: React.CSSProperties = {
-    width: `${design?.receiptWidth || 72}mm`, // عرض الإيصال بناءً على الإعدادات
+    width: `${design?.receiptWidth || 72}mm`, 
     fontFamily: 'monospace, "Noto Kufi Arabic", sans-serif',
     fontSize: `${design?.fontSizes?.items || 10}px`,
     color: '#000',
@@ -75,7 +71,6 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
   const paidAmount = Number(invoice.paidAmount ?? totalAmount);
   const remainingDue = Math.max(0, totalAmount - paidAmount);
   
-  // مكون جديد لتوليد الباركود باستخدام SVG لضمان الدقة
   const BarcodeDisplay = ({ value, design }: { value: string, design: any }) => {
     const ref = React.useRef<SVGSVGElement>(null);
 
@@ -102,15 +97,20 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
 
   return (
     <div style={receiptStyle} className="bg-white text-black printable-area">
-      {/* رأس الإيصال */}
       <div style={headerStyle}>
         {invoice.isCheck && <h2 style={{...h1Style, marginBottom: '10px', border: '1px solid black', padding: '4px'}}>شيك مبدئي</h2>}
-        {design?.showLogo && company?.logoUrl && <img src={company.logoUrl} alt="logo" crossOrigin="anonymous" style={{ maxWidth: '80px', maxHeight: '80px', margin: '0 auto 5px', objectFit: 'contain' }} />}
+        {design?.showLogo && company?.logoUrl && (
+            <img 
+                src={company.logoUrl} 
+                alt="logo" 
+                crossOrigin="anonymous" 
+                style={{ maxWidth: '80px', maxHeight: '80px', margin: '0 auto 5px', objectFit: 'contain' }} 
+            />
+        )}
         {design?.showCompanyName && <h1 style={h1Style}>{company?.companyName || 'اسم الشركة'}</h1>}
         {design?.showAddress && <p style={pStyle}>{company?.companyAddress || 'عنوان الشركة'}</p>}
         {design?.showPhoneNumber && <p style={pStyle}>{company?.phone || 'رقم الهاتف'}</p>}
         
-        {/* ETA Header Info */}
         {etaSettings && (
           <div style={{ fontSize: '10px', marginTop: '5px', borderTop: '1px solid #eee', paddingTop: '5px' }}>
             {etaSettings.taxRegNumber && <p style={pStyle}>رقم التسجيل: {etaSettings.taxRegNumber}</p>}
@@ -123,7 +123,6 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
         {invoice.isDelivery && <p style={{...pStyle, fontWeight: 'bold', fontSize: '14px', border: '1px solid black', padding: '2px', margin: '5px auto' }}>فاتورة توصيل (دليفري)</p>}
       </div>
       
-      {/* معلومات الفاتورة */}
       <div style={{ borderBottom: '1px dashed #000', paddingBottom: '5px', marginBottom: '5px', fontSize: `${design?.fontSizes?.header || 12}px` }}>
         {design?.showInvoiceNumber && <p style={pStyle}>رقم: {invoice.invoiceNumber}</p>}
         {invoice.orderReference && <p style={{...pStyle, fontWeight: 'bold'}}>الطلب: {invoice.orderReference}</p>}
@@ -134,7 +133,6 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
         {invoice.isDelivery && customer && customer.address && <p style={{...pStyle, fontWeight: 'bold'}}>العنوان: {customer.address}</p>}
       </div>
       
-      {/* جدول الأصناف */}
       <table style={tableStyle}>
         <thead>
           <tr>
@@ -156,7 +154,6 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
         </tbody>
       </table>
 
-      {/* قسم الإجماليات */}
       <div style={totalsStyle}>
         <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between' }}><span>الإجمالي الفرعي:</span> <span>{(invoice.subtotal || 0).toFixed(2)}</span></p>
         {design?.showDiscount && <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between' }}><span>الخصم:</span> <span>{(invoice.discount || 0).toFixed(2)}</span></p>}
@@ -170,7 +167,6 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
         <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between' }}><span>إجمالي المدفوع:</span> <span>{paidAmount.toFixed(2)}</span></p>
         <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between' }}><span>باقي المستحق على الفاتورة:</span> <span>{remainingDue.toFixed(2)}</span></p>
         
-        {/* إجمالي مديونية العميل بالكامل */}
         {customerBalance !== undefined && (
             <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between', marginTop: '5px', paddingTop: '5px', borderTop: '1px double #000', fontWeight: 'bold', color: '#d00' }}>
                 <span>إجمالي مديونية العميل:</span>
@@ -190,7 +186,6 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
         )}
       </div>
 
-       {/* تذييل الإيصال والباركود */}
        <div style={footerStyle}>
          {design?.showBarcode && barcodeValue && (
             <div style={{ display: 'flex', justifyContent: 'center', width: '100%', overflow: 'hidden', minHeight: '50px' }}>

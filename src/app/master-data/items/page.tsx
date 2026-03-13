@@ -208,24 +208,27 @@ const MatrixGeneratorDialog = ({ onSave, onOpenChange, itemSections, itemCategor
     useEffect(() => {
         const { itemGroupId, categoryId, sectionId } = baseItem;
         if (itemGroupId && (!categoryId || !sectionId)) {
-            const category = findParent(itemGroupId, itemGroups, 'parentCategoryId', itemCategories);
-            if (category) {
-                 const section = findParent(category.id, itemCategories, 'sectionId', itemSections);
-                 if (section) {
-                     setBaseItem(prev => ({
-                        ...prev,
-                        categoryId: category.id,
-                        sectionId: section.id,
-                    }));
-                 }
+            const group = itemGroups.find(g => g.id === itemGroupId);
+            if (group && group.parentCategoryId) {
+                const category = itemCategories.find(c => c.id === group.parentCategoryId);
+                if (category) {
+                    const section = itemSections.find(s => s.id === category.sectionId);
+                    if (section) {
+                        setBaseItem(prev => ({
+                            ...prev,
+                            categoryId: category.id,
+                            sectionId: section.id,
+                        }));
+                    }
+                }
             }
         } else if (categoryId && !sectionId) {
-            const section = findParent(categoryId, itemCategories, 'sectionId', itemSections);
-            if(section) {
-                 setBaseItem(prev => ({ ...prev, sectionId: section.id }));
+            const category = itemCategories.find(c => c.id === categoryId);
+            if(category && category.sectionId) {
+                 setBaseItem(prev => ({ ...prev, sectionId: category.sectionId }));
             }
         }
-    }, [baseItem.itemGroupId, baseItem.categoryId, itemSections, itemCategories, itemGroups, findParent]);
+    }, [baseItem.itemGroupId, baseItem.categoryId, itemSections, itemCategories, itemGroups]);
     
     
     const handleGenerate = async () => {
@@ -869,14 +872,13 @@ export default function ItemsPage() {
     const router = useRouter();
 
     useEffect(() => {
-        // Aggressive cleanup to prevent frozen screen after closing dialogs
         const cleanup = () => {
-            document.body.style.pointerEvents = 'auto';
-            document.body.style.overflow = 'auto';
+            if (!isEditOpen && !isMatrixOpen && !isPriceUpdateOpen) {
+                document.body.style.pointerEvents = 'auto';
+                document.body.style.overflow = 'auto';
+            }
         };
-        if (!isEditOpen && !isMatrixOpen && !isPriceUpdateOpen) {
-            cleanup();
-        }
+        cleanup();
     }, [isEditOpen, isMatrixOpen, isPriceUpdateOpen]);
 
     const [filters, setFilters] = useState({
