@@ -109,6 +109,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
                 <img 
                     src={company.logoUrl} 
                     alt="Logo" 
+                    crossOrigin="anonymous"
                     style={{ maxWidth: '100px', maxHeight: '80px', objectFit: 'contain' }} 
                 />
             )}

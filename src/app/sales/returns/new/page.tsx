@@ -43,7 +43,11 @@ export default function NewSalesReturnPage() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { salesReturns, cashAccounts, customerPayments, salesInvoices: allSales, posSales, posReturns, exceptionalIncomes, treasuryTransactions, expenses, supplierPayments, employeeAdvances, profitDistributions, dbAction, getNextId } = useData();
+  const { 
+    salesReturns, cashAccounts, customerPayments, salesInvoices: allSales, posSales, posReturns, 
+    exceptionalIncomes, treasuryTransactions, expenses, supplierPayments, employeeAdvances, 
+    profitDistributions, dbAction, getNextId, loading 
+  } = useData();
   
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(searchParams.get('invoiceId'));
   const [items, setItems] = useState<ReturnItem[]>([]);
@@ -64,10 +68,10 @@ export default function NewSalesReturnPage() {
     date: ''
   });
   
-  const { data: availableItems, loading: loadingItems } = useFirebase<Item>('items');
-  const { data: customers, loading: loadingCustomers } = useFirebase<Customer>('customers');
-  const { data: warehouses, loading: loadingWarehouses } = useFirebase<Warehouse>('warehouses');
-  const { data: invoices, loading: loadingInvoices } = useFirebase<SaleInvoice>('salesInvoices');
+  const { data: availableItems } = useFirebase<Item>('items');
+  const { data: customers } = useFirebase<Customer>('customers');
+  const { data: warehouses } = useFirebase<Warehouse>('warehouses');
+  const { data: invoices } = useFirebase<SaleInvoice>('salesInvoices');
 
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -117,7 +121,7 @@ export default function NewSalesReturnPage() {
       }
     } else {
         setItems([]);
-        setCustomerId("");
+        setSupplierId("");
         setWarehouseId("");
     }
   }, [selectedInvoiceId, invoices, availableItems]);
@@ -144,6 +148,7 @@ export default function NewSalesReturnPage() {
         expenses.forEach((ex: any) => { if (ex.paidFromAccountId === account.id) balance -= ex.amount });
         supplierPayments.forEach((sp: any) => { if (sp.paidFromAccountId === account.id) balance -= sp.amount });
         employeeAdvances.forEach((ea: any) => { if (ea.paidFromAccountId === account.id) balance -= ea.amount });
+        profitDistributions.forEach((pd: any) => { if (pd.paidFromAccountId === account.id) balance -= pd.amount });
         treasuryTransactions.forEach((tx: any) => { if (tx.accountId === account.id && tx.type === 'withdrawal') balance -= tx.amount });
         balances.set(account.id, balance);
     });
@@ -267,8 +272,6 @@ export default function NewSalesReturnPage() {
     }
   }
 
-  const loading = loadingItems || loadingCustomers || loadingWarehouses || loadingInvoices;
-  
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
     setFilters(prev => ({...prev, [key]: value}));
   };

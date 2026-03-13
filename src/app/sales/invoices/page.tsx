@@ -104,6 +104,14 @@ export default function SalesInvoicePage() {
     const [invoiceDate, setInvoiceDate] = useState<string>('');
     const [dueDate, setDueDate] = useState<string>('');
 
+    useEffect(() => {
+        // Aggressive cleanup to prevent frozen screen
+        const cleanup = () => {
+            document.body.style.pointerEvents = 'auto';
+            document.body.style.overflow = 'auto';
+        };
+        cleanup();
+    }, []);
 
     const allDataContext = useData();
     const { 
@@ -217,8 +225,8 @@ export default function SalesInvoicePage() {
         setAvailableUnits([]);
     };
 
-    const handleRemoveItem = (id: string) => {
-        setItems(items.filter((item) => item.uniqueId !== id));
+    const handleRemoveItem = (uniqueId: string) => {
+        setItems(items.filter((item) => item.uniqueId !== uniqueId));
     };
 
     const handleItemSelect = (itemId: string) => {
@@ -543,7 +551,7 @@ export default function SalesInvoicePage() {
                                         value={newItem.id}
                                         onValueChange={handleItemSelect}
                                         placeholder={!warehouseId ? "اختر مخزنًا أولاً" : "اختر صنفًا..."}
-                                        emptyMessage="لا توجد أصناف."
+                                        emptyMessage="لم يتم العثور على الصنف."
                                         className="w-full"
                                         disabled={!warehouseId}
                                     />

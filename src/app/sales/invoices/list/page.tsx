@@ -1,6 +1,7 @@
+
 "use client";
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -64,34 +65,36 @@ interface Warehouse { id: string; name: string; }
 interface InventoryClosing { id: string; warehouseId: string; closingDate: string; }
 interface StockInRecord { id: string; purchaseInvoiceId?: string; }
 
-const InvoiceItemsDialog = ({ items }: { items: any[] }) => (
-    <DialogContent className="max-w-3xl">
-        <DialogHeader>
-            <DialogTitle>تفاصيل أصناف الفاتورة</DialogTitle>
-        </DialogHeader>
-        <div className="w-full overflow-x-auto border rounded-md">
-            <Table className="min-w-[500px]">
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>الصنف</TableHead>
-                        <TableHead className="text-center">الكمية</TableHead>
-                        <TableHead className="text-center">سعر الوحدة</TableHead>
-                        <TableHead className="text-center">الإجمالي</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {items && items.map((item, idx) => (
-                        <TableRow key={idx}>
-                            <TableCell className="font-medium">{item.name}</TableCell>
-                            <TableCell className="text-center font-bold">{item.qty}</TableCell>
-                            <TableCell className="text-center">{item.price?.toLocaleString() || '-'}</TableCell>
-                            <TableCell className="text-center font-semibold">{item.total?.toLocaleString() || '-'}</TableCell>
+const InvoiceItemsDialog = ({ items, open, onOpenChange }: { items: any[], open: boolean, onOpenChange: (open: boolean) => void }) => (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-3xl">
+            <DialogHeader>
+                <DialogTitle>تفاصيل أصناف الفاتورة</DialogTitle>
+            </DialogHeader>
+            <div className="w-full overflow-x-auto border rounded-md">
+                <Table className="min-w-[500px]">
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>الصنف</TableHead>
+                            <TableHead className="text-center">الكمية</TableHead>
+                            <TableHead className="text-center">سعر الوحدة</TableHead>
+                            <TableHead className="text-center">الإجمالي</TableHead>
                         </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        </div>
-    </DialogContent>
+                    </TableHeader>
+                    <TableBody>
+                        {items && items.map((item, idx) => (
+                            <TableRow key={idx}>
+                                <TableCell className="font-medium">{item.name}</TableCell>
+                                <TableCell className="text-center font-bold">{item.qty}</TableCell>
+                                <TableCell className="text-center">{item.price?.toLocaleString() || '-'}</TableCell>
+                                <TableCell className="text-center font-semibold">{item.total?.toLocaleString() || '-'}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
+        </DialogContent>
+    </Dialog>
 )
 
 
@@ -114,8 +117,24 @@ export default function SalesInvoicesListPage() {
     invoice: null
   });
 
+  const [itemsModal, setItemsModal] = useState<{ open: boolean, items: any[] }>({
+    open: false,
+    items: []
+  });
+
   const [isSharing, setIsSharing] = useState(false);
   const [sharingData, setSharingData] = useState<{ invoice: SaleInvoice, type: 'A4' | 'Thermal' } | null>(null);
+
+  useEffect(() => {
+    // Aggressive cleanup to prevent frozen screen
+    const cleanup = () => {
+        document.body.style.pointerEvents = 'auto';
+        document.body.style.overflow = 'auto';
+    };
+    if (!printModal.open && !isSharing && !itemsModal.open) {
+        cleanup();
+    }
+  }, [printModal.open, isSharing, itemsModal.open]);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -207,7 +226,7 @@ export default function SalesInvoicesListPage() {
     setIsSharing(true);
 
     // Wait for the hidden component to render
-    await new Promise(resolve => setTimeout(resolve, 150));
+    await new Promise(resolve => setTimeout(resolve, 200));
 
     if (!shareRef.current) {
         setIsSharing(false);
@@ -236,7 +255,7 @@ export default function SalesInvoicesListPage() {
         }
     } catch (err) {
         console.error('Sharing failed', err);
-        toast({ variant: 'destructive', title: 'فشلت المشاركة', description: 'حدث خطأ أثناء محاولة إنشاء صورة الفاتورة.' });
+        toast({ variant: 'destructive', title: 'فشلت المشاركة', description: 'حدث خطأ أثناء محاولة إنشاء صورة الفاتورة. تأكد من إعدادات CORS للوجو.' });
     } finally {
         setIsSharing(false);
         setSharingData(null);
@@ -246,12 +265,7 @@ export default function SalesInvoicesListPage() {
 
   return (
     <>
-      <PageHeader title="سجل فواتير البيع">
-        <Button size="sm" className="gap-1" onClick={() => router.push('/sales/invoices')}>
-          <PlusCircle className="h-4 w-4" />
-          إضافة فاتورة جديدة
-        </Button>
-      </PageHeader>
+      <PageHeader title="سجل فواتير البيع" />
       <main className="flex flex-1 flex-col gap-4 p-2 md:p-6">
         <Card className="no-print">
             <CardHeader className="p-4"><CardTitle className="text-lg flex items-center gap-2"><Search className="h-4 w-4"/> فلاتر البحث</CardTitle></CardHeader>
@@ -309,8 +323,7 @@ export default function SalesInvoicesListPage() {
                         const paid = invoice.paidAmount || 0;
                         const remaining = invoice.total - paid;
                         return (
-                           <Dialog key={invoice.id}>
-                            <TableRow className={cn(invoice.isLocked ? 'bg-muted/30 opacity-80' : '', "hover:bg-muted/20")}>
+                            <TableRow key={invoice.id} className={cn(invoice.isLocked ? 'bg-muted/30 opacity-80' : '', "hover:bg-muted/20")}>
                             <TableCell className="font-mono font-bold">{invoice.invoiceNumber}</TableCell>
                             <TableCell className="font-medium">{invoice.customerName}</TableCell>
                             <TableCell className="text-xs">{new Date(invoice.date).toLocaleDateString('ar-EG')}</TableCell>
@@ -337,18 +350,25 @@ export default function SalesInvoicesListPage() {
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-56">
                                         <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
-                                         <DialogTrigger asChild>
-                                            <DropdownMenuItem>
-                                                <Eye className="ml-2 h-4 w-4 text-blue-500"/>
-                                                عرض الأصناف
-                                            </DropdownMenuItem>
-                                        </DialogTrigger>
+                                        <DropdownMenuItem onSelect={(e) => { 
+                                            e.preventDefault();
+                                            setTimeout(() => setItemsModal({ open: true, items: invoice.items }), 150);
+                                        }}>
+                                            <Eye className="ml-2 h-4 w-4 text-blue-500"/>
+                                            عرض الأصناف
+                                        </DropdownMenuItem>
                                         
-                                        <DropdownMenuItem onSelect={() => setPrintModal({ open: true, type: 'A4', invoice })}>
+                                        <DropdownMenuItem onSelect={(e) => {
+                                            e.preventDefault();
+                                            setTimeout(() => setPrintModal({ open: true, type: 'A4', invoice }), 150);
+                                        }}>
                                             <Printer className="ml-2 h-4 w-4" /> طباعة A4
                                         </DropdownMenuItem>
                                         
-                                        <DropdownMenuItem onSelect={() => setPrintModal({ open: true, type: 'Thermal', invoice })}>
+                                        <DropdownMenuItem onSelect={(e) => {
+                                            e.preventDefault();
+                                            setTimeout(() => setPrintModal({ open: true, type: 'Thermal', invoice }), 150);
+                                        }}>
                                             <Printer className="ml-2 h-4 w-4" /> طباعة إيصال (حراري)
                                         </DropdownMenuItem>
 
@@ -371,8 +391,6 @@ export default function SalesInvoicesListPage() {
                                 </DropdownMenu>
                             </TableCell>
                             </TableRow>
-                             <InvoiceItemsDialog items={invoice.items} />
-                           </Dialog>
                         )
                       })
                     ) : (
@@ -389,6 +407,13 @@ export default function SalesInvoicesListPage() {
           </CardContent>
         </Card>
       </main>
+
+      {/* حوار عرض الأصناف */}
+      <InvoiceItemsDialog 
+        items={itemsModal.items} 
+        open={itemsModal.open} 
+        onOpenChange={(open) => setItemsModal({ ...itemsModal, open })} 
+      />
 
       {/* حوار الطباعة الموحد */}
       <Dialog open={printModal.open} onOpenChange={(open) => !open && setPrintModal({ ...printModal, open: false })}>

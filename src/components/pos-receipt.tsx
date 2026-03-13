@@ -105,7 +105,7 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
       {/* رأس الإيصال */}
       <div style={headerStyle}>
         {invoice.isCheck && <h2 style={{...h1Style, marginBottom: '10px', border: '1px solid black', padding: '4px'}}>شيك مبدئي</h2>}
-        {design?.showLogo && company?.logoUrl && <img src={company.logoUrl} alt="logo" style={{ maxWidth: '80px', maxHeight: '80px', margin: '0 auto 5px', objectFit: 'contain' }} />}
+        {design?.showLogo && company?.logoUrl && <img src={company.logoUrl} alt="logo" crossOrigin="anonymous" style={{ maxWidth: '80px', maxHeight: '80px', margin: '0 auto 5px', objectFit: 'contain' }} />}
         {design?.showCompanyName && <h1 style={h1Style}>{company?.companyName || 'اسم الشركة'}</h1>}
         {design?.showAddress && <p style={pStyle}>{company?.companyAddress || 'عنوان الشركة'}</p>}
         {design?.showPhoneNumber && <p style={pStyle}>{company?.phone || 'رقم الهاتف'}</p>}

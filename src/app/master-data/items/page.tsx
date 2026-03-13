@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
@@ -317,7 +318,7 @@ const MatrixGeneratorDialog = ({ onSave, onOpenChange, itemSections, itemCategor
                         </div>
                         <div className="space-y-2">
                             <Label>المجموعة</Label>
-                            <Combobox options={groupOptions} value={baseItem.itemGroupId} onValueChange={v => setBaseItem(p => ({ ...p, itemGroupId: v }))} placeholder="اختر مجموعة" emptyMessage="اختر قسمًا أولاً" disabled={!baseItem.categoryId} />
+                            <Combobox options={groupOptions} value={baseItem.itemGroupId} onValueChange={v => setBaseItem(p => ({ ...p, itemGroupId: v }))} placeholder="اختر مجموعة" emptyMessage="اختر قسماً أولاً" disabled={!baseItem.categoryId} />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -868,10 +869,15 @@ export default function ItemsPage() {
     const router = useRouter();
 
     useEffect(() => {
-        if (!isEditOpen) {
+        // Aggressive cleanup to prevent frozen screen after closing dialogs
+        const cleanup = () => {
             document.body.style.pointerEvents = 'auto';
+            document.body.style.overflow = 'auto';
+        };
+        if (!isEditOpen && !isMatrixOpen && !isPriceUpdateOpen) {
+            cleanup();
         }
-    }, [isEditOpen]);
+    }, [isEditOpen, isMatrixOpen, isPriceUpdateOpen]);
 
     const [filters, setFilters] = useState({
         sectionId: '',
@@ -1203,7 +1209,7 @@ export default function ItemsPage() {
                                     onSelect={(e) => {
                                       e.preventDefault();
                                       setEditingItem(item);
-                                      setTimeout(() => setIsEditOpen(true), 100);
+                                      setTimeout(() => setIsEditOpen(true), 150);
                                     }}
                                   >
                                     <Edit className="ml-2 h-4 w-4" /> تعديل
