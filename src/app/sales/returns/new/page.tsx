@@ -11,12 +11,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Trash2, Save, Loader2, Info, Wallet } from "lucide-react";
 import React, { useState, useEffect, useMemo } from "react";
-import useFirebase from "@/hooks/use-firebase";
+import { useData } from "@/contexts/data-provider";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Combobox } from "@/components/ui/combobox";
 import { useAuth } from "@/contexts/auth-context";
-import { useData } from "@/contexts/data-provider";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface ReturnItem {
@@ -37,8 +36,6 @@ interface Item { id: string; name: string; unit: string; price?: number; cost?: 
 interface Customer { id: string; name: string; }
 interface Warehouse { id: string; name: string; }
 interface SaleInvoice { id: string; invoiceNumber: string; date: string; customerId: string; warehouseId: string; customerName: string; items: { id: string; name: string; qty: number; price: number; cost?: number; }[] }
-interface SalesReturnRecord { id: string; originalInvoiceId?: string; items: { id: string; qty: number; }[]; total: number; }
-interface CashAccount { id: string; name: string; warehouseId?: string; openingBalance: number; }
 
 export default function NewSalesReturnPage() {
   const router = useRouter();
@@ -94,6 +91,9 @@ export default function NewSalesReturnPage() {
       }));
   }, [filteredInvoices]);
 
+  const customerOptions = useMemo(() => ([{value: 'all', label: 'كل العملاء'}, ...allCustomersData.map((c:any) => ({value: c.id, label: c.name}))]), [allCustomersData]);
+  const warehouseOptions = useMemo(() => ([{value: 'all', label: 'كل المخازن'}, ...allWarehousesData.map((w:any) => ({value: w.id, label: w.name}))]), [allWarehousesData]);
+
   useEffect(() => {
     if (selectedInvoiceId && allSales.length > 0 && allItemsData.length > 0) {
       const invoice = allSales.find((inv: any) => inv.id === selectedInvoiceId);
@@ -102,7 +102,7 @@ export default function NewSalesReturnPage() {
         setWarehouseId(invoice.warehouseId);
 
         // Calculate previous returns
-        const previousReturns = (salesReturns || []).filter((r: any) => r.originalInvoiceId === selectedInvoiceId);
+        const previousReturns = (salesReturns || []).filter((r: any) => String(r.originalInvoiceId) === String(selectedInvoiceId));
         const prevReturnedByItem = new Map<string, number>();
         previousReturns.forEach((r: any) => {
             (r.items || []).forEach((it: any) => {
@@ -119,7 +119,7 @@ export default function NewSalesReturnPage() {
           return {
             id: item.id,
             name: item.name,
-            qty: remaining, // Default to remaining
+            qty: remaining, 
             soldQty: item.qty,
             returnedBefore: returnedBefore,
             price: item.price,
@@ -150,14 +150,14 @@ export default function NewSalesReturnPage() {
         let balance = account.openingBalance || 0;
         customerPayments.forEach((p:any) => { if(p.paidToAccountId === account.id) balance += p.amount });
         allSales.forEach((s: any) => { if (s.status === 'approved' && s.paidToAccountId === account.id) balance += (s.paidAmount || 0) });
-        exceptionalIncomes.forEach((i:any) => { if (i.paidToAccountId === account.id) balance += i.amount });
-        treasuryTransactions.forEach((tx: any) => { if (tx.accountId === account.id && tx.type === 'deposit') balance += tx.amount });
         posSales.forEach((sale: any) => {
             if (account.warehouseId && sale.warehouseId === account.warehouseId) {
                 const totalPaidOnSale = sale.paidAmount ?? sale.payments?.reduce((sum: number, p: any) => sum + p.amount, 0) ?? sale.total;
                 balance += totalPaidOnSale;
             }
         });
+        exceptionalIncomes.forEach((i:any) => { if (i.paidToAccountId === account.id) balance += i.amount });
+        treasuryTransactions.forEach((tx: any) => { if (tx.accountId === account.id && tx.type === 'deposit') balance += tx.amount });
         expenses.forEach((ex: any) => { if (ex.paidFromAccountId === account.id) balance -= ex.amount });
         supplierPayments.forEach((sp: any) => { if (sp.paidFromAccountId === account.id) balance -= sp.amount });
         employeeAdvances.forEach((ea: any) => { if (ea.paidFromAccountId === account.id) balance -= ea.amount });
@@ -198,53 +198,8 @@ export default function NewSalesReturnPage() {
         return;
     }
 
-    if (paidAmount > 0 && (accountBalances.get(paidFromAccountId) || 0) < paidAmount) {
-        toast({ variant: 'destructive', title: 'رصيد غير كافٍ', description: 'رصيد الخزينة المختارة لا يكفي لدفع هذا المبلغ.' });
-        return;
-    }
-
     const invoice = allSales.find((inv: any) => inv.id === selectedInvoiceId);
-    if (!invoice) {
-        toast({ variant: 'destructive', title: 'خطأ', description: 'لم يتم العثور على الفاتورة الأصلية.' });
-        return;
-    }
-
-    const soldQtyByItem = new Map<string, number>();
-    invoice.items.forEach((it: any) => {
-        const key = String(it.id || it.itemId);
-        soldQtyByItem.set(key, (soldQtyByItem.get(key) || 0) + (it.qty || 0));
-    });
-
-    const previousReturns = (salesReturns || []).filter((r: any) => String(r.originalInvoiceId) === String(selectedInvoiceId));
-    const prevReturnedByItem = new Map<string, number>();
-    previousReturns.forEach((r: any) => {
-        (r.items || []).forEach((it: any) => {
-            const key = String(it.id || it.itemId);
-            prevReturnedByItem.set(key, (prevReturnedByItem.get(key) || 0) + (it.qty || 0));
-        });
-    });
-
-    const overReturnedItems: string[] = [];
-    items.forEach(retItem => {
-        const baseId = String(retItem.id);
-        const sold = soldQtyByItem.get(baseId) || 0;
-        const prev = prevReturnedByItem.get(baseId) || 0;
-        const totalAfter = prev + retItem.qty;
-        
-        if (totalAfter - sold > 0.000001) {
-            overReturnedItems.push(retItem.name);
-        }
-    });
-
-    if (overReturnedItems.length > 0) {
-        const uniqueNames = Array.from(new Set(overReturnedItems));
-        toast({
-            variant: 'destructive',
-            title: 'كمية المرتجع أكبر من المباعة',
-            description: `لا يمكن عمل مرتجع إضافي للأصناف التالية لأنها تجاوزت الكمية المشتراة في الفاتورة: ${uniqueNames.join(' ، ')}`
-        });
-        return;
-    }
+    if (!invoice) return;
 
     setIsSaving(true);
     try {
@@ -275,7 +230,6 @@ export default function NewSalesReturnPage() {
         toast({ title: 'تم الحفظ بنجاح', description: `تم حفظ مرتجع المبيعات برقم: ${receiptNumber}` });
         router.push('/sales/returns');
     } catch (error) {
-        console.error("Failed to save sales return:", error);
         toast({ variant: 'destructive', title: 'خطأ', description: 'فشل حفظ مرتجع المبيعات.' });
     } finally {
         setIsSaving(false);
@@ -285,10 +239,6 @@ export default function NewSalesReturnPage() {
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
     setFilters(prev => ({...prev, [key]: value}));
   };
-  
-  const customerOptions = useMemo(() => ([{value: 'all', label: 'كل العملاء'}, ...allCustomersData.map((c:any) => ({value: c.id, label: c.name}))]), [allCustomersData]);
-  const warehouseOptions = useMemo(() => ([{value: 'all', label: 'كل المخازن'}, ...allWarehousesData.map((w:any) => ({value: w.id, label: w.name}))]), [allWarehousesData]);
-
 
   const ReturnForm = () => (
     <>

@@ -1,3 +1,4 @@
+
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -147,7 +148,7 @@ export default function PurchaseInvoicePage() {
   const { 
     items: allItems, 
     suppliers, 
-    warehouses,
+    warehouses, 
     inventoryZones, 
     cashAccounts, 
     purchaseOrders,

@@ -33,7 +33,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useData } from '@/contexts/data-provider';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { InvoiceTemplate } from '@/components/invoice-template';
 import { PosReceipt } from '@/components/pos-receipt';
 import { Combobox } from '@/components/ui/combobox';
@@ -60,38 +60,6 @@ interface SaleInvoice {
   tax?: number;
   isLocked?: boolean;
 }
-
-const InvoiceItemsDialog = ({ items, open, onOpenChange }: { items: any[], open: boolean, onOpenChange: (open: boolean) => void }) => (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl">
-            <DialogHeader>
-                <DialogTitle>تفاصيل أصناف الفاتورة</DialogTitle>
-            </DialogHeader>
-            <div className="w-full overflow-x-auto border rounded-md">
-                <Table className="min-w-[500px]">
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>الصنف</TableHead>
-                            <TableHead className="text-center">الكمية</TableHead>
-                            <TableHead className="text-center">سعر الوحدة</TableHead>
-                            <TableHead className="text-center">الإجمالي</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {items && items.map((item, idx) => (
-                            <TableRow key={idx}>
-                                <TableCell className="font-medium">{item.name}</TableCell>
-                                <TableCell className="text-center font-bold">{item.qty}</TableCell>
-                                <TableCell className="text-center">{item.price?.toLocaleString() || '-'}</TableCell>
-                                <TableCell className="text-center font-semibold">{item.total?.toLocaleString() || '-'}</TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </div>
-        </DialogContent>
-    </Dialog>
-);
 
 export default function SalesInvoicesListPage() {
   const { salesInvoices: invoices, customers, warehouses, inventoryClosings, customerPayments, salesReturns, posSales, posReturns, settings, loading } = useData();
@@ -120,6 +88,7 @@ export default function SalesInvoicesListPage() {
   const [isSharing, setIsSharing] = useState(false);
   const [sharingData, setSharingData] = useState<{ invoice: SaleInvoice, type: 'A4' | 'Thermal' } | null>(null);
 
+  // Aggressive Cleanup for Pointer Events and Scroll
   useEffect(() => {
     const cleanup = () => {
         if (!printModal.open && !isSharing && !itemsModal.open) {
@@ -128,6 +97,9 @@ export default function SalesInvoicesListPage() {
         }
     };
     cleanup();
+    // Also run on a short interval after interaction to be double sure
+    const timer = setTimeout(cleanup, 500);
+    return () => clearTimeout(timer);
   }, [printModal.open, isSharing, itemsModal.open]);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
@@ -232,7 +204,6 @@ export default function SalesInvoicesListPage() {
             quality: 0.95,
             pixelRatio: 2,
             backgroundColor: '#ffffff',
-            // Skip images that fail to load
             imagePlaceholder: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
         });
         const blob = await (await fetch(dataUrl)).blob();
@@ -253,7 +224,7 @@ export default function SalesInvoicesListPage() {
         }
     } catch (err) {
         console.error('Sharing failed', err);
-        toast({ variant: 'destructive', title: 'فشلت المشاركة', description: 'تأكد من استخدام رابط لوجو مباشر وصالح (Direct Image Link).' });
+        toast({ variant: 'destructive', title: 'فشلت المشاركة', description: 'حدث خطأ أثناء معالجة الصورة.' });
     } finally {
         setIsSharing(false);
         setSharingData(null);
@@ -339,7 +310,7 @@ export default function SalesInvoicesListPage() {
                                 {remaining.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </TableCell>
                             <TableCell className="text-center">
-                                <DropdownMenu>
+                                <DropdownMenu modal={false}>
                                     <DropdownMenuTrigger asChild>
                                         <Button aria-haspopup="true" size="icon" variant="ghost" className="h-8 w-8">
                                             <MoreHorizontal className="h-4 w-4" />
@@ -347,23 +318,20 @@ export default function SalesInvoicesListPage() {
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-56">
                                         <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
-                                        <DropdownMenuItem onSelect={(e) => { 
-                                            e.preventDefault();
+                                        <DropdownMenuItem onClick={() => { 
                                             setTimeout(() => setItemsModal({ open: true, items: invoice.items }), 150);
                                         }}>
                                             <Eye className="ml-2 h-4 w-4 text-blue-500"/>
                                             عرض الأصناف
                                         </DropdownMenuItem>
                                         
-                                        <DropdownMenuItem onSelect={(e) => {
-                                            e.preventDefault();
+                                        <DropdownMenuItem onClick={() => {
                                             setTimeout(() => setPrintModal({ open: true, type: 'A4', invoice }), 150);
                                         }}>
                                             <Printer className="ml-2 h-4 w-4" /> طباعة A4
                                         </DropdownMenuItem>
                                         
-                                        <DropdownMenuItem onSelect={(e) => {
-                                            e.preventDefault();
+                                        <DropdownMenuItem onClick={() => {
                                             setTimeout(() => setPrintModal({ open: true, type: 'Thermal', invoice }), 150);
                                         }}>
                                             <Printer className="ml-2 h-4 w-4" /> طباعة إيصال (حراري)
@@ -405,13 +373,37 @@ export default function SalesInvoicesListPage() {
         </Card>
       </main>
 
-      <InvoiceItemsDialog 
-        items={itemsModal.items} 
-        open={itemsModal.open} 
-        onOpenChange={(open) => setItemsModal({ ...itemsModal, open })} 
-      />
+      <Dialog open={itemsModal.open} onOpenChange={(open) => setItemsModal({ ...itemsModal, open })}>
+        <DialogContent className="max-w-3xl">
+            <DialogHeader>
+                <DialogTitle>تفاصيل أصناف الفاتورة</DialogTitle>
+            </DialogHeader>
+            <div className="w-full overflow-x-auto border rounded-md">
+                <Table className="min-w-[500px]">
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>الصنف</TableHead>
+                            <TableHead className="text-center">الكمية</TableHead>
+                            <TableHead className="text-center">سعر الوحدة</TableHead>
+                            <TableHead className="text-center">الإجمالي</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {itemsModal.items.map((item, idx) => (
+                            <TableRow key={idx}>
+                                <TableCell className="font-medium">{item.name}</TableCell>
+                                <TableCell className="text-center font-bold">{item.qty}</TableCell>
+                                <TableCell className="text-center">{item.price?.toLocaleString() || '-'}</TableCell>
+                                <TableCell className="text-center font-semibold">{item.total?.toLocaleString() || '-'}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
+        </DialogContent>
+      </Dialog>
 
-      <Dialog open={printModal.open} onOpenChange={(open) => !open && setPrintModal({ ...printModal, open: false })}>
+      <Dialog open={printModal.open} onOpenChange={(open) => setPrintModal({ ...printModal, open })}>
         <DialogContent className={cn("p-0 overflow-hidden flex flex-col max-h-[90vh]", printModal.type === 'A4' ? "max-w-4xl" : "max-w-sm")}>
             <DialogHeader className="p-4 shrink-0 bg-muted/30">
                 <DialogTitle>طباعة الفاتورة {printModal.invoice?.invoiceNumber}</DialogTitle>

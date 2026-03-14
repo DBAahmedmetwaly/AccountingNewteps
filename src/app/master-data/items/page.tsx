@@ -871,6 +871,7 @@ export default function ItemsPage() {
     const [isEditOpen, setIsEditOpen] = useState(false);
     const router = useRouter();
 
+    // Aggressive Cleanup for Pointer Events and Scroll
     useEffect(() => {
         const cleanup = () => {
             if (!isEditOpen && !isMatrixOpen && !isPriceUpdateOpen) {
@@ -879,6 +880,8 @@ export default function ItemsPage() {
             }
         };
         cleanup();
+        const timer = setTimeout(cleanup, 500);
+        return () => clearTimeout(timer);
     }, [isEditOpen, isMatrixOpen, isPriceUpdateOpen]);
 
     const [filters, setFilters] = useState({
@@ -1198,7 +1201,7 @@ export default function ItemsPage() {
                         <TableCell className="hidden md:table-cell">{item.price?.toLocaleString() || "-"}</TableCell>
                         <TableCell className="text-center">
                           <AlertDialog>
-                            <DropdownMenu>
+                            <DropdownMenu modal={false}>
                               <DropdownMenuTrigger asChild>
                                 <Button aria-haspopup="true" size="icon" variant="ghost">
                                   <MoreHorizontal className="h-4 w-4" />
@@ -1208,8 +1211,7 @@ export default function ItemsPage() {
                                 <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
                                 {can("edit", moduleName) && (
                                   <DropdownMenuItem
-                                    onSelect={(e) => {
-                                      e.preventDefault();
+                                    onClick={() => {
                                       setEditingItem(item);
                                       setTimeout(() => setIsEditOpen(true), 150);
                                     }}
