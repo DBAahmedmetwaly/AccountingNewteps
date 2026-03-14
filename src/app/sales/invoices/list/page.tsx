@@ -97,7 +97,6 @@ export default function SalesInvoicesListPage() {
         }
     };
     cleanup();
-    // Also run on a short interval after interaction to be double sure
     const timer = setTimeout(cleanup, 500);
     return () => clearTimeout(timer);
   }, [printModal.open, isSharing, itemsModal.open]);
@@ -233,7 +232,12 @@ export default function SalesInvoicesListPage() {
 
   return (
     <>
-      <PageHeader title="سجل فواتير البيع" />
+      <PageHeader title="سجل فواتير البيع">
+        <Button size="sm" className="gap-1" onClick={() => router.push('/sales/invoices')}>
+          <PlusCircle className="h-4 w-4" />
+          إضافة فاتورة جديدة
+        </Button>
+      </PageHeader>
       <main className="flex flex-1 flex-col gap-4 p-2 md:p-6">
         <Card className="no-print">
             <CardHeader className="p-4"><CardTitle className="text-lg flex items-center gap-2"><Search className="h-4 w-4"/> فلاتر البحث</CardTitle></CardHeader>
@@ -378,7 +382,7 @@ export default function SalesInvoicesListPage() {
             <DialogHeader>
                 <DialogTitle>تفاصيل أصناف الفاتورة</DialogTitle>
             </DialogHeader>
-            <div className="w-full overflow-x-auto border rounded-md">
+            <div className="w-full overflow-x-auto border-t">
                 <Table className="min-w-[500px]">
                     <TableHeader>
                         <TableRow>
