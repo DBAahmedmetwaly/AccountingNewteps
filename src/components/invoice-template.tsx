@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import Barcode from 'react-barcode';
 
 interface InvoiceTemplateProps {
@@ -11,6 +11,7 @@ interface InvoiceTemplateProps {
 }
 
 export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, company, customer, isPurchase = false, customerBalance }) => {
+  const [imgError, setImgError] = useState(false);
     
   const receiptStyle: React.CSSProperties = {
     width: '210mm', 
@@ -99,11 +100,12 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     <div style={receiptStyle} className="bg-white text-black printable-area">
       <header style={headerStyle}>
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-            {company?.logoUrl && (
+            {company?.logoUrl && !imgError && (
                 <img 
                     src={company.logoUrl} 
                     alt="Logo" 
                     crossOrigin="anonymous"
+                    onError={() => setImgError(true)}
                     style={{ maxWidth: '100px', maxHeight: '80px', objectFit: 'contain' }} 
                 />
             )}

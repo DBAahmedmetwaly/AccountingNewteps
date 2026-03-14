@@ -1,10 +1,11 @@
 
 "use client";
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
 
 export const PosReceipt = ({ invoice, company, design, warehouse, customer, customerBalance }: { invoice: any, company: any, design: any, warehouse?: any, customer?: any, customerBalance?: number }) => {
+  const [imgError, setImgError] = useState(false);
   
   const receiptStyle: React.CSSProperties = {
     width: `${design?.receiptWidth || 72}mm`, 
@@ -99,11 +100,12 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
     <div style={receiptStyle} className="bg-white text-black printable-area">
       <div style={headerStyle}>
         {invoice.isCheck && <h2 style={{...h1Style, marginBottom: '10px', border: '1px solid black', padding: '4px'}}>شيك مبدئي</h2>}
-        {design?.showLogo && company?.logoUrl && (
+        {design?.showLogo && company?.logoUrl && !imgError && (
             <img 
                 src={company.logoUrl} 
                 alt="logo" 
                 crossOrigin="anonymous" 
+                onError={() => setImgError(true)}
                 style={{ maxWidth: '80px', maxHeight: '80px', margin: '0 auto 5px', objectFit: 'contain' }} 
             />
         )}

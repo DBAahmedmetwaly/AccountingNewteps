@@ -218,7 +218,7 @@ export default function SalesInvoicesListPage() {
     setSharingData({ invoice, type });
     setIsSharing(true);
 
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     if (!shareRef.current) {
         setIsSharing(false);
@@ -231,7 +231,9 @@ export default function SalesInvoicesListPage() {
             cacheBust: true, 
             quality: 0.95,
             pixelRatio: 2,
-            backgroundColor: '#ffffff'
+            backgroundColor: '#ffffff',
+            // Skip images that fail to load
+            imagePlaceholder: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
         });
         const blob = await (await fetch(dataUrl)).blob();
         const file = new File([blob], `${invoice.invoiceNumber}.png`, { type: blob.type });
@@ -251,7 +253,7 @@ export default function SalesInvoicesListPage() {
         }
     } catch (err) {
         console.error('Sharing failed', err);
-        toast({ variant: 'destructive', title: 'فشلت المشاركة', description: 'حدث خطأ أثناء محاولة إنشاء صورة الفاتورة. تأكد من إعدادات CORS للوجو.' });
+        toast({ variant: 'destructive', title: 'فشلت المشاركة', description: 'تأكد من استخدام رابط لوجو مباشر وصالح (Direct Image Link).' });
     } finally {
         setIsSharing(false);
         setSharingData(null);
@@ -295,7 +297,7 @@ export default function SalesInvoicesListPage() {
             {loading || isSharing ? (
               <div className="flex flex-col justify-center items-center py-10 gap-4">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                {isSharing && <p className="text-sm font-semibold animate-pulse text-primary">جاري تحويل الفاتورة لصورة...</p>}
+                {isSharing && <p className="text-sm font-semibold animate-pulse text-primary">جاري معالجة صورة الفاتورة...</p>}
               </div>
             ) : (
               <div className="w-full overflow-x-auto border-t md:border border-muted-foreground/10 md:rounded-lg">
