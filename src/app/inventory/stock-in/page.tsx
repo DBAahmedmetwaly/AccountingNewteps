@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
@@ -12,7 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useData } from "@/contexts/data-provider";
-import { Loader2, Package, Save, Boxes, AlertTriangle, Filter, CheckCircle, Clock, Settings } from "lucide-react";
+import { Loader2, Package, Save, Boxes, AlertTriangle, Filter, CheckCircle, Clock, Settings, Printer, Eye } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
@@ -21,13 +20,14 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Combobox } from '@/components/ui/combobox';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
-import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 
 interface PutAwayItem {
@@ -253,6 +253,7 @@ const PutAwaySection = ({ record, onPutAway, onOpenChange }: { record: any, onPu
 
 export default function StockInPage() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const { toast } = useToast();
     const { user } = useAuth();
     
@@ -269,14 +270,24 @@ export default function StockInPage() {
         warehouseId: user?.warehouseIds?.[0] !== 'all' ? user?.warehouseIds?.[0] || 'all' : 'all',
         fromDate: '',
         toDate: '',
-        status: 'pending', // New filter
     });
+
+    // Aggressive Cleanup for Pointer Events
+    useEffect(() => {
+        const cleanup = () => {
+            document.body.style.pointerEvents = 'auto';
+            document.body.style.overflow = 'auto';
+        };
+        cleanup();
+        const timer = setTimeout(cleanup, 500);
+        return () => clearTimeout(timer);
+    }, []);
 
     const handleFilterChange = (key: string, value: string) => {
         setFilters(prev => ({ ...prev, [key]: value }));
     };
 
-    const pendingPutAwayRecords = useMemo(() => {
+    const records = useMemo(() => {
         if (loading) return [];
         
         const stockInId = searchParams.get('stockInId');
@@ -297,19 +308,13 @@ export default function StockInPage() {
                 if (to && recordDate > to) return false;
                 if (filters.warehouseId !== 'all' && rec.warehouseId !== filters.warehouseId) return false;
                 
-                // New status filter logic
-                if (filters.status === 'completed') {
-                    return rec.status === 'completed';
-                }
-                // When 'pending' is selected, show records with 'pending_putaway' status or no status at all (for backward compatibility).
-                if (filters.status === 'pending') {
-                    return rec.status === 'pending_putaway' || !rec.status;
-                }
-                
                 return true; 
             })
             .sort((a:any,b:any) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [searchParams, stockInRecords, filters, loading]);
+
+    const pendingRecords = useMemo(() => records.filter(r => r.status === 'pending_putaway' || !r.status), [records]);
+    const completedRecords = useMemo(() => records.filter(r => r.status === 'completed'), [records]);
 
     const warehouseOptions = useMemo(() => {
         const options = [
@@ -334,9 +339,6 @@ export default function StockInPage() {
             for (const item of Object.values(allocations)) {
                 for (const loc of item.locations) {
                     if (loc.quantity > 0) {
-                        const path = `inventory/${recordToUpdate.warehouseId}/${loc.sectionId}/${item.itemId}/balance`;
-                        // This logic should be encapsulated within dbAction for transactions
-                        // For now, let's assume we need to update the record with new allocation info
                          newAllocationsLog.push({
                             date: new Date().toISOString(),
                             userId: user?.id,
@@ -368,20 +370,20 @@ export default function StockInPage() {
             toast({ title: 'تم التسكين بنجاح' });
         } catch (e) {
             console.error("Failed to put away items:", e);
-            toast({ variant: 'destructive', title: 'خطأ', description: 'فشلت عملية التسكين.' });
+            toast({ variant: 'destructive', title: 'خطأ', description: 'فشل عملية التسكين.' });
         }
     };
     
 
     return (
         <>
-            <PageHeader title="تسكين البضاعة الواردة" />
+            <PageHeader title="تسكين وإدارة البضاعة الواردة" />
             <main className="flex-1 p-4 md:p-6 space-y-6">
-                 <Card>
+                 <Card className="no-print">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><Filter/> فلاتر التقرير</CardTitle>
+                        <CardTitle className="flex items-center gap-2"><Filter/> فلاتر البحث</CardTitle>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
                          <div className="space-y-2">
                             <Label>المخزن الرئيسي</Label>
                             <Combobox
@@ -401,59 +403,105 @@ export default function StockInPage() {
                             <Label>إلى تاريخ</Label>
                             <Input type="date" value={filters.toDate} onChange={e => handleFilterChange('toDate', e.target.value)} />
                         </div>
-                         <div className="space-y-2">
-                            <Label>الحالة</Label>
-                            <Select value={filters.status} onValueChange={(v) => handleFilterChange('status', v)}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">الكل</SelectItem>
-                                    <SelectItem value="pending">معلق</SelectItem>
-                                    <SelectItem value="completed">تم التسكين</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
                     </CardContent>
                 </Card>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>أذونات الدخول</CardTitle>
-                        <CardDescription>
-                            هذه قائمة بأذونات الدخول التي تنتظر توزيع أصنافها على الأقسام الداخلية (الحاويات) في المخازن الرئيسية.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {loading ? (
-                            <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin mx-auto"/></div>
-                        ) : (
-                             <Accordion type="single" collapsible className="w-full">
-                                {pendingPutAwayRecords.length > 0 ? pendingPutAwayRecords.map((record: any) => (
-                                    <AccordionItem value={record.id} key={record.id} className="border-b">
-                                        <AccordionTrigger className="hover:no-underline">
-                                            <div className="grid grid-cols-3 md:grid-cols-5 w-full text-right rtl:text-right text-sm">
-                                                <span className="font-semibold col-span-2 md:col-span-1">{record.receiptNumber}</span>
-                                                <span className="text-muted-foreground">{new Date(record.date).toLocaleDateString('ar-EG')}</span>
-                                                <span className="hidden md:block text-muted-foreground">المستلم: {warehouses.find((w:any) => w.id === record.warehouseId)?.name}</span>
-                                                <span className="hidden md:block text-muted-foreground">بواسطة: {record.createdByName}</span>
-                                                <span className="text-left rtl:text-right">
-                                                    <Badge variant={record.status === 'completed' ? 'default' : 'outline'} className={cn(record.status !== 'completed' ? 'border-amber-500 text-amber-500' : 'bg-green-600')}>
-                                                        {record.status === 'completed' ? <CheckCircle className="ml-1 h-3 w-3"/> : <Clock className="ml-1 h-3 w-3"/>}
-                                                        {record.status === 'completed' ? 'تم التسكين' : 'معلق'}
-                                                    </Badge>
-                                                </span>
-                                            </div>
-                                        </AccordionTrigger>
-                                        <PutAwaySection record={record} onPutAway={handlePutAway} onOpenChange={()=>{}} />
-                                    </AccordionItem>
-                                )) : <p className="text-center text-muted-foreground p-6">لا توجد أذونات دخول تطابق الفلاتر المحددة.</p>}
-                            </Accordion>
-                        )}
-                    </CardContent>
-                </Card>
+                <Tabs defaultValue="pending">
+                    <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="pending">أذونات بانتظار التسكين ({pendingRecords.length})</TabsTrigger>
+                        <TabsTrigger value="history">سجل الأذونات المكتملة ({completedRecords.length})</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="pending">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>أذونات الدخول المعلقة</CardTitle>
+                                <CardDescription>
+                                    هذه قائمة بأذونات الدخول التي تنتظر توزيع أصنافها على الأقسام الداخلية (الحاويات).
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {loading ? (
+                                    <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin mx-auto"/></div>
+                                ) : (
+                                    <Accordion type="single" collapsible className="w-full">
+                                        {pendingRecords.length > 0 ? pendingRecords.map((record: any) => (
+                                            <AccordionItem value={record.id} key={record.id} className="border-b">
+                                                <AccordionTrigger className="hover:no-underline">
+                                                    <div className="grid grid-cols-2 md:grid-cols-4 w-full text-right rtl:text-right text-sm">
+                                                        <span className="font-bold">{record.receiptNumber}</span>
+                                                        <span className="text-muted-foreground">{new Date(record.date).toLocaleDateString('ar-EG')}</span>
+                                                        <span className="hidden md:block text-muted-foreground">المستلم: {warehouses.find((w:any) => w.id === record.warehouseId)?.name}</span>
+                                                        <span className="text-left rtl:text-right">
+                                                            <Badge variant="outline" className="border-amber-500 text-amber-500">
+                                                                <Clock className="ml-1 h-3 w-3"/>
+                                                                انتظار التسكين
+                                                            </Badge>
+                                                        </span>
+                                                    </div>
+                                                </AccordionTrigger>
+                                                <PutAwaySection record={record} onPutAway={handlePutAway} onOpenChange={()=>{}} />
+                                            </AccordionItem>
+                                        )) : <p className="text-center text-muted-foreground p-6">لا توجد أذونات بانتظار التسكين.</p>}
+                                    </Accordion>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="history">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>سجل الأذونات المكتملة</CardTitle>
+                                <CardDescription>عرض وتفاصيل الأذونات التي تم استلامها وتسكينها بالكامل.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="w-full overflow-auto border rounded-lg">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="bg-muted/50">
+                                                <TableHead>رقم الإذن</TableHead>
+                                                <TableHead>التاريخ</TableHead>
+                                                <TableHead>المخزن</TableHead>
+                                                <TableHead>بواسطة</TableHead>
+                                                <TableHead className="text-center">الأصناف</TableHead>
+                                                <TableHead className="text-center w-[120px]">الإجراءات</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {completedRecords.length > 0 ? completedRecords.map((record: any) => (
+                                                <TableRow key={record.id}>
+                                                    <TableCell className="font-mono font-bold">{record.receiptNumber}</TableCell>
+                                                    <TableCell>{new Date(record.date).toLocaleDateString('ar-EG')}</TableCell>
+                                                    <TableCell>{warehouses.find((w:any) => w.id === record.warehouseId)?.name}</TableCell>
+                                                    <TableCell className="text-xs">{record.createdByName || '---'}</TableCell>
+                                                    <TableCell className="text-center">
+                                                        <Badge variant="secondary">{record.items.length}</Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        <div className="flex justify-center gap-2">
+                                                            <Button variant="ghost" size="icon" onClick={() => router.push(`/inventory/stock-in/${record.id}`)} title="عرض التفاصيل">
+                                                                <Eye className="h-4 w-4 text-blue-500" />
+                                                            </Button>
+                                                            <Button variant="ghost" size="icon" onClick={() => router.push(`/inventory/stock-in/${record.id}`)} title="طباعة">
+                                                                <Printer className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            )) : (
+                                                <TableRow>
+                                                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">لا توجد سجلات مكتملة.</TableCell>
+                                                </TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
             </main>
         </>
     )
 }
-    

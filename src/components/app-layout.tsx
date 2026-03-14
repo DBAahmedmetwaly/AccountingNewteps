@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
@@ -291,8 +290,8 @@ export const navStructure = [
         { type: 'link', href: '/inventory/goods-in-transit', module: 'inventory_goodsInTransit', title: dictionary.nav.goodsInTransit },
         { type: 'link', href: '/inventory/requisitions/recommendations', icon: <Lightbulb />, module: 'inventory_requisitions_recommendations', title: dictionary.nav.requisitionRecommendations },
         { type: 'link', href: '/inventory/requisitions', module: 'inventory_requisitions', title: dictionary.nav.requisitions },
-        { type: 'link', href: '/inventory/stock-out/new', module: 'inventory_stockOut', title: dictionary.nav.stockOut },
-        { type: 'link', href: '/inventory/transfer/new', module: 'inventory_transfer', title: dictionary.nav.stockTransfer },
+        { type: 'link', href: '/inventory/stock-out', module: 'inventory_stockOut', title: dictionary.nav.stockOut },
+        { type: 'link', href: '/inventory/transfer', module: 'inventory_transfer', title: dictionary.nav.stockTransfer },
         { type: 'link', href: '/inventory/adjustment', module: 'inventory_adjustment', title: dictionary.nav.stockAdjustment },
         { type: 'link', href: '/inventory/movements', module: 'inventory_movements', title: dictionary.nav.stockMovements },
     ]},
