@@ -81,7 +81,7 @@ export default function SalesInvoicePage() {
     const { user } = useAuth();
 
     const [items, setItems] = useState<InvoiceItem[]>([]);
-    const [newItem, setNewItem] = useState({ id: "", name: "", qty: 1, price: 0, cost: 0, unit: "" });
+    const [newItem, setNewItem] = useState({ id: "", name: "", qty: 1, price: 0, cost: 0, unit: "", code: "" });
     const [selectedUnit, setSelectedUnit] = useState('base');
     const [availableUnits, setAvailableUnits] = useState<{ value: string; label: string; factor: number; price?: number }[]>([]);
 
@@ -217,11 +217,11 @@ export default function SalesInvoicePage() {
                 unit: selectedUnitInfo.label,
                 baseUnit: selectedItem.baseUnit,
                 conversionFactor: selectedUnitInfo.factor,
-                code: selectedItem.code,
+                code: newItem.code,
                 uniqueId: `${selectedItem.id}-${Date.now()}-${Math.random()}`
             },
         ]);
-        setNewItem({ id: "", name: "", qty: 1, price: 0, cost: 0, unit: "" });
+        setNewItem({ id: "", name: "", qty: 1, price: 0, cost: 0, unit: "", code: "" });
         setSelectedUnit('base');
         setAvailableUnits([]);
     };
@@ -252,6 +252,7 @@ export default function SalesInvoicePage() {
                 price: selectedItem.price || 0,
                 cost: selectedItem.cost || 0,
                 unit: selectedItem.baseUnit,
+                code: selectedItem.code || '',
             });
         }
     }
@@ -261,7 +262,12 @@ export default function SalesInvoicePage() {
         const unit = availableUnits.find(u => u.value === unitName);
         const item = allItems.find((i: Item) => i.id === newItem.id);
         if (unit && item) {
-             setNewItem(prev => ({...prev, price: unit.price || (item.price || 0) * unit.factor}));
+             const secondaryUnit = item.secondaryUnits?.find(u => u.name === unitName);
+             setNewItem(prev => ({
+                 ...prev, 
+                 price: unit.price || (item.price || 0) * unit.factor,
+                 code: secondaryUnit?.barcode || item.code || ''
+             }));
         }
     }
         
@@ -345,7 +351,6 @@ export default function SalesInvoicePage() {
         }));
     }, [availableItemsForWarehouse]);
     
-    // حساب الرصيد الحالي للعميل المختار
     const selectedCustomerBalance = useMemo(() => {
         if (!customerId) return 0;
         const c = customers.find((cust: any) => cust.id === customerId);
@@ -353,33 +358,29 @@ export default function SalesInvoicePage() {
 
         let balance = Number(c.openingBalance) || 0;
         
-        // 1. إضافة المبالغ المتبقية من فواتير البيع المعتمدة
         salesInvoices.filter((inv: any) => inv.customerId === customerId && inv.status === 'approved')
             .forEach((inv: any) => {
                 balance += (Number(inv.total) - Number(inv.paidAmount || 0));
             });
 
-        // 2. إضافة المبالغ المتبقية من فواتير الكاشير
         posSales.filter((sale: any) => sale.customerId === customerId)
             .forEach((sale: any) => {
                 balance += (Number(sale.total) - Number(sale.paidAmount || 0));
             });
 
-        // 3. طرح المدفوعات غير المرتبطة بفواتير
         customerPayments.filter((p: any) => p.customerId === customerId && !p.invoiceId)
             .forEach((p: any) => {
                 balance -= Number(p.amount);
             });
 
-        // 4. طرح المرتجعات (المبالغ التي لم تُرد نقداً للعميل)
         salesReturns.filter((r: any) => r.customerId === customerId)
             .forEach((r: any) => {
-                balance -= (Number(r.total) - Number(r.paidAmount || 0));
+                balance -= Number(r.total);
             });
         
         posReturns.filter((r: any) => r.customerId === customerId)
             .forEach((r: any) => {
-                balance -= (Number(r.total) - Number(r.paidAmount || 0));
+                balance -= Number(r.total);
             });
 
         return balance;
@@ -546,7 +547,7 @@ export default function SalesInvoicePage() {
                                 </TableRow>
                             ))}
                             <TableRow className="no-print bg-muted/20">
-                                <TableCell className="p-2" colSpan={2}>
+                                <TableCell className="p-2">
                                      <Combobox
                                         options={itemsForCombobox}
                                         value={newItem.id}
@@ -556,6 +557,9 @@ export default function SalesInvoicePage() {
                                         className="w-full"
                                         disabled={!warehouseId}
                                     />
+                                </TableCell>
+                                <TableCell className="p-2 font-mono text-xs">
+                                    {newItem.code}
                                 </TableCell>
                                 <TableCell className="p-2">
                                      <Combobox
@@ -575,8 +579,9 @@ export default function SalesInvoicePage() {
                                 </TableCell>
                                 <TableCell></TableCell>
                                 <TableCell className="text-center p-1">
-                                    <Button onClick={handleAddItem} size="icon" className="h-9 w-9" disabled={!warehouseId || !newItem.id}>
-                                        <PlusCircle className="h-5 w-5" />
+                                    <Button onClick={handleAddItem} className="h-9 gap-1" disabled={!warehouseId || !newItem.id}>
+                                        <PlusCircle className="h-4 w-4" />
+                                        إضافة صنف
                                     </Button>
                                 </TableCell>
                             </TableRow>
@@ -607,7 +612,7 @@ export default function SalesInvoicePage() {
                                 </div>
                                 <div className="flex justify-between items-center text-sm">
                                     <span>الخصم</span>
-                                    <Input type="number" value={discount} onFocus={e => e.target.select()} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} className="h-8 max-w-[100px] text-left" placeholder="0.00"/>
+                                    <Input type="number" value={discount} onFocus={e => e.target.select()} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} className="h-8 max-w-[120px] text-left" placeholder="0.00"/>
                                 </div>
                                 <div className="flex justify-between items-center text-sm">
                                     <span>الضريبة ({settings?.main?.financial?.vatRate || 14}%)</span>
