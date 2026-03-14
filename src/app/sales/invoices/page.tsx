@@ -42,6 +42,7 @@ interface SecondaryUnitOption {
     label: string;
     factor: number;
     price?: number;
+    barcode?: string;
 }
 
 interface Item {
@@ -83,7 +84,7 @@ export default function SalesInvoicePage() {
     const [items, setItems] = useState<InvoiceItem[]>([]);
     const [newItem, setNewItem] = useState({ id: "", name: "", qty: 1, price: 0, cost: 0, unit: "", code: "" });
     const [selectedUnit, setSelectedUnit] = useState('base');
-    const [availableUnits, setAvailableUnits] = useState<{ value: string; label: string; factor: number; price?: number }[]>([]);
+    const [availableUnits, setAvailableUnits] = useState<SecondaryUnitOption[]>([]);
 
     const [subtotal, setSubtotal] = useState(0);
     const [discount, setDiscount] = useState(0);
@@ -233,12 +234,13 @@ export default function SalesInvoicePage() {
     const handleItemSelect = (itemId: string) => {
         const selectedItem = availableItemsForWarehouse.find((i: Item) => i.id === itemId);
         if (selectedItem) {
-            const baseUnitOption = { value: 'base', label: selectedItem.baseUnit || 'قطعة', factor: 1, price: selectedItem.price || 0 };
-            const secondaryUnitsOptions = (selectedItem.secondaryUnits || []).map((u: any) => ({
+            const baseUnitOption: SecondaryUnitOption = { value: 'base', label: selectedItem.baseUnit || 'قطعة', factor: 1, price: selectedItem.price || 0, barcode: selectedItem.code || '' };
+            const secondaryUnitsOptions: SecondaryUnitOption[] = (selectedItem.secondaryUnits || []).map((u: any) => ({
                 value: u.name,
                 label: u.name,
                 factor: u.conversionFactor,
-                price: u.price || 0
+                price: u.price || 0,
+                barcode: u.barcode || '',
             }));
 
             const allUnits = [baseUnitOption, ...secondaryUnitsOptions];
@@ -262,11 +264,10 @@ export default function SalesInvoicePage() {
         const unit = availableUnits.find(u => u.value === unitName);
         const item = allItems.find((i: Item) => i.id === newItem.id);
         if (unit && item) {
-             const secondaryUnit = item.secondaryUnits?.find(u => u.name === unitName);
              setNewItem(prev => ({
                  ...prev, 
                  price: unit.price || (item.price || 0) * unit.factor,
-                 code: secondaryUnit?.barcode || item.code || ''
+                 code: unit.barcode || item.code || ''
              }));
         }
     }
@@ -294,15 +295,14 @@ export default function SalesInvoicePage() {
                 return {
                     id: item.itemId,
                     name: item.name,
-                    qty: item.qty * item.conversionFactor, // Store in base units
-                    price: item.price / item.conversionFactor, // Store price per base unit
+                    qty: item.qty * item.conversionFactor, 
+                    price: item.price / item.conversionFactor, 
                     total: item.total,
                     cost: item.cost / item.conversionFactor,
                 }
             });
             
             const date = new Date();
-            const dateString = date.toISOString().split('T')[0];
 
             const invoiceData: any = {
                 invoiceNumber,
@@ -324,6 +324,8 @@ export default function SalesInvoicePage() {
                 deliveryPersonId: isDelivery ? deliveryPersonId : null,
                 deliveryPersonName: isDelivery ? deliveryStaff.find((d:any) => d.id === deliveryPersonId)?.name : null,
             };
+            
+            if (location) invoiceData.location = location;
             
             await dbAction(`salesInvoices`, 'add', invoiceData);
 
@@ -425,7 +427,7 @@ export default function SalesInvoicePage() {
     <>
       <PageHeader title="فاتورة بيع جديدة" />
       <main className="flex flex-1 flex-col gap-4 p-2 md:p-6 printable-area">
-        <Card>
+        <Card className="max-w-7xl mx-auto w-full">
           <CardHeader className="p-4 md:p-6">
             <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
                 <div className="w-full lg:w-auto">
@@ -522,8 +524,8 @@ export default function SalesInvoicePage() {
                             <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[30%]">الصنف</TableHead>
-                                <TableHead>الباركود</TableHead>
-                                <TableHead className="text-center w-32">الوحدة</TableHead>
+                                <TableHead className="w-[15%]">الباركود</TableHead>
+                                <TableHead className="text-center w-24">الوحدة</TableHead>
                                 <TableHead className="text-center w-20">الكمية</TableHead>
                                 <TableHead className="text-center w-28">سعر الوحدة</TableHead>
                                 <TableHead className="text-center w-28">الإجمالي</TableHead>
@@ -558,8 +560,8 @@ export default function SalesInvoicePage() {
                                         disabled={!warehouseId}
                                     />
                                 </TableCell>
-                                <TableCell className="p-2 font-mono text-xs">
-                                    {newItem.code}
+                                <TableCell className="p-2">
+                                    <Input value={newItem.code} readOnly className="h-9 font-mono text-xs bg-muted" placeholder="الباركود"/>
                                 </TableCell>
                                 <TableCell className="p-2">
                                      <Combobox
