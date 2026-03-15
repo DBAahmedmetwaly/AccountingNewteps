@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -110,14 +110,45 @@ export default function SettingsPage() {
     useEffect(() => {
         if (allData?.main) {
             const loadedSettings = allData.main;
+            
+            const defaultGeneral: GeneralSettings = { 
+                companyName: '', 
+                companyAddress: '', 
+                logoUrl: "/logo.png", 
+                language: 'ar', 
+                mobileFabPosition: 'bottom-right', 
+                invoiceFooter: '', 
+                desktopLayout: 'sidebar', 
+                toastDuration: 5, 
+                welcomeMessage: '', 
+                isClothingStore: false, 
+                licenseKey: '', 
+                licenseStatus: 'inactive',
+                showWatermark: false, 
+                watermarkOpacity: 0.1 
+            };
+
             setSettings({
                 general: {
+                    ...defaultGeneral,
                     ...loadedSettings.general,
                     logoUrl: loadedSettings.general?.logoUrl || "/logo.png",
                     showWatermark: loadedSettings.general?.showWatermark ?? false,
                     watermarkOpacity: loadedSettings.general?.watermarkOpacity ?? 0.1,
-                } || { companyName: '', companyAddress: '', logoUrl: "/logo.png", language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false, showWatermark: false, watermarkOpacity: 0.1 },
-                financial: loadedSettings.financial || { openingCapital: 0, fiscalYearStart: '', currency: 'EGP', allowNegativeStock: false, scaleBarcodePrefix: '21', clothingBarcodePrefix: '23', standardItemBarcodePrefix: '25', purchaseWorkflow: 'direct', roundingDecimals: 2, vatRate: 14 },
+                },
+                financial: {
+                    openingCapital: 0, 
+                    fiscalYearStart: '', 
+                    currency: 'EGP', 
+                    allowNegativeStock: false, 
+                    scaleBarcodePrefix: '21', 
+                    clothingBarcodePrefix: '23', 
+                    standardItemBarcodePrefix: '25', 
+                    purchaseWorkflow: 'direct', 
+                    roundingDecimals: 2, 
+                    vatRate: 14,
+                    ...loadedSettings.financial
+                },
                 posSettings: {
                     workDay: loadedSettings.posSettings?.workDay || new Date().toISOString().split('T')[0],
                     scaleItemDefaultFocus: loadedSettings.posSettings?.scaleItemDefaultFocus || 'weight',
