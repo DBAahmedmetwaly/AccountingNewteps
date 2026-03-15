@@ -112,8 +112,8 @@ export default function SettingsPage() {
             setSettings({
                 general: {
                     ...loadedSettings.general,
-                    logoUrl: loadedSettings.general?.logoUrl || placeholderImages.invoiceLogo.url
-                } || { companyName: '', companyAddress: '', logoUrl: placeholderImages.invoiceLogo.url, language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false },
+                    logoUrl: loadedSettings.general?.logoUrl || "/logo.png"
+                } || { companyName: '', companyAddress: '', logoUrl: "/logo.png", language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false },
                 financial: loadedSettings.financial || { openingCapital: 0, fiscalYearStart: '', currency: 'EGP', allowNegativeStock: false, scaleBarcodePrefix: '21', clothingBarcodePrefix: '23', standardItemBarcodePrefix: '25', purchaseWorkflow: 'direct', roundingDecimals: 2, vatRate: 14 },
                 posSettings: {
                     workDay: loadedSettings.posSettings?.workDay || new Date().toISOString().split('T')[0],
@@ -134,7 +134,7 @@ export default function SettingsPage() {
         } else {
              const defaultWorkDay = new Date().toISOString().split('T')[0];
                 const defaultSettings: Settings = {
-                    general: { companyName: '', companyAddress: '', logoUrl: placeholderImages.invoiceLogo.url, language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false, licenseKey: '', licenseStatus: 'inactive' },
+                    general: { companyName: '', companyAddress: '', logoUrl: "/logo.png", language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false, licenseKey: '', licenseStatus: 'inactive' },
                     financial: { openingCapital: 0, fiscalYearStart: '', currency: 'EGP', allowNegativeStock: false, scaleBarcodePrefix: '21', clothingBarcodePrefix: '23', standardItemBarcodePrefix: '25', purchaseWorkflow: 'direct', roundingDecimals: 2, vatRate: 14 },
                     posSettings: { 
                         workDay: defaultWorkDay, 
@@ -293,8 +293,8 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="logo-url">رابط شعار الشركة (URL)</Label>
-                  <Input id="logo-url" placeholder="أدخل رابط صورة الشعار (مثلاً من Google Drive أو موقع خارجي)" value={settings.general.logoUrl || ''} onChange={e => handleGeneralChange('logoUrl', e.target.value)} />
-                  <p className="text-xs text-muted-foreground">سيظهر هذا الشعار في الجزء العلوي من الفواتير والإيصالات. تأكد من وضع ملف logo.png في مجلد public.</p>
+                  <Input id="logo-url" placeholder="مثال: /logo.png" value={settings.general.logoUrl || ''} onChange={e => handleGeneralChange('logoUrl', e.target.value)} />
+                  <p className="text-xs text-muted-foreground">افتراضياً يستخدم النظام الملف المرفوع في Public باسم logo.png. يمكنك تغيير المسار هنا.</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="welcome-message">الرسالة الترحيبية</Label>

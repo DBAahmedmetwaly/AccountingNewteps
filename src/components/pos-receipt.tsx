@@ -7,7 +7,10 @@ import placeholderImages from "@/app/lib/placeholder-images.json";
 export const PosReceipt = ({ invoice, company, design, warehouse, customer, customerBalance }: { invoice: any, company: any, design: any, warehouse?: any, customer?: any, customerBalance?: number }) => {
   const [imgError, setImgError] = useState(false);
   
-  const logoUrl = company?.logoUrl || placeholderImages.invoiceLogo.url;
+  // Prioritize local logo over settings URL if the settings URL is default or empty
+  const logoUrl = company?.logoUrl && company.logoUrl !== placeholderImages.invoiceLogo.url 
+    ? company.logoUrl 
+    : "/logo.png";
 
   const receiptStyle: React.CSSProperties = {
     width: `${design?.receiptWidth || 72}mm`, 
@@ -108,7 +111,13 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
                 alt="logo" 
                 crossOrigin="anonymous" 
                 data-ai-hint={placeholderImages.invoiceLogo.hint}
-                onError={() => setImgError(true)}
+                onError={() => {
+                    if (logoUrl !== "/logo.png") {
+                        setImgError(false); // Try again with local if first fails
+                    } else {
+                        setImgError(true);
+                    }
+                }}
                 style={{ maxWidth: '80px', maxHeight: '80px', margin: '0 auto 5px', objectFit: 'contain' }} 
             />
         )}

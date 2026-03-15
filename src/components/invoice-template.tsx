@@ -13,7 +13,10 @@ interface InvoiceTemplateProps {
 export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, company, customer, isPurchase = false, customerBalance }) => {
   const [imgError, setImgError] = useState(false);
   
-  const logoUrl = company?.logoUrl || placeholderImages.invoiceLogo.url;
+  // Prioritize local logo over settings URL if the settings URL is default or empty
+  const logoUrl = company?.logoUrl && company.logoUrl !== placeholderImages.invoiceLogo.url 
+    ? company.logoUrl 
+    : "/logo.png";
     
   const receiptStyle: React.CSSProperties = {
     width: '210mm', 
@@ -108,7 +111,13 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
                     alt="Logo" 
                     crossOrigin="anonymous"
                     data-ai-hint={placeholderImages.invoiceLogo.hint}
-                    onError={() => setImgError(true)}
+                    onError={() => {
+                        if (logoUrl !== "/logo.png") {
+                            setImgError(false); // Try again with local if first fails
+                        } else {
+                            setImgError(true);
+                        }
+                    }}
                     style={{ maxWidth: '100px', maxHeight: '80px', objectFit: 'contain' }} 
                 />
             )}
