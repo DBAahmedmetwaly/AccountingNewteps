@@ -24,12 +24,11 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Save, Bell, BellRing, Palette, ShieldCheck, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useData } from "@/contexts/data-provider";
 import { useNotifications } from "@/contexts/notification-context";
-import { Bell, BellRing } from "lucide-react";
-import placeholderImages from "@/app/lib/placeholder-images.json";
+import { Slider } from "@/components/ui/slider";
 
 
 interface GeneralSettings {
@@ -45,6 +44,8 @@ interface GeneralSettings {
     isClothingStore?: boolean;
     licenseKey?: string;
     licenseStatus?: 'active' | 'inactive' | 'expired';
+    showWatermark?: boolean;
+    watermarkOpacity?: number;
 }
 
 interface FinancialSettings {
@@ -112,8 +113,10 @@ export default function SettingsPage() {
             setSettings({
                 general: {
                     ...loadedSettings.general,
-                    logoUrl: loadedSettings.general?.logoUrl || "/logo.png"
-                } || { companyName: '', companyAddress: '', logoUrl: "/logo.png", language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false },
+                    logoUrl: loadedSettings.general?.logoUrl || "/logo.png",
+                    showWatermark: loadedSettings.general?.showWatermark ?? false,
+                    watermarkOpacity: loadedSettings.general?.watermarkOpacity ?? 0.1,
+                } || { companyName: '', companyAddress: '', logoUrl: "/logo.png", language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false, showWatermark: false, watermarkOpacity: 0.1 },
                 financial: loadedSettings.financial || { openingCapital: 0, fiscalYearStart: '', currency: 'EGP', allowNegativeStock: false, scaleBarcodePrefix: '21', clothingBarcodePrefix: '23', standardItemBarcodePrefix: '25', purchaseWorkflow: 'direct', roundingDecimals: 2, vatRate: 14 },
                 posSettings: {
                     workDay: loadedSettings.posSettings?.workDay || new Date().toISOString().split('T')[0],
@@ -134,7 +137,7 @@ export default function SettingsPage() {
         } else {
              const defaultWorkDay = new Date().toISOString().split('T')[0];
                 const defaultSettings: Settings = {
-                    general: { companyName: '', companyAddress: '', logoUrl: "/logo.png", language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false, licenseKey: '', licenseStatus: 'inactive' },
+                    general: { companyName: '', companyAddress: '', logoUrl: "/logo.png", language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false, licenseKey: '', licenseStatus: 'inactive', showWatermark: false, watermarkOpacity: 0.1 },
                     financial: { openingCapital: 0, fiscalYearStart: '', currency: 'EGP', allowNegativeStock: false, scaleBarcodePrefix: '21', clothingBarcodePrefix: '23', standardItemBarcodePrefix: '25', purchaseWorkflow: 'direct', roundingDecimals: 2, vatRate: 14 },
                     posSettings: { 
                         workDay: defaultWorkDay, 
@@ -351,6 +354,38 @@ export default function SettingsPage() {
                       <Input id="toast-duration" type="number" placeholder="5" value={settings.general.toastDuration || 5} onChange={e => handleGeneralChange('toastDuration', parseFloat(e.target.value))} step="0.1" />
                     </div>
                  </div>
+
+                 {/* Watermark Section */}
+                 <div className="pt-4 border-t space-y-4">
+                    <h3 className="font-bold flex items-center gap-2 text-primary"><ImageIcon className="h-5 w-5"/> إعدادات العلامة المائية (Logo Watermark)</h3>
+                    <div className="flex items-center justify-between rounded-lg border p-4 shadow-sm bg-muted/20">
+                        <div className="space-y-0.5">
+                            <Label htmlFor="show-watermark">تفعيل العلامة المائية في الفواتير</Label>
+                            <p className="text-xs text-muted-foreground">
+                                إظهار شعار الشركة بشكل باهت في خلفية فواتير A4 وإيصالات الكاشير.
+                            </p>
+                        </div>
+                        <Switch id="show-watermark" checked={settings.general.showWatermark} onCheckedChange={checked => handleGeneralChange('showWatermark', checked)} />
+                    </div>
+                    {settings.general.showWatermark && (
+                        <div className="p-4 border rounded-lg space-y-4 animate-in fade-in slide-in-from-top-1">
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <Label>درجة شفافية العلامة المائية: {Math.round((settings.general.watermarkOpacity || 0.1) * 100)}%</Label>
+                                    <span className="text-xs text-muted-foreground">ينصح بـ 10% للوضوح</span>
+                                </div>
+                                <Slider 
+                                    defaultValue={[settings.general.watermarkOpacity || 0.1]} 
+                                    max={0.5} 
+                                    min={0.05} 
+                                    step={0.01} 
+                                    onValueChange={(val) => handleGeneralChange('watermarkOpacity', val[0])}
+                                />
+                            </div>
+                        </div>
+                    )}
+                 </div>
+
                  <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
                   <div className="space-y-0.5">
                     <Label htmlFor="is-clothing-store">تفعيل وضع محلات الملابس</Label>

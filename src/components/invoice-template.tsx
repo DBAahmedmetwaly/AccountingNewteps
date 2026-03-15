@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import Barcode from 'react-barcode';
-import placeholderImages from "@/app/lib/placeholder-images.json";
 
 interface InvoiceTemplateProps {
   invoice: any; 
@@ -17,6 +16,9 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     ? company.logoUrl 
     : "/logo.png";
     
+  const showWatermark = company?.showWatermark === true;
+  const watermarkOpacity = company?.watermarkOpacity || 0.1;
+
   const receiptStyle: React.CSSProperties = {
     width: '210mm', 
     minHeight: '297mm', 
@@ -29,7 +31,9 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     textAlign: 'right',
     display: 'flex',
     flexDirection: 'column',
-    backgroundColor: '#ffffff', // Explicitly white
+    backgroundColor: '#ffffff',
+    position: 'relative',
+    overflow: 'hidden',
   };
 
   const headerStyle: React.CSSProperties = {
@@ -39,7 +43,9 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     borderBottom: '3px solid #000',
     paddingBottom: '15px',
     marginBottom: '25px',
-    backgroundColor: 'transparent'
+    backgroundColor: 'transparent',
+    position: 'relative',
+    zIndex: 1
   };
   
   const h1Style: React.CSSProperties = {
@@ -62,14 +68,16 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     fontSize: '14px',
     color: '#000',
     border: '1px solid #000',
-    backgroundColor: '#ffffff'
+    backgroundColor: 'transparent', // Transparent to see watermark
+    position: 'relative',
+    zIndex: 1
   };
 
   const thStyle: React.CSSProperties = {
     border: '1px solid #000',
     padding: '10px',
     textAlign: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'rgba(245, 245, 245, 0.8)',
     fontWeight: 'bold'
   };
   
@@ -83,7 +91,9 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     width: '50%',
     marginTop: '25px',
     fontSize: '14px',
-    color: '#000'
+    color: '#000',
+    position: 'relative',
+    zIndex: 1
   };
 
   const totalsRowStyle: React.CSSProperties = {
@@ -100,7 +110,22 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     fontSize: '12px',
     borderTop: '1px solid #000',
     color: '#000',
-    backgroundColor: 'transparent'
+    backgroundColor: 'transparent',
+    position: 'relative',
+    zIndex: 1
+  };
+
+  const watermarkStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    opacity: watermarkOpacity,
+    zIndex: 0,
+    width: '120mm',
+    height: 'auto',
+    pointerEvents: 'none',
+    filter: 'grayscale(1)' // Optional: make watermark grayscale
   };
 
   const invoiceType = isPurchase ? 'فاتورة شراء' : 'فاتورة مبيعات ضريبية';
@@ -114,6 +139,16 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
 
   return (
     <div style={receiptStyle} className="bg-white text-black printable-area">
+      {/* Watermark Rendering */}
+      {showWatermark && !imgError && logoUrl && (
+          <img 
+            src={logoUrl} 
+            alt="watermark" 
+            style={watermarkStyle}
+            crossOrigin="anonymous"
+          />
+      )}
+
       <header style={headerStyle}>
         <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
             {!imgError && logoUrl ? (
@@ -141,7 +176,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
         </div>
       </header>
       
-      <div style={{marginBottom: '25px', padding: '15px', border: '1px solid #eee', borderRadius: '8px', backgroundColor: '#ffffff'}}>
+      <div style={{marginBottom: '25px', padding: '15px', border: '1px solid #eee', borderRadius: '8px', backgroundColor: 'rgba(255, 255, 255, 0.7)', position: 'relative', zIndex: 1}}>
         <h3 style={{borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '10px', fontWeight: 'bold'}}>بيانات {partyLabel}:</h3>
         <p style={pStyle}><strong>الاسم:</strong> {effectivePartyName}</p>
         {customer?.address && <p style={pStyle}><strong>العنوان:</strong> {customer.address}</p>}
@@ -189,7 +224,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
         )}
         
         {!isPurchase && customerBalance !== undefined && (
-            <div style={{...totalsRowStyle, marginTop: '15px', borderTop: '2px double #000', paddingTop: '10px', color: '#000', fontWeight: 'bold', backgroundColor: '#f9f9f9', padding: '10px' }}>
+            <div style={{...totalsRowStyle, marginTop: '15px', borderTop: '2px double #000', paddingTop: '10px', color: '#000', fontWeight: 'bold', backgroundColor: 'rgba(249, 249, 249, 0.8)', padding: '10px' }}>
                 <span>إجمالي المديونية السابقة والحالية</span>
                 <span style={{color: '#d00'}}>{customerBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م</span>
             </div>
@@ -198,9 +233,9 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
 
        <footer style={footerStyle}>
          {invoice?.invoiceNumber && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', marginBottom: '15px', minHeight: '50px', backgroundColor: '#ffffff' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', marginBottom: '15px', minHeight: '50px', backgroundColor: 'transparent' }}>
                 {canGenerateBarcode(invoice.invoiceNumber) ? (
-                    <Barcode value={invoice.invoiceNumber} height={40} width={1.5} fontSize={14} displayValue={false} background="#ffffff" />
+                    <Barcode value={invoice.invoiceNumber} height={40} width={1.5} fontSize={14} displayValue={false} background="transparent" />
                 ) : (
                     <p style={{fontFamily: 'monospace', fontSize: '16px', border: '1px solid #000', padding: '5px 15px'}}>{invoice.invoiceNumber}</p>
                 )}

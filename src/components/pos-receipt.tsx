@@ -10,6 +10,9 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
     ? company.logoUrl 
     : "/logo.png";
 
+  const showWatermark = company?.showWatermark === true;
+  const watermarkOpacity = company?.watermarkOpacity || 0.1;
+
   const receiptStyle: React.CSSProperties = {
     width: `${design?.receiptWidth || 72}mm`, 
     fontFamily: 'monospace, "Noto Kufi Arabic", sans-serif',
@@ -17,14 +20,18 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
     color: '#000', 
     padding: '10px',
     boxSizing: 'border-box',
-    backgroundColor: '#ffffff', // Explicitly white
+    backgroundColor: '#ffffff',
     direction: 'rtl',
+    position: 'relative',
+    overflow: 'hidden'
   };
 
   const headerStyle: React.CSSProperties = {
     textAlign: 'center',
     marginBottom: '15px',
-    backgroundColor: 'transparent'
+    backgroundColor: 'transparent',
+    position: 'relative',
+    zIndex: 1
   };
 
   const h1Style: React.CSSProperties = {
@@ -46,7 +53,9 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
     marginBottom: '10px',
     fontSize: `${design?.fontSizes?.items || 12}px`,
     color: '#000',
-    backgroundColor: '#ffffff'
+    backgroundColor: 'transparent',
+    position: 'relative',
+    zIndex: 1
   };
 
   const thStyle: React.CSSProperties = {
@@ -66,7 +75,9 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
     paddingTop: '8px',
     borderTop: '2px solid #000',
     fontSize: `${design?.fontSizes?.totals || 13}px`,
-    color: '#000'
+    color: '#000',
+    position: 'relative',
+    zIndex: 1
   };
 
   const footerStyle: React.CSSProperties = {
@@ -74,7 +85,22 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
     marginTop: '20px',
     fontSize: `${design?.fontSizes?.items || 12}px`,
     color: '#000',
-    backgroundColor: 'transparent'
+    backgroundColor: 'transparent',
+    position: 'relative',
+    zIndex: 1
+  };
+
+  const watermarkStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    opacity: watermarkOpacity,
+    zIndex: 0,
+    width: '80%',
+    height: 'auto',
+    pointerEvents: 'none',
+    filter: 'grayscale(1)'
   };
   
   const barcodeValue = invoice?.invoiceNumber || 'N/A';
@@ -95,7 +121,7 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
                     displayValue: design?.showCode !== false,
                     fontSize: design?.fontSizes?.barcode || 12,
                     margin: 5,
-                    background: "#ffffff"
+                    background: "transparent"
                 });
             } catch (e) {
                 console.error("Barcode generation failed:", e);
@@ -112,6 +138,16 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
 
   return (
     <div style={receiptStyle} className="bg-white text-black printable-area">
+      {/* Watermark Rendering */}
+      {showWatermark && !imgError && logoUrl && (
+          <img 
+            src={logoUrl} 
+            alt="watermark" 
+            style={watermarkStyle}
+            crossOrigin="anonymous"
+          />
+      )}
+
       <div style={headerStyle}>
         {invoice?.isCheck && <h2 style={{...h1Style, marginBottom: '10px', border: '2px solid black', padding: '5px'}}>شيك مبدئي</h2>}
         {design?.showLogo !== false && logoUrl && !imgError && (
@@ -131,7 +167,7 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
         {invoice?.isDelivery && <p style={{...pStyle, fontWeight: 'bold', fontSize: '16px', border: '2px solid black', padding: '3px', margin: '8px auto' }}>توصيل (دليفري)</p>}
       </div>
       
-      <div style={{ borderBottom: '1px dashed #000', paddingBottom: '8px', marginBottom: '8px', fontSize: `${design?.fontSizes?.header || 13}px` }}>
+      <div style={{ borderBottom: '1px dashed #000', paddingBottom: '8px', marginBottom: '8px', fontSize: `${design?.fontSizes?.header || 13}px`, position: 'relative', zIndex: 1 }}>
         {design?.showInvoiceNumber !== false && <p style={pStyle}>رقم الفاتورة: {invoice?.invoiceNumber}</p>}
         <p style={pStyle}>التاريخ: {invoice?.date ? new Date(invoice.date).toLocaleString('ar-EG') : '-'}</p>
         {design?.showCashier !== false && <p style={pStyle}>الكاشير: {invoice?.cashierName || '---'}</p>}
@@ -179,7 +215,7 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
 
        <div style={footerStyle}>
          {design?.showBarcode !== false && barcodeValue && (
-            <div style={{ display: 'flex', justifyContent: 'center', width: '100%', overflow: 'hidden', minHeight: '60px', backgroundColor: '#ffffff' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', width: '100%', overflow: 'hidden', minHeight: '60px', backgroundColor: 'transparent' }}>
                 <BarcodeDisplay value={barcodeValue} design={design} />
             </div>
          )}
