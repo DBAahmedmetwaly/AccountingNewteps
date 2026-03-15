@@ -188,6 +188,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
           <tr>
             <th style={{...thStyle, width: '50px'}}>#</th>
             <th style={{...thStyle, textAlign: 'right'}}>الصنف</th>
+            <th style={thStyle}>الباركود</th>
             <th style={thStyle}>الكمية</th>
             <th style={thStyle}>السعر</th>
             <th style={thStyle}>الإجمالي</th>
@@ -198,6 +199,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
             <tr key={index}>
               <td style={{...tdStyle, textAlign: 'center'}}>{index + 1}</td>
               <td style={tdStyle}>{item.name}</td>
+              <td style={{...tdStyle, textAlign: 'center', fontFamily: 'monospace', fontSize: '12px'}}>{item.code || '-'}</td>
               <td style={{...tdStyle, textAlign: 'center'}}>{item.qty}</td>
               <td style={{...tdStyle, textAlign: 'center'}}>{(item.price || item.cost)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
               <td style={{...tdStyle, textAlign: 'center', fontWeight: 'bold'}}>{item.total?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
