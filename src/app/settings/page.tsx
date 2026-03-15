@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useState, useEffect } from "react";
@@ -30,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { useData } from "@/contexts/data-provider";
 import { useNotifications } from "@/contexts/notification-context";
 import { Bell, BellRing } from "lucide-react";
+import placeholderImages from "@/app/lib/placeholder-images.json";
 
 
 interface GeneralSettings {
@@ -110,7 +110,10 @@ export default function SettingsPage() {
         if (allData?.main) {
             const loadedSettings = allData.main;
             setSettings({
-                general: loadedSettings.general || { companyName: '', companyAddress: '', logoUrl: '', language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false },
+                general: {
+                    ...loadedSettings.general,
+                    logoUrl: loadedSettings.general?.logoUrl || placeholderImages.invoiceLogo.url
+                } || { companyName: '', companyAddress: '', logoUrl: placeholderImages.invoiceLogo.url, language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false },
                 financial: loadedSettings.financial || { openingCapital: 0, fiscalYearStart: '', currency: 'EGP', allowNegativeStock: false, scaleBarcodePrefix: '21', clothingBarcodePrefix: '23', standardItemBarcodePrefix: '25', purchaseWorkflow: 'direct', roundingDecimals: 2, vatRate: 14 },
                 posSettings: {
                     workDay: loadedSettings.posSettings?.workDay || new Date().toISOString().split('T')[0],
@@ -131,7 +134,7 @@ export default function SettingsPage() {
         } else {
              const defaultWorkDay = new Date().toISOString().split('T')[0];
                 const defaultSettings: Settings = {
-                    general: { companyName: '', companyAddress: '', logoUrl: '', language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false, licenseKey: '', licenseStatus: 'inactive' },
+                    general: { companyName: '', companyAddress: '', logoUrl: placeholderImages.invoiceLogo.url, language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false, licenseKey: '', licenseStatus: 'inactive' },
                     financial: { openingCapital: 0, fiscalYearStart: '', currency: 'EGP', allowNegativeStock: false, scaleBarcodePrefix: '21', clothingBarcodePrefix: '23', standardItemBarcodePrefix: '25', purchaseWorkflow: 'direct', roundingDecimals: 2, vatRate: 14 },
                     posSettings: { 
                         workDay: defaultWorkDay, 

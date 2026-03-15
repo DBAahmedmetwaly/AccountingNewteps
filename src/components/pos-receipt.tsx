@@ -1,12 +1,14 @@
-
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
+import placeholderImages from "@/app/lib/placeholder-images.json";
 
 export const PosReceipt = ({ invoice, company, design, warehouse, customer, customerBalance }: { invoice: any, company: any, design: any, warehouse?: any, customer?: any, customerBalance?: number }) => {
   const [imgError, setImgError] = useState(false);
   
+  const logoUrl = company?.logoUrl || placeholderImages.invoiceLogo.url;
+
   const receiptStyle: React.CSSProperties = {
     width: `${design?.receiptWidth || 72}mm`, 
     fontFamily: 'monospace, "Noto Kufi Arabic", sans-serif',
@@ -100,11 +102,12 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
     <div style={receiptStyle} className="bg-white text-black printable-area">
       <div style={headerStyle}>
         {invoice.isCheck && <h2 style={{...h1Style, marginBottom: '10px', border: '1px solid black', padding: '4px'}}>شيك مبدئي</h2>}
-        {design?.showLogo && company?.logoUrl && !imgError && (
+        {design?.showLogo && logoUrl && !imgError && (
             <img 
-                src={company.logoUrl} 
+                src={logoUrl} 
                 alt="logo" 
                 crossOrigin="anonymous" 
+                data-ai-hint={placeholderImages.invoiceLogo.hint}
                 onError={() => setImgError(true)}
                 style={{ maxWidth: '80px', maxHeight: '80px', margin: '0 auto 5px', objectFit: 'contain' }} 
             />

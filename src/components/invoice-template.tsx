@@ -1,6 +1,6 @@
-
 import React, { useState } from 'react';
 import Barcode from 'react-barcode';
+import placeholderImages from "@/app/lib/placeholder-images.json";
 
 interface InvoiceTemplateProps {
   invoice: any; 
@@ -12,6 +12,8 @@ interface InvoiceTemplateProps {
 
 export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, company, customer, isPurchase = false, customerBalance }) => {
   const [imgError, setImgError] = useState(false);
+  
+  const logoUrl = company?.logoUrl || placeholderImages.invoiceLogo.url;
     
   const receiptStyle: React.CSSProperties = {
     width: '210mm', 
@@ -100,11 +102,12 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     <div style={receiptStyle} className="bg-white text-black printable-area">
       <header style={headerStyle}>
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-            {company?.logoUrl && !imgError && (
+            {!imgError && logoUrl && (
                 <img 
-                    src={company.logoUrl} 
+                    src={logoUrl} 
                     alt="Logo" 
                     crossOrigin="anonymous"
+                    data-ai-hint={placeholderImages.invoiceLogo.hint}
                     onError={() => setImgError(true)}
                     style={{ maxWidth: '100px', maxHeight: '80px', objectFit: 'contain' }} 
                 />
