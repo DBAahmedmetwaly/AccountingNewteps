@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -132,9 +133,6 @@ export default function SettingsPage() {
                 general: {
                     ...defaultGeneral,
                     ...loadedSettings.general,
-                    logoUrl: loadedSettings.general?.logoUrl || "/logo.png",
-                    showWatermark: loadedSettings.general?.showWatermark ?? false,
-                    watermarkOpacity: loadedSettings.general?.watermarkOpacity ?? 0.1,
                 },
                 financial: {
                     openingCapital: 0, 
@@ -386,7 +384,6 @@ export default function SettingsPage() {
                     </div>
                  </div>
 
-                 {/* Watermark Section */}
                  <div className="pt-4 border-t space-y-4">
                     <h3 className="font-bold flex items-center gap-2 text-primary"><ImageIcon className="h-5 w-5"/> إعدادات العلامة المائية (Logo Watermark)</h3>
                     <div className="flex items-center justify-between rounded-lg border p-4 shadow-sm bg-muted/20">
