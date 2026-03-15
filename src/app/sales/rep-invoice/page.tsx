@@ -371,7 +371,7 @@ export default function SalesRepInvoicePage() {
         setIsLoadingShare(true);
         setInvoiceToShare(invoiceData);
     
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 300)); // Increased delay for stability
     
         if (invoiceRef.current === null) {
             console.error('Invoice ref is not available.');
@@ -381,7 +381,11 @@ export default function SalesRepInvoicePage() {
         }
     
         try {
-            const dataUrl = await toPng(invoiceRef.current, { cacheBust: true, quality: 0.95 });
+            const dataUrl = await toPng(invoiceRef.current, { 
+                cacheBust: true, 
+                quality: 0.95,
+                backgroundColor: '#ffffff' // Force white background for transparency
+            });
             const blob = await (await fetch(dataUrl)).blob();
             const file = new File([blob], `${invoiceData.invoiceNumber}.png`, { type: blob.type });
     
@@ -705,7 +709,6 @@ export default function SalesRepInvoicePage() {
         </Card>
       </main>
       
-      {/* عنصر مخفي لتوليد الصورة */}
       <div style={{ position: 'fixed', top: '200vh', left: 0, zIndex: -100 }}>
           <div ref={invoiceRef} className="bg-white">
               {invoiceToShare && (

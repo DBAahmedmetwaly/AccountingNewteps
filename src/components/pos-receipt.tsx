@@ -14,16 +14,17 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
     width: `${design?.receiptWidth || 72}mm`, 
     fontFamily: 'monospace, "Noto Kufi Arabic", sans-serif',
     fontSize: `${design?.fontSizes?.items || 12}px`,
-    color: '#000', // Force black text
+    color: '#000', 
     padding: '10px',
     boxSizing: 'border-box',
-    backgroundColor: '#fff', // Force white background
+    backgroundColor: '#ffffff', // Explicitly white
     direction: 'rtl',
   };
 
   const headerStyle: React.CSSProperties = {
     textAlign: 'center',
     marginBottom: '15px',
+    backgroundColor: 'transparent'
   };
 
   const h1Style: React.CSSProperties = {
@@ -44,7 +45,8 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
     borderCollapse: 'collapse',
     marginBottom: '10px',
     fontSize: `${design?.fontSizes?.items || 12}px`,
-    color: '#000'
+    color: '#000',
+    backgroundColor: '#ffffff'
   };
 
   const thStyle: React.CSSProperties = {
@@ -71,7 +73,8 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
     textAlign: 'center',
     marginTop: '20px',
     fontSize: `${design?.fontSizes?.items || 12}px`,
-    color: '#000'
+    color: '#000',
+    backgroundColor: 'transparent'
   };
   
   const barcodeValue = invoice?.invoiceNumber || 'N/A';
@@ -117,7 +120,7 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
                 alt="logo" 
                 crossOrigin="anonymous" 
                 onError={() => setImgError(true)}
-                style={{ maxWidth: '100px', maxHeight: '100px', margin: '0 auto 10px', objectFit: 'contain' }} 
+                style={{ maxWidth: '100px', maxHeight: '100px', margin: '0 auto 10px', objectFit: 'contain', backgroundColor: 'transparent' }} 
             />
         )}
         {design?.showCompanyName !== false && <h1 style={h1Style}>{effectiveCompanyName}</h1>}
@@ -176,7 +179,7 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
 
        <div style={footerStyle}>
          {design?.showBarcode !== false && barcodeValue && (
-            <div style={{ display: 'flex', justifyContent: 'center', width: '100%', overflow: 'hidden', minHeight: '60px' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', width: '100%', overflow: 'hidden', minHeight: '60px', backgroundColor: '#ffffff' }}>
                 <BarcodeDisplay value={barcodeValue} design={design} />
             </div>
          )}

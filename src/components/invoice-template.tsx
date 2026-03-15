@@ -13,7 +13,6 @@ interface InvoiceTemplateProps {
 export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, company, customer, isPurchase = false, customerBalance }) => {
   const [imgError, setImgError] = useState(false);
   
-  // 1. Better Logo Handling
   const logoUrl = company?.logoUrl && company.logoUrl !== "" && company.logoUrl !== "/logo.png"
     ? company.logoUrl 
     : "/logo.png";
@@ -23,14 +22,14 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     minHeight: '297mm', 
     fontFamily: '"Noto Kufi Arabic", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
     fontSize: '14px',
-    color: '#000', // Force black text
+    color: '#000', 
     padding: '20mm',
     boxSizing: 'border-box',
     direction: 'rtl', 
     textAlign: 'right',
     display: 'flex',
     flexDirection: 'column',
-    backgroundColor: '#fff', // Force white background
+    backgroundColor: '#ffffff', // Explicitly white
   };
 
   const headerStyle: React.CSSProperties = {
@@ -39,7 +38,8 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     alignItems: 'center',
     borderBottom: '3px solid #000',
     paddingBottom: '15px',
-    marginBottom: '25px'
+    marginBottom: '25px',
+    backgroundColor: 'transparent'
   };
   
   const h1Style: React.CSSProperties = {
@@ -61,7 +61,8 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     marginBottom: '25px',
     fontSize: '14px',
     color: '#000',
-    border: '1px solid #000'
+    border: '1px solid #000',
+    backgroundColor: '#ffffff'
   };
 
   const thStyle: React.CSSProperties = {
@@ -98,13 +99,13 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     paddingTop: '20px',
     fontSize: '12px',
     borderTop: '1px solid #000',
-    color: '#000'
+    color: '#000',
+    backgroundColor: 'transparent'
   };
 
   const invoiceType = isPurchase ? 'فاتورة شراء' : 'فاتورة مبيعات ضريبية';
   const partyLabel = isPurchase ? 'المورد' : 'العميل';
   
-  // Logic to get the most accurate names
   const effectivePartyName = customer?.name || invoice?.customerName || invoice?.supplierName || "عميل نقدي";
   const effectiveCompanyName = company?.companyName || "اسم شركتك";
   const effectiveCompanyAddress = company?.companyAddress || "عنوان الشركة";
@@ -121,7 +122,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
                     alt="Logo" 
                     crossOrigin="anonymous"
                     onError={() => setImgError(true)}
-                    style={{ maxWidth: '120px', maxHeight: '100px', objectFit: 'contain' }} 
+                    style={{ maxWidth: '120px', maxHeight: '100px', objectFit: 'contain', backgroundColor: 'transparent' }} 
                 />
             ) : (
                 <div style={{ width: '100px', height: '100px', border: '2px solid #000', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px' }}>
@@ -140,7 +141,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
         </div>
       </header>
       
-      <div style={{marginBottom: '25px', padding: '15px', border: '1px solid #eee', borderRadius: '8px'}}>
+      <div style={{marginBottom: '25px', padding: '15px', border: '1px solid #eee', borderRadius: '8px', backgroundColor: '#ffffff'}}>
         <h3 style={{borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '10px', fontWeight: 'bold'}}>بيانات {partyLabel}:</h3>
         <p style={pStyle}><strong>الاسم:</strong> {effectivePartyName}</p>
         {customer?.address && <p style={pStyle}><strong>العنوان:</strong> {customer.address}</p>}
@@ -197,9 +198,9 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
 
        <footer style={footerStyle}>
          {invoice?.invoiceNumber && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', marginBottom: '15px', minHeight: '50px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', marginBottom: '15px', minHeight: '50px', backgroundColor: '#ffffff' }}>
                 {canGenerateBarcode(invoice.invoiceNumber) ? (
-                    <Barcode value={invoice.invoiceNumber} height={40} width={1.5} fontSize={14} displayValue={false} />
+                    <Barcode value={invoice.invoiceNumber} height={40} width={1.5} fontSize={14} displayValue={false} background="#ffffff" />
                 ) : (
                     <p style={{fontFamily: 'monospace', fontSize: '16px', border: '1px solid #000', padding: '5px 15px'}}>{invoice.invoiceNumber}</p>
                 )}
