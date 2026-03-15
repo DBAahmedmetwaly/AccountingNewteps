@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Trash2, Printer, Save, Loader2, Info, Truck, MapPin, Wallet } from "lucide-react";
+import { PlusCircle, Trash2, Printer, Save, Loader2, Info, Truck, MapPin, Wallet, UserPlus } from "lucide-react";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useData } from "@/contexts/data-provider";
 import { useToast } from "@/hooks/use-toast";
@@ -20,6 +20,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { Combobox } from "@/components/ui/combobox";
 import { calculateStockForItemInWarehouse } from '@/lib/inventory-utils';
 import { Badge } from "@/components/ui/badge";
+import { AddEntityDialog } from "@/components/add-entity-dialog";
 
 
 interface InvoiceItem {
@@ -59,6 +60,11 @@ interface Item {
 interface Customer {
     id: string;
     name: string;
+    phone?: string;
+    address?: string;
+    allowCredit?: boolean;
+    openingBalance?: number;
+    creditLimit?: number;
 }
 
 interface Warehouse {
@@ -72,6 +78,61 @@ interface CashAccount {
     name: string;
     salesRepId?: string;
     warehouseId?: string;
+}
+
+const NewCustomerForm = ({ onSave, onClose, allCustomers }: { onSave: (customer: any) => void, onClose: () => void, allCustomers: any[] }) => {
+    const [formData, setFormData] = useState({ name: '', phone: '', address: '', allowCredit: false });
+    const { toast } = useToast();
+
+    const handleSave = () => {
+        if (!formData.name || !formData.phone?.trim()) {
+            toast({
+                variant: "destructive",
+                title: "بيانات ناقصة",
+                description: "يرجى إدخال اسم العميل ورقم الهاتف.",
+            });
+            return;
+        }
+
+        const isPhoneDuplicate = allCustomers.some(c => c.phone?.trim() === formData.phone?.trim());
+        if (isPhoneDuplicate) {
+            toast({
+                variant: "destructive",
+                title: "رقم هاتف مكرر",
+                description: "هذا الرقم مسجل لعميل آخر. يرجى إدخال رقم مختلف.",
+            });
+            return;
+        }
+
+        onSave({ ...formData, openingBalance: 0, creditLimit: 0 });
+        onClose();
+    }
+
+    return (
+        <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="cust-name" className="text-right">الاسم</Label>
+                <Input id="cust-name" value={formData.name} onChange={(e: any) => setFormData(p => ({...p, name: e.target.value}))} className="col-span-3"/>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="cust-phone" className="text-right">الهاتف</Label>
+                <Input id="cust-phone" value={formData.phone} onChange={(e: any) => setFormData(p => ({...p, phone: e.target.value}))} className="col-span-3"/>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="cust-address" className="text-right">العنوان</Label>
+                <Input id="cust-address" value={formData.address} onChange={(e: any) => setFormData(p => ({...p, address: e.target.value}))} className="col-span-3"/>
+            </div>
+             <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="cust-credit" className="text-right">عميل آجل</Label>
+                <div className="col-span-3">
+                   <Switch id="cust-credit" checked={formData.allowCredit} onCheckedChange={checked => setFormData(p => ({...p, allowCredit: !!checked}))} />
+                </div>
+            </div>
+             <div className="flex justify-end pt-4">
+                <Button onClick={handleSave}>حفظ العميل</Button>
+            </div>
+        </div>
+    )
 }
 
 
@@ -423,11 +484,23 @@ export default function SalesInvoicePage() {
         }
     }, [availableCashAccounts]);
 
+    const handleNewCustomerSave = async (customerData: any) => {
+        try {
+            const newId = await dbAction('customers', 'add', customerData);
+            if (newId) {
+                toast({ title: 'تم إضافة العميل بنجاح' });
+                setCustomerId(newId as string);
+            }
+        } catch(e) {
+            toast({ variant: 'destructive', title: 'فشل إضافة العميل' });
+        }
+    }
+
   return (
     <>
       <PageHeader title="فاتورة بيع جديدة" />
       <main className="flex flex-1 flex-col gap-4 p-2 md:p-6 printable-area">
-        <Card className="max-w-7xl mx-auto w-full">
+        <Card className="max-w-full w-full">
           <CardHeader className="p-4 md:p-6">
             <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
                 <div className="w-full lg:w-auto">
@@ -463,13 +536,23 @@ export default function SalesInvoicePage() {
                         <div className="space-y-2">
                             <Label htmlFor="customer">العميل</Label>
                             <div className="flex flex-col gap-2">
-                                <Combobox
-                                    options={customerOptions}
-                                    value={customerId}
-                                    onValueChange={setCustomerId}
-                                    placeholder="اختر عميلاً..."
-                                    emptyMessage="لم يتم العثور على عميل."
-                                />
+                                <div className="flex gap-2">
+                                    <Combobox
+                                        options={customerOptions}
+                                        value={customerId}
+                                        onValueChange={setCustomerId}
+                                        placeholder="اختر عميلاً..."
+                                        emptyMessage="لم يتم العثور على عميل."
+                                        className="flex-1"
+                                    />
+                                    <AddEntityDialog
+                                        title="إضافة عميل جديد"
+                                        description="أدخل تفاصيل العميل الجديد."
+                                        triggerButton={<Button variant="outline" size="icon"><UserPlus className="h-4 w-4"/></Button>}
+                                    >
+                                        {({onClose}) => <NewCustomerForm onSave={handleNewCustomerSave} onClose={onClose} allCustomers={customers}/>}
+                                    </AddEntityDialog>
+                                </div>
                                 {customerId && (
                                     <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-primary/20">
                                         <Wallet className="h-4 w-4 text-primary" />
