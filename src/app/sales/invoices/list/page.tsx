@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PlusCircle, Loader2, MoreHorizontal, FileText, Undo2, Printer, Eye, Truck, CheckCircle, MessageCircle, Image as ImageIcon, Search } from "lucide-react";
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   DropdownMenu,
@@ -87,7 +88,6 @@ export default function SalesInvoicesListPage() {
   const [isSharing, setIsSharing] = useState(false);
   const [sharingData, setSharingData] = useState<{ invoice: SaleInvoice, type: 'A4' | 'Thermal' } | null>(null);
 
-  // Aggressive Cleanup for Pointer Events and Scroll
   useEffect(() => {
     const cleanup = () => {
         if (!printModal.open && !isSharing && !itemsModal.open) {
@@ -386,6 +386,7 @@ export default function SalesInvoicesListPage() {
                     <TableHeader>
                         <TableRow>
                             <TableHead>الصنف</TableHead>
+                            <TableHead className="text-center">الباركود</TableHead>
                             <TableHead className="text-center">الكمية</TableHead>
                             <TableHead className="text-center">السعر</TableHead>
                             <TableHead className="text-center">الإجمالي</TableHead>
@@ -395,6 +396,7 @@ export default function SalesInvoicesListPage() {
                         {itemsModal.items.map((item, idx) => (
                             <TableRow key={idx}>
                                 <TableCell className="font-medium">{item.name}</TableCell>
+                                <TableCell className="text-center font-mono text-xs">{item.code || '-'}</TableCell>
                                 <TableCell className="text-center font-bold">{item.qty}</TableCell>
                                 <TableCell className="text-center">{item.price?.toLocaleString() || '-'}</TableCell>
                                 <TableCell className="text-center font-semibold">{item.total?.toLocaleString() || '-'}</TableCell>

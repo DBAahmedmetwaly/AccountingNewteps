@@ -1,4 +1,3 @@
-
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -8,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Trash2, Printer, Save, Loader2, Info, Truck, MapPin, Wallet, UserPlus } from "lucide-react";
+import { PlusCircle, Trash2, Printer, Save, Loader2, Info, Truck, MapPin, Wallet, UserPlus, Clock } from "lucide-react";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useData } from "@/contexts/data-provider";
 import { useToast } from "@/hooks/use-toast";
@@ -194,6 +193,7 @@ export default function SalesInvoicePage() {
         users 
     } = allDataContext;
     
+    const companySettings = useMemo(() => settings?.main?.general || {}, [settings]);
     const deliveryStaff = useMemo(() => users.filter((u: any) => u.isDelivery), [users]);
 
 
@@ -204,13 +204,16 @@ export default function SalesInvoicePage() {
     }, [user]);
 
     const availableItemsForWarehouse = useMemo(() => {
-        if (!warehouseId || warehouseId === "all" || !allItems.length) return [];
-        const allowNegativeStock = settings?.main?.financial?.allowNegativeStock || false;
-
-        return allItems
-            .map((item:any) => ({ ...item, stock: calculateStockForItemInWarehouse(item.id, warehouseId, allDataContext) }))
-            .filter((item:any) => item.stock > 0 || allowNegativeStock);
-    }, [warehouseId, allItems, settings, allDataContext]);
+        const activeItems = allItems.filter((i: any) => !i.isDisabled && i.itemType !== 'raw_material');
+        if (!warehouseId || warehouseId === "all") {
+            return activeItems.map((item: any) => ({ ...item, stock: 0 }));
+        }
+        
+        return activeItems.map((item: any) => ({
+            ...item,
+            stock: calculateStockForItemInWarehouse(item.id, warehouseId, allDataContext)
+        }));
+    }, [warehouseId, allItems, allDataContext]);
 
 
     useEffect(() => {
@@ -257,7 +260,7 @@ export default function SalesInvoicePage() {
         const requiredBaseQty = newItem.qty * selectedUnitInfo.factor;
 
         const mainSettings = settings?.main;
-        if(requiredBaseQty > (selectedItem.stock || 0) && !mainSettings?.financial?.allowNegativeStock) {
+        if(warehouseId && requiredBaseQty > (selectedItem.stock || 0) && !mainSettings?.financial?.allowNegativeStock) {
             toast({
                 variant: 'destructive',
                 title: 'كمية غير متوفرة',
@@ -360,6 +363,7 @@ export default function SalesInvoicePage() {
                     price: item.price / item.conversionFactor, 
                     total: item.total,
                     cost: item.cost / item.conversionFactor,
+                    code: item.code,
                 }
             });
             
@@ -504,9 +508,9 @@ export default function SalesInvoicePage() {
           <CardHeader className="p-4 md:p-6">
             <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
                 <div className="w-full lg:w-auto">
-                    <CardTitle className="text-xl md:text-2xl">فاتورة بيع</CardTitle>
+                    <CardTitle className="text-xl md:text-2xl">فاتورة مبيعات</CardTitle>
                     <CardDescription>
-                        {settings?.main?.general?.companyName || 'اسم شركتك'}
+                        {companySettings.companyName || 'اسم شركتك'}
                     </CardDescription>
                 </div>
                 <div className="w-full lg:w-auto text-right text-sm md:text-base grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
@@ -518,8 +522,8 @@ export default function SalesInvoicePage() {
                         <Label htmlFor="invoiceDate" className="font-bold shrink-0">تاريخ الفاتورة:</Label>
                         <Input id="invoiceDate" type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="h-8 w-full max-w-[150px]"/>
                     </div>
-                    <div className="flex items-center justify-between sm:justify-start gap-2 sm:col-start-2">
-                        <Label htmlFor="dueDate" className="font-bold shrink-0">تاريخ الاستحقاق:</Label>
+                    <div className="flex items-center justify-between sm:justify-start gap-4 sm:col-start-2">
+                        <Label htmlFor="dueDate" className="font-bold flex items-center gap-2 shrink-0"><Clock className="h-4 w-4 text-muted-foreground"/> الاستحقاق:</Label>
                         <Input id="dueDate" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="h-8 w-full max-w-[150px]"/>
                     </div>
                 </div>
@@ -584,7 +588,7 @@ export default function SalesInvoicePage() {
                                 فاتورة توصيل (دليفري)
                             </Label>
                         </div>
-                        {isDelivery && warehouseId !== 'all' && (
+                        {isDelivery && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-0 md:pl-8 rtl:md:pr-8">
                                 <div className="space-y-2">
                                     <Label htmlFor="delivery-person">موظف التوصيل (الطيار)</Label>
@@ -637,10 +641,9 @@ export default function SalesInvoicePage() {
                                         options={itemsForCombobox}
                                         value={newItem.id}
                                         onValueChange={handleItemSelect}
-                                        placeholder={!warehouseId ? "اختر مخزنًا أولاً" : "اختر صنفًا..."}
+                                        placeholder={"ابحث عن صنف..."}
                                         emptyMessage="لم يتم العثور على الصنف."
                                         className="w-full"
-                                        disabled={!warehouseId}
                                     />
                                 </TableCell>
                                 <TableCell className="p-2">
@@ -664,9 +667,9 @@ export default function SalesInvoicePage() {
                                 </TableCell>
                                 <TableCell></TableCell>
                                 <TableCell className="text-center p-1">
-                                    <Button onClick={handleAddItem} className="h-9 gap-1" disabled={!warehouseId || !newItem.id}>
+                                    <Button onClick={handleAddItem} className="h-9 gap-1" disabled={!newItem.id}>
                                         <PlusCircle className="h-4 w-4" />
-                                        إضافة صنف
+                                        إضافة صنف +
                                     </Button>
                                 </TableCell>
                             </TableRow>
