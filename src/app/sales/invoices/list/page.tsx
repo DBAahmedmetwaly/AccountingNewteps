@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -388,7 +387,7 @@ export default function SalesInvoicesListPage() {
                         <TableRow>
                             <TableHead>الصنف</TableHead>
                             <TableHead className="text-center">الكمية</TableHead>
-                            <TableHead className="text-center">سعر الوحدة</TableHead>
+                            <TableHead className="text-center">السعر</TableHead>
                             <TableHead className="text-center">الإجمالي</TableHead>
                         </TableRow>
                     </TableHeader>
