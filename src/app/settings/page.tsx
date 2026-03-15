@@ -294,7 +294,7 @@ export default function SettingsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="logo-url">رابط شعار الشركة (URL)</Label>
                   <Input id="logo-url" placeholder="أدخل رابط صورة الشعار (مثلاً من Google Drive أو موقع خارجي)" value={settings.general.logoUrl || ''} onChange={e => handleGeneralChange('logoUrl', e.target.value)} />
-                  <p className="text-xs text-muted-foreground">سيظهر هذا الشعار في الجزء العلوي من الفواتير والإيصالات.</p>
+                  <p className="text-xs text-muted-foreground">سيظهر هذا الشعار في الجزء العلوي من الفواتير والإيصالات. تأكد من وضع ملف logo.png في مجلد public.</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="welcome-message">الرسالة الترحيبية</Label>

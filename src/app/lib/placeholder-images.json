@@ -1,6 +1,6 @@
 {
   "invoiceLogo": {
-    "url": "https://picsum.photos/seed/8/200/200",
+    "url": "/logo.png",
     "hint": "company logo"
   }
 }
