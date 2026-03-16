@@ -88,27 +88,35 @@ const ExpenseForm = ({ expense, onSave, onClose, warehouses, cashAccounts }: { e
     useEffect(() => {
         let filtered: CashAccount[] = [];
         
+        // استثناء عهد المناديب دائماً من المصروفات الإدارية
+        const nonRepAccounts = cashAccounts.filter(acc => !acc.userId && !acc.salesRepId);
+
         if (formData.warehouseId && formData.warehouseId !== 'none') {
-            // إذا تم تحديد فرع، نعرض خزينة الفرع فقط
-            const branchCashAccount = cashAccounts.find((acc: CashAccount) => acc.warehouseId === formData.warehouseId);
+            // إذا تم تحديد فرع، نحاول إيجاد خزينته أولاً
+            const branchCashAccount = nonRepAccounts.find((acc: CashAccount) => acc.warehouseId === formData.warehouseId);
             if (branchCashAccount) {
-                filtered = [branchCashAccount];
+                // إذا وجدت خزينة للفرع، نضعها في المقدمة ونضيف باقي الخزائن العامة كبديل
+                filtered = [branchCashAccount, ...nonRepAccounts.filter(acc => !acc.warehouseId)];
             } else {
-                // إذا لم يكن للفرع خزينة، نسمح بالدفع من الخزائن العامة
-                filtered = cashAccounts.filter((acc: CashAccount) => !acc.warehouseId && !acc.userId && !acc.salesRepId);
+                // إذا لم يكن للفرع خزينة، نعرض كافة الخزائن العامة والبنوك
+                filtered = nonRepAccounts.filter((acc: CashAccount) => !acc.warehouseId);
             }
         } else {
-            // المصروفات العامة تظهر الخزائن الرئيسية والبنوك فقط (نستبعد عهد المناديب)
-            filtered = cashAccounts.filter((acc: CashAccount) => !acc.warehouseId && !acc.userId && !acc.salesRepId);
+            // المصروفات العامة تظهر الخزائن الرئيسية والبنوك فقط
+            filtered = nonRepAccounts.filter((acc: CashAccount) => !acc.warehouseId);
         }
         
         setAvailableCashAccounts(filtered);
 
-        // منطق التحديد التلقائي
-        if (filtered.length === 1 && formData.paidFromAccountId !== filtered[0].id) {
-            setFormData(prev => ({...prev, paidFromAccountId: filtered[0].id}));
-        } else if (formData.paidFromAccountId && !filtered.find(a => a.id === formData.paidFromAccountId)) {
-            // إذا كان الحساب المحدد حالياً غير موجود في القائمة الجديدة، نقوم بتصفيره
+        // منطق التحديد التلقائي: إذا كانت القائمة تحتوي على خيارات ولا يوجد خيار محدد حالياً أو الخيار الحالي غير متاح
+        if (filtered.length > 0) {
+            if (!formData.paidFromAccountId || !filtered.find(a => a.id === formData.paidFromAccountId)) {
+                // لا نحدد تلقائياً إلا إذا كانت القائمة تحتوي على خيار واحد فقط لضمان دقة اختيار المستخدم
+                if (filtered.length === 1) {
+                    setFormData(prev => ({...prev, paidFromAccountId: filtered[0].id}));
+                }
+            }
+        } else {
             setFormData(prev => ({...prev, paidFromAccountId: ''}));
         }
     }, [formData.warehouseId, cashAccounts]);
@@ -189,7 +197,6 @@ const ExpenseForm = ({ expense, onSave, onClose, warehouses, cashAccounts }: { e
                         onValueChange={v => setFormData({...formData, warehouseId: v})}
                         placeholder="اختياري: اختر فرعًا"
                         emptyMessage="لا يوجد فروع."
-                        disabled={user?.warehouseIds?.length === 1 && !user.warehouseIds.includes('all')}
                     />
                 </div>
                 <div className="flex items-center space-x-2 rtl:space-x-reverse">
@@ -206,9 +213,9 @@ const ExpenseForm = ({ expense, onSave, onClose, warehouses, cashAccounts }: { e
                         options={cashAccountOptions}
                         value={formData.paidFromAccountId}
                         onValueChange={v => setFormData({...formData, paidFromAccountId: v})}
-                        placeholder="اختر حساب الدفع..."
+                        placeholder={isPending ? "سيتم التحديد عند الدفع" : "اختر حساب الدفع..."}
                         emptyMessage="لا توجد حسابات متاحة."
-                        disabled={!availableCashAccounts.length || isPending}
+                        disabled={isPending}
                     />
                 </div>
             </div>
