@@ -1,4 +1,3 @@
-
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -6,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Trash2, Save, Loader2, Info, Wallet } from "lucide-react";
@@ -17,6 +15,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Combobox } from "@/components/ui/combobox";
 import { useAuth } from "@/contexts/auth-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 
 interface ReturnItem {
   id: string; 
@@ -31,11 +30,6 @@ interface ReturnItem {
   soldQty: number;
   returnedBefore: number;
 }
-
-interface Item { id: string; name: string; unit: string; price?: number; cost?: number; code?: string; }
-interface Customer { id: string; name: string; }
-interface Warehouse { id: string; name: string; }
-interface SaleInvoice { id: string; invoiceNumber: string; date: string; customerId: string; warehouseId: string; customerName: string; items: { id: string; name: string; qty: number; price: number; cost?: number; }[] }
 
 export default function NewSalesReturnPage() {
   const router = useRouter();
@@ -144,6 +138,41 @@ export default function NewSalesReturnPage() {
     setTotal(newTotal);
   }, [items]);
 
+  const currentCustomerBalance = useMemo(() => {
+    if (!customerId) return 0;
+    const c = allCustomersData.find((cust: any) => cust.id === customerId);
+    if (!c) return 0;
+
+    let balance = Number(c.openingBalance) || 0;
+    
+    allSales.filter((inv: any) => inv.customerId === customerId && inv.status === 'approved')
+        .forEach((inv: any) => {
+            balance += (Number(inv.total) - Number(inv.paidAmount || 0));
+        });
+
+    posSales.filter((sale: any) => sale.customerId === customerId)
+        .forEach((sale: any) => {
+            balance += (Number(sale.total) - Number(sale.paidAmount || 0));
+        });
+
+    customerPayments.filter((p: any) => p.customerId === customerId && !p.invoiceId)
+        .forEach((p: any) => {
+            balance -= Number(p.amount);
+        });
+
+    salesReturns.filter((r: any) => r.customerId === customerId)
+        .forEach((r: any) => {
+            balance -= (Number(r.total) - Number(r.paidAmount || 0));
+        });
+    
+    posReturns.filter((r: any) => r.customerId === customerId)
+        .forEach((r: any) => {
+            balance -= (Number(r.total) - Number(r.paidAmount || 0));
+        });
+
+    return balance;
+  }, [customerId, allCustomersData, allSales, posSales, posReturns, customerPayments, salesReturns]);
+
   const accountBalances = useMemo(() => {
     const balances = new Map<string, number>();
     cashAccounts.forEach((account: any) => {
@@ -245,7 +274,17 @@ export default function NewSalesReturnPage() {
         <div className="grid md:grid-cols-3 gap-6">
             <div className="space-y-2">
                 <Label htmlFor="customer">العميل</Label>
-                <Input value={allCustomersData.find((c: any) => c.id === customerId)?.name} disabled className="bg-muted" />
+                <div className="flex flex-col gap-2">
+                    <Input value={allCustomersData.find((c: any) => c.id === customerId)?.name} disabled className="bg-muted" />
+                    <div className="flex items-center gap-2 p-2 rounded bg-muted/50 border">
+                        <Wallet className="h-4 w-4 text-primary" />
+                        <span className="text-xs font-semibold">المديونية الحالية:</span>
+                        <Badge variant={currentCustomerBalance > 0 ? "destructive" : "default"} className="text-xs">
+                            {Math.abs(currentCustomerBalance).toLocaleString()} ج.م 
+                            {currentCustomerBalance > 0 ? " (عليه)" : currentCustomerBalance < 0 ? " (له)" : ""}
+                        </Badge>
+                    </div>
+                </div>
             </div>
             <div className="space-y-2">
                 <Label htmlFor="warehouse">إلى مخزن</Label>

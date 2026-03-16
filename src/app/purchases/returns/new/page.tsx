@@ -1,4 +1,3 @@
-
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -16,6 +15,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Combobox } from "@/components/ui/combobox";
 import { useAuth } from "@/contexts/auth-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 
 interface ReturnItem {
   id: string; // original item id
@@ -26,11 +26,6 @@ interface ReturnItem {
   unit: string;
   uniqueId: string; // for list key
 }
-
-interface Item { id: string; name: string; unit: string; price?: number; cost?: number;}
-interface Supplier { id: string; name: string; openingBalance: number; }
-interface Warehouse { id: string; name: string; }
-interface PurchaseInvoice { id: string; supplierId: string; warehouseId: string; invoiceNumber: string; date: string; supplierName: string; items: { id: string; name: string; qty: number; cost?: number; }[] }
 
 export default function NewPurchaseReturnPage() {
   const router = useRouter();
@@ -137,6 +132,31 @@ export default function NewPurchaseReturnPage() {
     setSubtotal(newSubtotal);
     setTotal(newSubtotal - discount);
   }, [items, discount]);
+
+  const currentSupplierBalance = useMemo(() => {
+    if (!supplierId) return 0;
+    const s = suppliers.find((sup: any) => sup.id === supplierId);
+    if (!s) return 0;
+
+    let balance = Number(s.openingBalance) || 0;
+    
+    invoices.filter((inv: any) => inv.supplierId === supplierId)
+        .forEach((inv: any) => {
+            balance += (Number(inv.total) - Number(inv.paidAmount || 0));
+        });
+
+    supplierPayments.filter((p: any) => p.supplierId === supplierId && !p.invoiceId)
+        .forEach((p: any) => {
+            balance -= Number(p.amount);
+        });
+
+    purchaseReturns.filter((r: any) => r.supplierId === supplierId)
+        .forEach((r: any) => {
+            balance -= (Number(r.total) - Number(r.paidAmount || 0));
+        });
+
+    return balance;
+  }, [supplierId, suppliers, invoices, supplierPayments, purchaseReturns]);
 
   const accountBalances = useMemo(() => {
     const balances = new Map<string, number>();
@@ -258,7 +278,17 @@ export default function NewPurchaseReturnPage() {
         <div className="grid md:grid-cols-3 gap-6">
             <div className="space-y-2">
                 <Label htmlFor="supplier">المورد</Label>
-                <Input value={suppliers.find(s => s.id === supplierId)?.name} disabled className="bg-muted" />
+                <div className="flex flex-col gap-2">
+                    <Input value={suppliers.find(s => s.id === supplierId)?.name} disabled className="bg-muted" />
+                    <div className="flex items-center gap-2 p-2 rounded bg-muted/50 border">
+                        <Wallet className="h-4 w-4 text-primary" />
+                        <span className="text-xs font-semibold">المستحقات الحالية:</span>
+                        <Badge variant={currentSupplierBalance > 0 ? "default" : "destructive"} className="text-xs">
+                            {Math.abs(currentSupplierBalance).toLocaleString()} ج.م 
+                            {currentSupplierBalance > 0 ? " (له)" : currentSupplierBalance < 0 ? " (عليه)" : ""}
+                        </Badge>
+                    </div>
+                </div>
             </div>
             <div className="space-y-2">
                 <Label htmlFor="warehouse">من مخزن</Label>
