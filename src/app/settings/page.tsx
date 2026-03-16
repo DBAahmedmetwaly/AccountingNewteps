@@ -60,6 +60,7 @@ interface FinancialSettings {
     purchaseWorkflow: 'direct' | 'manual';
     roundingDecimals: number;
     vatRate: number;
+    inventoryValuationMethod: 'average' | 'last_purchase';
 }
 
 interface PosSettings {
@@ -129,23 +130,28 @@ export default function SettingsPage() {
                 watermarkOpacity: 0.1 
             };
 
+            const defaultFinancial: FinancialSettings = {
+                openingCapital: 0, 
+                fiscalYearStart: '', 
+                currency: 'EGP', 
+                allowNegativeStock: false, 
+                scaleBarcodePrefix: '21', 
+                clothingBarcodePrefix: '23', 
+                standardItemBarcodePrefix: '25', 
+                purchaseWorkflow: 'direct', 
+                roundingDecimals: 2, 
+                vatRate: 14,
+                inventoryValuationMethod: 'last_purchase'
+            };
+
             setSettings({
                 general: {
                     ...defaultGeneral,
-                    ...loadedSettings.general,
+                    ...(loadedSettings.general || {}),
                 },
                 financial: {
-                    openingCapital: 0, 
-                    fiscalYearStart: '', 
-                    currency: 'EGP', 
-                    allowNegativeStock: false, 
-                    scaleBarcodePrefix: '21', 
-                    clothingBarcodePrefix: '23', 
-                    standardItemBarcodePrefix: '25', 
-                    purchaseWorkflow: 'direct', 
-                    roundingDecimals: 2, 
-                    vatRate: 14,
-                    ...loadedSettings.financial
+                    ...defaultFinancial,
+                    ...(loadedSettings.financial || {})
                 },
                 posSettings: {
                     workDay: loadedSettings.posSettings?.workDay || new Date().toISOString().split('T')[0],
@@ -167,7 +173,7 @@ export default function SettingsPage() {
              const defaultWorkDay = new Date().toISOString().split('T')[0];
                 const defaultSettings: Settings = {
                     general: { companyName: '', companyAddress: '', logoUrl: "/logo.png", language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false, licenseKey: '', licenseStatus: 'inactive', showWatermark: false, watermarkOpacity: 0.1 },
-                    financial: { openingCapital: 0, fiscalYearStart: '', currency: 'EGP', allowNegativeStock: false, scaleBarcodePrefix: '21', clothingBarcodePrefix: '23', standardItemBarcodePrefix: '25', purchaseWorkflow: 'direct', roundingDecimals: 2, vatRate: 14 },
+                    financial: { openingCapital: 0, fiscalYearStart: '', currency: 'EGP', allowNegativeStock: false, scaleBarcodePrefix: '21', clothingBarcodePrefix: '23', standardItemBarcodePrefix: '25', purchaseWorkflow: 'direct', roundingDecimals: 2, vatRate: 14, inventoryValuationMethod: 'last_purchase' },
                     posSettings: { 
                         workDay: defaultWorkDay, 
                         scaleItemDefaultFocus: 'weight',
@@ -505,6 +511,19 @@ export default function SettingsPage() {
                     </div>
                 </div>
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                     <div className="space-y-2">
+                        <Label htmlFor="valuation-method">طريقة احتساب تكلفة المخزون</Label>
+                        <Select value={settings.financial.inventoryValuationMethod} onValueChange={(value: any) => handleFinancialChange('inventoryValuationMethod', value)}>
+                            <SelectTrigger id="valuation-method">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="average">متوسط التكلفة (Moving Average)</SelectItem>
+                                <SelectItem value="last_purchase">آخر سعر شراء</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p className="text-[10px] text-muted-foreground">المتوسط يحسب بناءً على (الرصيد الحالي * التكلفة الحالية + الكمية الجديدة * السعر الجديد) / الرصيد الكلي.</p>
+                    </div>
                      <div className="space-y-2">
                         <Label htmlFor="standard-prefix">بادئة باركود الأصناف العادية</Label>
                         <Input id="standard-prefix" type="text" placeholder="مثال: 25" maxLength={2} value={settings.financial.standardItemBarcodePrefix || '25'} onChange={e => handleFinancialChange('standardItemBarcodePrefix', e.target.value)} />

@@ -19,6 +19,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { Combobox } from "@/components/ui/combobox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { calculateStockForItemInWarehouse } from '@/lib/inventory-utils';
 
 
 interface InvoiceItem {
@@ -145,6 +146,7 @@ export default function PurchaseInvoicePage() {
   const [originalPoId, setOriginalPoId] = useState<string | null>(null);
 
 
+  const allDataContext = useData();
   const { 
     items: allItems, 
     suppliers, 
@@ -165,9 +167,10 @@ export default function PurchaseInvoicePage() {
     employeeAdvances,
     profitDistributions,
     settings,
-  } = useData();
+  } = allDataContext;
 
   const purchaseWorkflow = useMemo(() => settings?.main?.financial?.purchaseWorkflow || 'direct', [settings]);
+  const inventoryValuationMethod = useMemo(() => settings?.main?.financial?.inventoryValuationMethod || 'last_purchase', [settings]);
 
   useEffect(() => {
     const fromPO = searchParams.get('from_po');
@@ -206,8 +209,7 @@ export default function PurchaseInvoicePage() {
     }));
   }, [suppliers, purchaseInvoices, supplierPayments]);
   
-   const allWarehouses = useMemo(() => [...warehouses, ...inventoryZones], [warehouses, inventoryZones]);
-   const warehouseOptions = useMemo(() => allWarehouses.map((w: any) => ({ value: w.id, label: w.name })), [allWarehouses]);
+   const warehouseOptions = useMemo(() => [...warehouses, ...inventoryZones].map((w: any) => ({ value: w.id, label: w.name })), [warehouses, inventoryZones]);
 
    const itemsForCombobox = useMemo(() => {
     return allItems.map((item: Item) => ({ 
@@ -239,7 +241,7 @@ export default function PurchaseInvoicePage() {
             const branchAccount = cashAccounts.find((acc: any) => acc.warehouseId === warehouseId);
             if (branchAccount) return [branchAccount];
         }
-        return cashAccounts.filter((acc: any) => !acc.warehouseId);
+        return cashAccounts.filter((acc: any) => !acc.warehouseId && !acc.salesRepId);
     }, [warehouseId, cashAccounts]);
 
     const cashAccountOptions = React.useMemo(() => {
@@ -434,10 +436,28 @@ export default function PurchaseInvoicePage() {
 
         if (updatePrices) {
             for (const item of invoiceItems) {
-                const baseSellingPrice = item.sellingPrice > 0 ? item.sellingPrice : allItems.find((i:Item) => i.id === item.id)?.price || 0;
+                const masterItem = allItems.find((i:Item) => i.id === item.id);
+                let finalCost = item.cost;
+
+                if (inventoryValuationMethod === 'average' && masterItem) {
+                    const currentCost = masterItem.cost || 0;
+                    // Calculate total stock across all warehouses
+                    let totalCurrentStock = 0;
+                    const combinedWarehouses = [...warehouses, ...inventoryZones];
+                    combinedWarehouses.forEach(w => {
+                        totalCurrentStock += calculateStockForItemInWarehouse(item.id, w.id, allDataContext);
+                    });
+
+                    const totalNewStock = totalCurrentStock + item.qty;
+                    if (totalNewStock > 0) {
+                        finalCost = ((totalCurrentStock * currentCost) + (item.qty * item.cost)) / totalNewStock;
+                    }
+                }
+
+                const baseSellingPrice = item.sellingPrice > 0 ? item.sellingPrice : masterItem?.price || 0;
                 await dbAction('items', 'update', {
                     id: item.id,
-                    data: { cost: item.cost, price: baseSellingPrice }
+                    data: { cost: finalCost, price: baseSellingPrice }
                 });
             }
         }
@@ -620,7 +640,7 @@ export default function PurchaseInvoicePage() {
                                     options={availableUnits}
                                     value={selectedUnit}
                                     onValueChange={handleUnitChange}
-                                    placeholder="اختر وحدة..."
+                                    placeholder="الوحدة"
                                     emptyMessage="اختر صنفًا أولاً"
                                     disabled={!newItem.id}
                                 />
@@ -717,6 +737,7 @@ export default function PurchaseInvoicePage() {
                         <AlertDialogTitle>تأكيد تحديث أسعار البيع والتكلفة</AlertDialogTitle>
                         <AlertDialogDescription>
                             هل تريد تحديث أسعار البيع والتكاليف الأساسية للأصناف في النظام بناءً على الأسعار في هذه الفاتورة؟
+                            {inventoryValuationMethod === 'average' && " (سيتم احتساب التكلفة الجديدة بناءً على متوسط التكلفة المرجح)"}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
