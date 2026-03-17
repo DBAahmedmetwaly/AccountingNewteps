@@ -408,12 +408,11 @@ const SecondaryUnitDialog = ({ unit, onSave, onClose }: { unit: Partial<Secondar
 };
 
 
-const ComponentManagement = ({ item, onSave, allItems }: { 
-    item: Item,
-    onSave: (itemId: string, components: { itemId: string; quantity: number }[]) => void, 
+const ComponentManagement = ({ components, onComponentsChange, allItems }: { 
+    components: { itemId: string; quantity: number }[],
+    onComponentsChange: (components: { itemId: string; quantity: number }[]) => void, 
     allItems: Item[] 
 }) => {
-    const [currentComponents, setCurrentComponents] = useState(item.components || []);
     const [newComponent, setNewComponent] = useState({ itemId: '', quantity: 1 });
     
     const availableRawMaterials = useMemo(() => {
@@ -422,28 +421,23 @@ const ComponentManagement = ({ item, onSave, allItems }: {
     
     const handleAddComponent = () => {
         if (!newComponent.itemId || newComponent.quantity <= 0) return;
-        const alreadyAdded = currentComponents.some(c => c.itemId === newComponent.itemId);
+        const alreadyAdded = components.some(c => c.itemId === newComponent.itemId);
         if (alreadyAdded) return;
-        setCurrentComponents(prev => [...prev, newComponent]);
+        onComponentsChange([...components, newComponent]);
         setNewComponent({ itemId: '', quantity: 1 });
     };
 
     const handleRemoveComponent = (itemId: string) => {
-        setCurrentComponents(prev => prev.filter(c => c.itemId !== itemId));
+        onComponentsChange(components.filter(c => c.itemId !== itemId));
     };
 
     const handleQuantityChange = (itemId: string, qty: number) => {
-        setCurrentComponents(prev => prev.map(c => c.itemId === itemId ? { ...c, quantity: qty } : c));
-    };
-    
-    const handleSave = () => {
-        if(!item.id) return;
-        onSave(item.id, currentComponents);
+        onComponentsChange(components.map(c => c.itemId === itemId ? { ...c, quantity: qty } : c));
     };
 
     return (
         <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
-            <Label>مكونات الصنف</Label>
+            <Label className="font-bold">مكونات الصنف (الخلطة / الوصفة)</Label>
             <div className="w-full overflow-auto border rounded-lg max-h-60">
                 <Table>
                     <TableHeader>
@@ -454,7 +448,7 @@ const ComponentManagement = ({ item, onSave, allItems }: {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {currentComponents.map(comp => (
+                        {components.map(comp => (
                             <TableRow key={comp.itemId}>
                                 <TableCell>{allItems.find(i => i.id === comp.itemId)?.name}</TableCell>
                                 <TableCell><Input type="number" value={comp.quantity} onChange={e => handleQuantityChange(comp.itemId, Number(e.target.value))} className="text-center"/></TableCell>
@@ -474,12 +468,6 @@ const ComponentManagement = ({ item, onSave, allItems }: {
                         </TableRow>
                     </TableBody>
                 </Table>
-            </div>
-             <div className="flex justify-end">
-                <Button onClick={handleSave} size="sm">
-                    <Save className="ml-2 h-4 w-4"/>
-                    حفظ المكونات
-                </Button>
             </div>
         </div>
     );
@@ -606,12 +594,6 @@ function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGro
   
   const handleRemoveSecondaryUnit = (unitName: string) => {
       setFormData(prev => ({...prev, secondaryUnits: (prev.secondaryUnits || []).filter(u => u.name !== unitName) }));
-  }
-  
-  const handleSaveComponents = async (itemId: string, components: { itemId: string; quantity: number }[]) => {
-      const updatedFormData = { ...formData, components: components };
-      setFormData(updatedFormData);
-      await onSave(updatedFormData);
   }
 
   const handleSubmit = () => {
@@ -791,8 +773,12 @@ function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGro
         <Separator />
       </div>
       <div className="space-y-6 p-4 border rounded-lg bg-muted/50">
-        {formData.itemType === 'manufactured' && item && (
-            <ComponentManagement item={item} onSave={handleSaveComponents} allItems={allItems} />
+        {formData.itemType === 'manufactured' && (
+            <ComponentManagement 
+                components={formData.components || []} 
+                onComponentsChange={(newComponents) => setFormData(prev => ({ ...prev, components: newComponents }))} 
+                allItems={allItems} 
+            />
         )}
         <div className="space-y-2">
               <Label>الوحدات الثانوية</Label>
@@ -1260,6 +1246,37 @@ export default function ItemsPage() {
             )}
         </Card>
       </main>
+
+      <Dialog open={isEditOpen} onOpenChange={(open) => {
+          setIsEditOpen(open);
+          if (!open) setEditingItem(null);
+      }}>
+          <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                  <DialogTitle>تعديل صنف</DialogTitle>
+                  <DialogDescription>قم بتحديث تفاصيل الصنف هنا.</DialogDescription>
+              </DialogHeader>
+              {editingItem && (
+                  <ItemForm 
+                      item={editingItem} 
+                      onSave={handleSave} 
+                      onClose={() => setIsEditOpen(false)} 
+                      itemSections={itemSections} 
+                      itemCategories={itemCategories} 
+                      itemGroups={itemGroups} 
+                      itemSubCategories1={itemSubCategories1} 
+                      itemSubCategories2={itemSubCategories2} 
+                      allItems={allItems} 
+                      itemColors={itemColors} 
+                      itemSizes={itemSizes} 
+                      settings={settings} 
+                      inventorySections={inventorySections} 
+                      dbAction={dbAction} 
+                      getNextId={getNextId} 
+                  />
+              )}
+          </DialogContent>
+      </Dialog>
     </>
   );
 }
