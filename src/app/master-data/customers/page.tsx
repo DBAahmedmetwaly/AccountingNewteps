@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, List } from "lucide-react";
@@ -33,10 +33,11 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
-
+import { cn } from "@/lib/utils";
 
 interface Customer {
   id?: string;
@@ -48,20 +49,14 @@ interface Customer {
   allowCredit?: boolean;
 }
 
-// Interfaces for balance calculation
-interface SaleInvoice { id: string; customerId: string; total: number; paidAmount?: number; status?: 'pending' | 'approved'; }
-interface PosSale { id: string; customerId?: string; total: number; paidAmount?: number; }
-interface CustomerPayment { id: string; customerId: string; amount: number; }
-interface SalesReturn { id: string; customerId: string; total: number; }
-
-
 const CustomerForm = ({ customer, onSave, onClose, allCustomers, hasInvoices }: { customer?: Customer, onSave: (customer: Customer) => void, onClose: () => void, allCustomers: Customer[], hasInvoices: boolean }) => {
   const [formData, setFormData] = useState<Customer>(
     customer || { name: "", openingBalance: 0, creditLimit: 0, phone: "", address: "", allowCredit: false }
   );
   const { toast } = useToast();
 
-  const handleSubmit = () => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
      if (!formData.name || !formData.phone?.trim()) {
         toast({
             variant: "destructive",
@@ -70,7 +65,6 @@ const CustomerForm = ({ customer, onSave, onClose, allCustomers, hasInvoices }: 
         });
         return;
     }
-    // Check for duplicate phone number
     const isPhoneDuplicate = allCustomers.some((c: Customer) => c.phone?.trim() === formData.phone?.trim() && c.id !== customer?.id);
     if (isPhoneDuplicate) {
         toast({
@@ -90,7 +84,7 @@ const CustomerForm = ({ customer, onSave, onClose, allCustomers, hasInvoices }: 
   };
 
   return (
-    <>
+    <form onSubmit={handleSubmit}>
       <div className="space-y-4 py-2">
         <div className="space-y-2">
           <Label htmlFor="customer-name" className={hasInvoices ? "text-muted-foreground" : ""}>اسم العميل</Label>
@@ -121,58 +115,63 @@ const CustomerForm = ({ customer, onSave, onClose, allCustomers, hasInvoices }: 
         </div>
       </div>
       <div className="flex justify-end pt-4">
-        <Button onClick={handleSubmit}>حفظ</Button>
+        <Button type="submit">حفظ</Button>
       </div>
-    </>
+    </form>
   );
 };
-
 
 export default function CustomersPage() {
   const { customers, salesInvoices, posSales, posReturns, customerPayments, salesReturns, loading, dbAction } = useData();
   const router = useRouter();
   const { toast } = useToast();
   
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+
+  // Manual cleanup for pointer-events bug
+  useEffect(() => {
+    if (!isEditOpen) {
+        document.body.style.pointerEvents = 'auto';
+        document.body.style.overflow = 'auto';
+    }
+  }, [isEditOpen]);
+
   const checkHasInvoices = (id: string) => {
-    const hasSalesInvoices = salesInvoices.some((inv: any) => inv.customerId === id);
-    const hasPosSales = posSales.some((sale: any) => sale.customerId === id);
-    const hasReturns = salesReturns.some((ret: any) => ret.customerId === id);
-    const hasPosReturns = posReturns.some((ret: any) => ret.customerId === id);
-    const hasPayments = customerPayments.some((pay: any) => pay.customerId === id);
+    const hasSalesInvoices = (salesInvoices || []).some((inv: any) => inv.customerId === id);
+    const hasPosSales = (posSales || []).some((sale: any) => sale.customerId === id);
+    const hasReturns = (salesReturns || []).some((ret: any) => ret.customerId === id);
+    const hasPosReturns = (posReturns || []).some((ret: any) => ret.customerId === id);
+    const hasPayments = (customerPayments || []).some((pay: any) => pay.customerId === id);
     return hasSalesInvoices || hasPosSales || hasReturns || hasPosReturns || hasPayments;
   };
 
   const customersWithBalance = useMemo(() => {
     return customers.map((customer: Customer) => {
-        const approvedSalesInvoices = salesInvoices.filter((s: SaleInvoice) => s.customerId === customer.id && s.status === 'approved');
-        const customerPosSales = posSales.filter((s: PosSale) => s.customerId === customer.id);
-        const filteredPayments = customerPayments.filter((p: CustomerPayment) => p.customerId === customer.id);
-        const filteredReturns = salesReturns.filter((r: SalesReturn) => r.customerId === customer.id);
+        const approvedSalesInvoices = (salesInvoices || []).filter((s: any) => s.customerId === customer.id && s.status === 'approved');
+        const customerPosSales = (posSales || []).filter((s: any) => s.customerId === customer.id);
+        const filteredPayments = (customerPayments || []).filter((p: any) => p.customerId === customer.id);
+        const filteredReturns = (salesReturns || []).filter((r: any) => r.customerId === customer.id);
 
         let balance = customer.openingBalance || 0;
-        
-        // Add invoice totals
-        approvedSalesInvoices.forEach((inv: SaleInvoice) => { balance += inv.total; });
-        customerPosSales.forEach((sale: PosSale) => { balance += sale.total; });
-
-        // Subtract payments
-        approvedSalesInvoices.forEach((inv: SaleInvoice) => { balance -= (inv.paidAmount || 0); });
-        customerPosSales.forEach((sale: PosSale) => { balance -= (sale.paidAmount || 0); });
-        filteredPayments.forEach((payment: CustomerPayment) => { balance -= payment.amount; });
-
-        // Subtract returns
-        filteredReturns.forEach((ret: SalesReturn) => { balance -= ret.total; });
+        approvedSalesInvoices.forEach((inv: any) => { balance += inv.total; });
+        customerPosSales.forEach((sale: any) => { balance += sale.total; });
+        approvedSalesInvoices.forEach((inv: any) => { balance -= (inv.paidAmount || 0); });
+        customerPosSales.forEach((sale: any) => { balance -= (sale.paidAmount || 0); });
+        filteredPayments.forEach((payment: any) => { balance -= payment.amount; });
+        filteredReturns.forEach((ret: any) => { balance -= ret.total; });
         
         return { ...customer, currentBalance: balance };
     });
   }, [customers, salesInvoices, posSales, customerPayments, salesReturns]);
 
-
   const handleSave = (customer: Customer) => {
     if (customer.id) {
       dbAction('customers', 'update', { id: customer.id, data: customer });
+      toast({ title: "تم التحديث بنجاح" });
     } else {
       dbAction('customers', 'add', customer);
+      toast({ title: "تمت إضافة العميل بنجاح" });
     }
   };
 
@@ -181,11 +180,10 @@ export default function CustomersPage() {
         toast({
             variant: "destructive",
             title: "لا يمكن الحذف",
-            description: "لا يمكن حذف هذا العميل لوجود حركات مالية أو مبيعات مرتبطة به في النظام. يمكنك تعطيله أو تغيير بياناته بدلاً من حذفه.",
+            description: "لا يمكن حذف هذا العميل لوجود حركات مالية مرتبطة به. يمكنك تعطيله بدلاً من حذفه.",
         });
         return;
     }
-
     dbAction('customers', 'remove', { id });
     toast({ title: "تم الحذف بنجاح" });
   };
@@ -203,16 +201,14 @@ export default function CustomersPage() {
             </Button>
           }
         >
-          <CustomerForm onSave={handleSave} onClose={() => {}} allCustomers={customers} hasInvoices={false} />
+          {({onClose}) => <CustomerForm onSave={handleSave} onClose={onClose} allCustomers={customers} hasInvoices={false} />}
         </AddEntityDialog>
       </PageHeader>
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
         <Card>
           <CardHeader>
             <CardTitle>العملاء</CardTitle>
-            <CardDescription>
-              إدارة العملاء مع حدود الائتمان والأرصدة الافتتاحية والحالية.
-            </CardDescription>
+            <CardDescription>إدارة العملاء مع حدود الائتمان والأرصدة الحالية.</CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -228,7 +224,7 @@ export default function CustomersPage() {
                                 <TableHead className="hidden md:table-cell">الهاتف</TableHead>
                                 <TableHead className="text-center">حد الائتمان</TableHead>
                                 <TableHead className="text-center">الرصيد الحالي</TableHead>
-                                <TableHead className="text-center">الإجراءات</TableHead>
+                                <TableHead className="text-center w-[100px]">الإجراءات</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -237,50 +233,40 @@ export default function CustomersPage() {
                                     <TableCell className="font-medium">{customer.name}</TableCell>
                                     <TableCell className="hidden md:table-cell">{customer.phone || '-'}</TableCell>
                                     <TableCell className="text-center">{customer.creditLimit?.toLocaleString() || '0'}</TableCell>
-                                    <TableCell className={`text-center font-bold ${customer.currentBalance > customer.creditLimit && customer.creditLimit > 0 ? 'text-destructive' : 'text-primary'}`}>
+                                    <TableCell className={cn("text-center font-bold", customer.currentBalance > 0 ? "text-destructive" : "text-primary")}>
                                         {customer.currentBalance.toLocaleString()}
                                     </TableCell>
                                     <TableCell className="text-center">
                                          <AlertDialog>
-                                            <DropdownMenu>
+                                            <DropdownMenu modal={false}>
                                                 <DropdownMenuTrigger asChild>
-                                                <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                <Button size="icon" variant="ghost">
                                                     <MoreHorizontal className="h-4 w-4" />
                                                 </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
                                                     <DropdownMenuItem onSelect={() => router.push(`/reports/customer-statement?customerId=${customer.id}`)}>
-                                                        <List className="ml-2 h-4 w-4" />
-                                                        كشف حساب
+                                                        <List className="ml-2 h-4 w-4" /> كشف حساب
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
-                                                    <AddEntityDialog
-                                                        title="تعديل العميل"
-                                                        description="قم بتحديث تفاصيل العميل هنا."
-                                                        triggerButton={
-                                                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                                            <Edit className="ml-2 h-4 w-4" />
-                                                            تعديل
-                                                            </DropdownMenuItem>
-                                                        }
-                                                    >
-                                                    <CustomerForm customer={customer} onSave={handleSave} onClose={() => {}} allCustomers={customers} hasInvoices={checkHasInvoices(customer.id)} />
-                                                    </AddEntityDialog>
+                                                    <DropdownMenuItem onSelect={() => {
+                                                        setEditingCustomer(customer);
+                                                        setTimeout(() => setIsEditOpen(true), 150);
+                                                    }}>
+                                                        <Edit className="ml-2 h-4 w-4" /> تعديل
+                                                    </DropdownMenuItem>
                                                     <AlertDialogTrigger asChild>
-                                                        <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
-                                                            <Trash2 className="ml-2 h-4 w-4" />
-                                                            حذف
+                                                        <DropdownMenuItem className="text-destructive">
+                                                            <Trash2 className="ml-2 h-4 w-4" /> حذف
                                                         </DropdownMenuItem>
                                                     </AlertDialogTrigger>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                             <AlertDialogContent>
                                                 <AlertDialogHeader>
-                                                <AlertDialogTitle>هل أنت متأكد تمامًا؟</AlertDialogTitle>
-                                                <AlertDialogDescription>
-                                                    هذا الإجراء سيحذف العميل بشكل دائم. لا يمكن التراجع عن هذا الإجراء.
-                                                </AlertDialogDescription>
+                                                <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
+                                                <AlertDialogDescription>هل أنت متأكد من حذف العميل؟ لا يمكن التراجع عن هذا الإجراء.</AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
                                                 <AlertDialogCancel>إلغاء</AlertDialogCancel>
@@ -298,6 +284,24 @@ export default function CustomersPage() {
           </CardContent>
         </Card>
       </main>
+
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>تعديل بيانات العميل</DialogTitle>
+            <DialogDescription>قم بتحديث بيانات العميل هنا.</DialogDescription>
+          </DialogHeader>
+          {editingCustomer && (
+            <CustomerForm 
+                customer={editingCustomer} 
+                onSave={handleSave} 
+                onClose={() => setIsEditOpen(false)} 
+                allCustomers={customers} 
+                hasInvoices={checkHasInvoices(editingCustomer.id!)} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
