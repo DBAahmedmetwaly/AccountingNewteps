@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
@@ -51,6 +50,7 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 
 interface SecondaryUnit {
@@ -275,7 +275,7 @@ const MatrixGeneratorDialog = ({ onSave, onOpenChange, itemSections, itemCategor
                     const udf2Code = String(udf2?.code || '00').padStart(2, '0');
                     const itemIndexCode = String(nextId).padStart(3, '0');
 
-                    const base = `${clothingPrefix}${sectionCode}${categoryCode}${udf1Code}${udf2Code}${itemIndexCode}`.slice(0, 12);
+                    const base = `${clothingPrefix}${sectionCode}${categoryCode}${parentIdCode}${udf1Code}${udf2Code}${itemIndexCode}`.slice(0, 12);
                     const checkDigit = calculateEan13CheckDigit(base);
                     const finalBarcode = `${base}${checkDigit}`;
 
@@ -905,9 +905,9 @@ function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGro
               <Combobox options={binOptions} value={formData.defaultBinId || ''} onValueChange={v => setFormData({ ...formData, defaultBinId: v })} placeholder="اختر قسمًا..." emptyMessage="لا توجد أقسام معرفة."/>
         </div>
       </div>
-        <QuickAddDialog open={isQuickAddSectionOpen} onOpenChange={setIsQuickAddSectionOpen} onConfirm={(name) => handleQuickAdd(1, name)} title="إضافة فئة جديدة" label="اسم الفئة (م1)" />
-        <QuickAddDialog open={isQuickAddCategoryOpen} onOpenChange={setIsQuickAddCategoryOpen} onConfirm={(name) => handleQuickAdd(2, name)} title="إضافة قسم جديد" label="اسم القسم (م2)" />
-        <QuickAddDialog open={isQuickAddGroupOpen} onOpenChange={setIsQuickAddGroupOpen} onConfirm={(name) => handleQuickAdd(3, name)} title="إضافة مجموعة جديدة" label="اسم المجموعة (م3)" />
+        <QuickAddDialog open={isQuickAddSectionOpen} onOpenChange={setIsQuickAddSectionOpen} onConfirm={(name) => handleQuickAdd(1, name)} title="إضافة فئة جديدة" label="اسم فئة (م1)" />
+        <QuickAddDialog open={isQuickAddCategoryOpen} onOpenChange={setIsQuickAddCategoryOpen} onConfirm={(name) => handleQuickAdd(2, name)} title="إضافة قسم جديد" label="اسم قسم (م2)" />
+        <QuickAddDialog open={isQuickAddGroupOpen} onOpenChange={setIsQuickAddGroupOpen} onConfirm={(name) => handleQuickAdd(3, name)} title="إضافة مجموعة جديدة" label="اسم مجموعة (م3)" />
         <QuickAddDialog open={isQuickAddSubCategory1Open} onOpenChange={setIsQuickAddSubCategory1Open} onConfirm={(name) => handleQuickAdd(4, name)} title="إضافة مجموعة فرعية 1" label="اسم المجموعة" />
         <QuickAddDialog open={isQuickAddSubCategory2Open} onOpenChange={setIsQuickAddSubCategory2Open} onConfirm={(name) => handleQuickAdd(5, name)} title="إضافة مجموعة فرعية 2" label="اسم المجموعة" />
 
