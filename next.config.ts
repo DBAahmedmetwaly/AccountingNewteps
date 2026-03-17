@@ -17,22 +17,18 @@ const withPWA = nextPWA({
         options: {
           cacheName: 'pages',
           expiration: {
-            maxEntries: 60,
+            maxEntries: 100,
             maxAgeSeconds: 30 * 24 * 60 * 60, // 30 Days
           },
-          networkTimeoutSeconds: 3, // Fallback to cache after 3 seconds
+          networkTimeoutSeconds: 3,
         },
       },
       {
         urlPattern: ({ request }) =>
-          request.destination === 'script' || request.destination === 'style',
+          request.destination === 'script' || request.destination === 'style' || request.destination === 'font',
         handler: 'StaleWhileRevalidate',
         options: {
           cacheName: 'static-resources',
-          expiration: {
-            maxEntries: 60,
-            maxAgeSeconds: 24 * 60 * 60, // 1 Day
-          },
         },
       },
       {
@@ -41,16 +37,16 @@ const withPWA = nextPWA({
         options: {
           cacheName: 'images',
           expiration: {
-            maxEntries: 100,
-            maxAgeSeconds: 30 * 24 * 60 * 60, // 30 Days
+            maxEntries: 150,
+            maxAgeSeconds: 30 * 24 * 60 * 60,
           },
         },
       },
        {
-        urlPattern: ({ url }) => url.href.includes("firebaseio.com"),
+        urlPattern: ({ url }) => url.href.includes("firebaseio.com") || url.href.includes("googleapis.com"),
         handler: 'NetworkFirst',
         options: {
-          cacheName: 'firebase-data',
+          cacheName: 'api-data',
           networkTimeoutSeconds: 5,
         },
       },
@@ -64,8 +60,8 @@ const withPWA = nextPWA({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   swcMinify: true,
-  reactStrictMode: false, // Recommended for production PWA to avoid double renders
-  eslint: { ignoreDuringBuilds: true }, // Avoid ESLint 9/10 options conflict during Vercel build
+  reactStrictMode: false,
+  eslint: { ignoreDuringBuilds: true },
 };
 
 export default withPWA(nextConfig);

@@ -126,32 +126,22 @@ export default function RootLayout({
           <meta name="apple-mobile-web-app-capable" content="yes" />
           <meta name="apple-mobile-web-app-status-bar-style" content="default" />
           <meta name="apple-mobile-web-app-title" content="MetoStore" />
-          <meta name="description" content="MetoStore" />
+          <meta name="description" content="نظام إدارة المحلات المتكامل" />
           <meta name="format-detection" content="telephone=no" />
           <meta name="mobile-web-app-capable" content="yes" />
-          <meta name="msapplication-config" content="/icons/browserconfig.xml" />
-          <meta name="msapplication-TileColor" content="#2B5797" />
-          <meta name="msapplication-tap-highlight" content="no" />
-          <meta name="theme-color" content="#3F51B5" />
+          <meta name="theme-color" content="#3b82f6" />
 
           <link rel="apple-touch-icon" href="/icons/icon-192x192.svg" />
-          
           <link rel="icon" type="image/svg+xml" href="/icons/icon-192x192.svg" />
-          
           <link rel="manifest" href="/manifest.webmanifest" />
 
           <meta name="twitter:card" content="summary" />
-          <meta name="twitter:url" content="https://metostore.com" />
           <meta name="twitter:title" content="MetoStore" />
-          <meta name="twitter:description" content="MetoStore" />
-          <meta name="twitter:image" content="https://metostore.com/icons/icon-192x192.svg" />
-          <meta name="twitter:creator" content="@DavidWGrissom" />
+          <meta name="twitter:description" content="نظام إدارة المحلات المتكامل" />
           <meta property="og:type" content="website" />
           <meta property="og:title" content="MetoStore" />
-          <meta property="og:description" content="MetoStore" />
+          <meta property="og:description" content="نظام إدارة المحلات المتكامل" />
           <meta property="og:site_name" content="MetoStore" />
-          <meta property="og:url" content="https://metostore.com" />
-          <meta property="og:image" content="https://metostore.com/icons/icon-512x512.svg" />
       </head>
       <body
         suppressHydrationWarning={true}
