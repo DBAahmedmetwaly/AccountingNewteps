@@ -23,6 +23,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from "@/components/ui/table";
 import {
   DropdownMenu,
@@ -39,7 +40,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { BarcodePrintDialog } from "@/components/barcode-print-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { PlusCircle, Trash2, Loader2, QrCode, TrendingUp, Search, Component, Save, History, Edit, MoreHorizontal, X, Clock } from "lucide-react";
+import { PlusCircle, Trash2, Loader2, QrCode, TrendingUp, Search, Component, Save, History, Edit, MoreHorizontal, X, Clock, Calculator } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Combobox } from "@/components/ui/combobox";
 import { useAuth } from "@/contexts/auth-context";
@@ -224,7 +225,7 @@ const MatrixGeneratorDialog = ({ onSave, onOpenChange, itemSections, itemCategor
     
     const handleGenerate = async () => {
         if (!baseItem.name) {
-            alert("الرجاء إدخال اسم أساسي للمصفوفة.");
+            alert("الرجاء إدخل اسم أساسي للمصفوفة.");
             return;
         }
 
@@ -413,18 +414,22 @@ const ComponentManagement = ({ components, onComponentsChange, allItems }: {
     onComponentsChange: (components: { itemId: string; quantity: number }[]) => void, 
     allItems: Item[] 
 }) => {
-    const [newComponent, setNewComponent] = useState({ itemId: '', quantity: 1 });
+    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+    const [newComponent, setNewComponent] = useState({ itemId: '', quantity: 1, cost: 0 });
     
     const availableRawMaterials = useMemo(() => {
-        return allItems.filter(i => i.itemType === 'raw_material').map(i => ({ value: i.id!, label: i.name }));
+        return allItems
+            .filter(i => i.itemType === 'raw_material')
+            .map(i => ({ value: i.id!, label: `${i.name} (التكلفة: ${i.cost || 0})` }));
     }, [allItems]);
     
     const handleAddComponent = () => {
         if (!newComponent.itemId || newComponent.quantity <= 0) return;
         const alreadyAdded = components.some(c => c.itemId === newComponent.itemId);
         if (alreadyAdded) return;
-        onComponentsChange([...components, newComponent]);
-        setNewComponent({ itemId: '', quantity: 1 });
+        onComponentsChange([...components, { itemId: newComponent.itemId, quantity: newComponent.quantity }]);
+        setNewComponent({ itemId: '', quantity: 1, cost: 0 });
+        setIsAddDialogOpen(false);
     };
 
     const handleRemoveComponent = (itemId: string) => {
@@ -435,38 +440,102 @@ const ComponentManagement = ({ components, onComponentsChange, allItems }: {
         onComponentsChange(components.map(c => c.itemId === itemId ? { ...c, quantity: qty } : c));
     };
 
+    const totalCalculatedCost = useMemo(() => {
+        return components.reduce((sum, comp) => {
+            const master = allItems.find(i => i.id === comp.itemId);
+            return sum + (comp.quantity * (master?.cost || 0));
+        }, 0);
+    }, [components, allItems]);
+
     return (
         <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
-            <Label className="font-bold">مكونات الصنف (الخلطة / الوصفة)</Label>
-            <div className="w-full overflow-auto border rounded-lg max-h-60">
+            <div className="flex items-center justify-between">
+                <Label className="font-bold">مكونات الصنف (الخلطة / الوصفة)</Label>
+                <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button size="sm" variant="outline"><PlusCircle className="ml-2 h-4 w-4"/>إضافة مادة خام</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>إضافة مكون جديد</DialogTitle>
+                            <DialogDescription>اختر المادة الخام وحدد الكمية المستخدمة في هذا المنتج.</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <Label>المادة الخام</Label>
+                                <Combobox 
+                                    options={availableRawMaterials} 
+                                    value={newComponent.itemId} 
+                                    onValueChange={v => {
+                                        const master = allItems.find(i => i.id === v);
+                                        setNewComponent(p => ({ ...p, itemId: v, cost: master?.cost || 0 }));
+                                    }} 
+                                    placeholder="اختر مادة خام..." 
+                                    emptyMessage="لا يوجد مواد خام."
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>الكمية المستخدمة</Label>
+                                    <Input type="number" value={newComponent.quantity} onChange={e => setNewComponent(p => ({ ...p, quantity: Number(e.target.value) }))} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>سعر التكلفة الحالي</Label>
+                                    <Input value={newComponent.cost} disabled className="bg-muted" />
+                                </div>
+                            </div>
+                            <div className="p-3 bg-primary/5 rounded-md border border-primary/20 flex justify-between items-center">
+                                <span className="text-sm">إجمالي تكلفة البند:</span>
+                                <span className="font-bold">{(newComponent.quantity * newComponent.cost).toLocaleString()} ج.م</span>
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="ghost" onClick={() => setIsAddDialogOpen(false)}>إلغاء</Button>
+                            <Button onClick={handleAddComponent} disabled={!newComponent.itemId || newComponent.quantity <= 0}>إضافة للبند</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            </div>
+
+            <div className="w-full overflow-auto border rounded-lg max-h-60 bg-background">
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead className="w-[60%]">المادة الخام</TableHead>
+                            <TableHead className="w-[40%]">المادة الخام</TableHead>
                             <TableHead className="text-center">الكمية</TableHead>
+                            <TableHead className="text-center">تكلفة الوحدة</TableHead>
+                            <TableHead className="text-center">إجمالي التكلفة</TableHead>
                             <TableHead className="w-16"></TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {components.map(comp => (
-                            <TableRow key={comp.itemId}>
-                                <TableCell>{allItems.find(i => i.id === comp.itemId)?.name}</TableCell>
-                                <TableCell><Input type="number" value={comp.quantity} onChange={e => handleQuantityChange(comp.itemId, Number(e.target.value))} className="text-center"/></TableCell>
-                                <TableCell><Button variant="ghost" size="icon" onClick={() => handleRemoveComponent(comp.itemId)}><Trash2 className="h-4 w-4 text-destructive"/></Button></TableCell>
+                        {components.map(comp => {
+                            const master = allItems.find(i => i.id === comp.itemId);
+                            const unitCost = master?.cost || 0;
+                            const lineTotal = comp.quantity * unitCost;
+                            return (
+                                <TableRow key={comp.itemId}>
+                                    <TableCell className="font-medium">{master?.name}</TableCell>
+                                    <TableCell className="w-24"><Input type="number" value={comp.quantity} onChange={e => handleQuantityChange(comp.itemId, Number(e.target.value))} className="text-center h-8"/></TableCell>
+                                    <TableCell className="text-center text-muted-foreground">{unitCost.toLocaleString()}</TableCell>
+                                    <TableCell className="text-center font-semibold">{lineTotal.toLocaleString()}</TableCell>
+                                    <TableCell><Button variant="ghost" size="icon" onClick={() => handleRemoveComponent(comp.itemId)}><Trash2 className="h-4 w-4 text-destructive"/></Button></TableCell>
+                                </TableRow>
+                            );
+                        })}
+                        {components.length === 0 && (
+                            <TableRow>
+                                <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">لا توجد مكونات مضافة بعد.</TableCell>
                             </TableRow>
-                        ))}
-                          <TableRow className="bg-muted/20">
-                            <TableCell className="p-2">
-                                 <Combobox options={availableRawMaterials} value={newComponent.itemId} onValueChange={v => setNewComponent(p => ({ ...p, itemId: v }))} placeholder="اختر مادة خام..." emptyMessage="لا يوجد مواد خام."/>
-                            </TableCell>
-                             <TableCell className="p-2">
-                                <Input type="number" value={newComponent.quantity} onChange={e => setNewComponent(p => ({ ...p, quantity: Number(e.target.value) }))} />
-                            </TableCell>
-                            <TableCell className="p-2">
-                                <Button onClick={handleAddComponent} size="sm" className="w-full"><PlusCircle className="ml-2 h-4 w-4"/>إضافة</Button>
-                            </TableCell>
-                        </TableRow>
+                        )}
                     </TableBody>
+                    <TableFooter>
+                        <TableRow>
+                            <TableCell colSpan={3} className="font-bold">إجمالي تكلفة المكونات</TableCell>
+                            <TableCell className="text-center font-bold text-primary">{totalCalculatedCost.toLocaleString()} ج.م</TableCell>
+                            <TableCell></TableCell>
+                        </TableRow>
+                    </TableFooter>
                 </Table>
             </div>
         </div>
@@ -528,6 +597,19 @@ function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGro
             }
         }
     }, [formData.itemGroupId, formData.categoryId, formData.sectionId, itemSections, itemCategories, itemGroups]);
+
+    // Auto-calculate cost for manufactured items
+    useEffect(() => {
+        if (formData.itemType === 'manufactured' && formData.components) {
+            const totalCost = formData.components.reduce((sum, comp) => {
+                const master = allItems.find(i => i.id === comp.itemId);
+                return sum + (comp.quantity * (master?.cost || 0));
+            }, 0);
+            if (formData.cost !== totalCost) {
+                setFormData(prev => ({ ...prev, cost: totalCost }));
+            }
+        }
+    }, [formData.components, formData.itemType, allItems, formData.cost]);
 
 
   const sectionOptions = useMemo(() => itemSections.map(s => ({ value: s.id, label: s.name })), [itemSections]);
@@ -717,7 +799,15 @@ function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGro
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="item-cost">سعر التكلفة</Label>
-            <Input id="item-cost" type="number" value={formData.cost} onChange={e => setFormData({ ...formData, cost: Number(e.target.value) })} />
+            <Input 
+                id="item-cost" 
+                type="number" 
+                value={formData.cost} 
+                onChange={e => setFormData({ ...formData, cost: Number(e.target.value) })} 
+                disabled={formData.itemType === 'manufactured'}
+                className={cn(formData.itemType === 'manufactured' && "bg-muted font-bold text-primary")}
+            />
+            {formData.itemType === 'manufactured' && <p className="text-[10px] text-muted-foreground">يتم احتسابه تلقائياً من المكونات.</p>}
           </div>
           <div className="space-y-2">
             <Label htmlFor="item-price">سعر البيع</Label>
