@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Loader2, MoreHorizontal, Edit, Trash2, Info } from "lucide-react";
+import { PlusCircle, Loader2, MoreHorizontal, Edit, Trash2, Info, Wallet } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem } from '@/components/ui/dropdown-menu';
@@ -25,6 +25,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useData } from '@/contexts/data-provider';
 import { Combobox } from '@/components/ui/combobox';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 // تعريف واجهات البيانات (Interfaces) لضمان تطابق أنواع البيانات
 interface SupplierPayment {
@@ -43,6 +44,7 @@ interface SupplierPayment {
 interface Supplier {
     id: string;
     name: string;
+    openingBalance?: number;
 }
 
 interface CashAccount {
@@ -67,7 +69,7 @@ interface PurchaseInvoice {
 /**
  * مكون `PaymentForm` المسئول عن نموذج إضافة دفعة
  */
-const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { onSave: (data: Omit<SupplierPayment, 'id' | 'receiptNumber'>) => void, suppliers: Supplier[], cashAccounts: CashAccount[], purchaseInvoices: PurchaseInvoice[] }) => {
+const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices, supplierPayments, purchaseReturns }: { onSave: (data: Omit<SupplierPayment, 'id' | 'receiptNumber'>) => void, suppliers: Supplier[], cashAccounts: CashAccount[], purchaseInvoices: PurchaseInvoice[], supplierPayments: any[], purchaseReturns: any[] }) => {
     const [formData, setFormData] = useState<Omit<SupplierPayment, 'id' | 'receiptNumber'>>({ 
         date: new Date().toISOString().split('T')[0], 
         amount: 0, 
@@ -82,7 +84,38 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { on
         return cashAccounts.filter(acc => !acc.userId && !acc.salesRepId);
     }, [cashAccounts]);
 
-    const supplierOptions = React.useMemo(() => suppliers.map((s: Supplier) => ({ value: s.id, label: s.name })), [suppliers]);
+    const currentSupplierBalance = useMemo(() => {
+        if (!formData.supplierId) return 0;
+        const supplier = suppliers.find(s => s.id === formData.supplierId);
+        if (!supplier) return 0;
+
+        let balance = Number(supplier.openingBalance) || 0;
+        
+        // إضافة فواتير الشراء (مديونية للمورد)
+        purchaseInvoices.filter(inv => inv.supplierId === formData.supplierId)
+            .forEach(inv => {
+                balance += (Number(inv.total) - Number(inv.paidAmount || 0));
+            });
+
+        // طرح المدفوعات غير المرتبطة بفواتير (التي سجلت كسندات صرف عامة)
+        supplierPayments.filter(p => p.supplierId === formData.supplierId && !p.invoiceId)
+            .forEach(p => {
+                balance -= Number(p.amount);
+            });
+
+        // طرح المرتجعات (تخفض المديونية)
+        purchaseReturns.filter(r => r.supplierId === formData.supplierId)
+            .forEach(r => {
+                balance -= (Number(r.total) - Number(r.paidAmount || 0));
+            });
+
+        return balance;
+    }, [formData.supplierId, suppliers, purchaseInvoices, supplierPayments, purchaseReturns]);
+
+    const supplierOptions = React.useMemo(() => suppliers.map((s: Supplier) => ({ 
+        value: s.id, 
+        label: s.name 
+    })), [suppliers]);
     
     const [availableCashAccounts, setAvailableCashAccounts] = useState(branchAndGeneralAccounts);
     
@@ -169,6 +202,16 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { on
                         placeholder="اختر موردًا..."
                         emptyMessage="لم يتم العثور على مورد."
                     />
+                    {formData.supplierId && (
+                        <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-primary/20 animate-in fade-in slide-in-from-top-1">
+                            <Wallet className="h-4 w-4 text-primary" />
+                            <span className="text-sm font-medium">المستحقات الحالية:</span>
+                            <Badge variant={currentSupplierBalance > 0 ? "default" : "destructive"} className="text-sm">
+                                {Math.abs(currentSupplierBalance).toLocaleString()} ج.م 
+                                {currentSupplierBalance > 0 ? " (له)" : currentSupplierBalance < 0 ? " (عليه)" : ""}
+                            </Badge>
+                        </div>
+                    )}
                 </div>
                  <div className="space-y-2">
                     <Label htmlFor="payment-invoice">ربط بفاتورة شراء (اختياري)</Label>
@@ -234,6 +277,7 @@ export default function SupplierPaymentsPage() {
         suppliers, 
         cashAccounts: rawCashAccounts,
         purchaseInvoices, 
+        purchaseReturns,
         dbAction, 
         getNextId,
         customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions,
@@ -359,7 +403,14 @@ export default function SupplierPaymentsPage() {
                 <CardDescription>سجل الدفعات التي تمت للموردين لتسوية حساباتهم.</CardDescription>
             </CardHeader>
             <CardContent>
-                <PaymentForm onSave={handleSave} suppliers={suppliers} cashAccounts={cashAccounts} purchaseInvoices={purchaseInvoices} />
+                <PaymentForm 
+                    onSave={handleSave} 
+                    suppliers={suppliers} 
+                    cashAccounts={cashAccounts} 
+                    purchaseInvoices={purchaseInvoices} 
+                    supplierPayments={payments}
+                    purchaseReturns={purchaseReturns}
+                />
             </CardContent>
             </Card>
             
