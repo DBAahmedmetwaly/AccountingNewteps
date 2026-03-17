@@ -24,6 +24,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useData } from '@/contexts/data-provider';
 import { Combobox } from '@/components/ui/combobox';
+import { cn } from '@/lib/utils';
 
 // تعريف واجهات البيانات (Interfaces) لضمان تطابق أنواع البيانات
 interface SupplierPayment {
@@ -51,7 +52,7 @@ interface CashAccount {
     userId?: string;
     salesRepId?: string;
     openingBalance?: number;
-    currentBalance?: number; // Added to check balance
+    currentBalance?: number;
 }
 
 interface PurchaseInvoice {
@@ -64,10 +65,9 @@ interface PurchaseInvoice {
 }
 
 /**
- * مكون `PaymentForm`
+ * مكون `PaymentForm` المسئول عن نموذج إضافة دفعة
  */
 const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { onSave: (data: Omit<SupplierPayment, 'id' | 'receiptNumber'>) => void, suppliers: Supplier[], cashAccounts: CashAccount[], purchaseInvoices: PurchaseInvoice[] }) => {
-    // حالة (state) لتخزين بيانات النموذج
     const [formData, setFormData] = useState<Omit<SupplierPayment, 'id' | 'receiptNumber'>>({ 
         date: new Date().toISOString().split('T')[0], 
         amount: 0, 
@@ -77,7 +77,7 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { on
         invoiceId: "" 
     });
     
-    // فلترة الخزائن لاستبعاد عهد المناديب تماماً
+    // فلترة الخزائن لاستبعاد عهد المناديب (التي تمتلك userId أو salesRepId)
     const branchAndGeneralAccounts = useMemo(() => {
         return cashAccounts.filter(acc => !acc.userId && !acc.salesRepId);
     }, [cashAccounts]);
@@ -86,7 +86,10 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { on
     
     const [availableCashAccounts, setAvailableCashAccounts] = useState(branchAndGeneralAccounts);
     
-    const cashAccountOptions = React.useMemo(() => availableCashAccounts.map((c: CashAccount) => ({ value: c.id, label: `${c.name} (المتاح: ${c.currentBalance?.toLocaleString() || 0})` })), [availableCashAccounts]);
+    const cashAccountOptions = React.useMemo(() => availableCashAccounts.map((c: CashAccount) => ({ 
+        value: c.id, 
+        label: `${c.name} (المتاح: ${c.currentBalance?.toLocaleString() || 0})` 
+    })), [availableCashAccounts]);
 
     const supplierInvoicesWithBalance = useMemo(() => {
         if (!formData.supplierId) return [];
@@ -111,16 +114,20 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { on
     
     useEffect(() => {
         if (selectedInvoiceDetails?.warehouseId) {
+            // إذا تم اختيار فاتورة، نبحث عن خزينة الفرع المرتبط بها أولاً
             const branchCashAccount = branchAndGeneralAccounts.find((acc: CashAccount) => acc.warehouseId === selectedInvoiceDetails.warehouseId);
             if (branchCashAccount) {
-                setAvailableCashAccounts([branchCashAccount, ...branchAndGeneralAccounts.filter(acc => !acc.warehouseId)]);
+                // نظهر خزينة الفرع كخيار أول ونبقي باقي الخزائن متاحة
+                setAvailableCashAccounts([branchCashAccount, ...branchAndGeneralAccounts.filter(acc => acc.id !== branchCashAccount.id)]);
                 setFormData(prev => ({...prev, paidFromAccountId: branchCashAccount.id}));
             } else {
-                setAvailableCashAccounts(branchAndGeneralAccounts.filter((acc: CashAccount) => !acc.warehouseId)); 
-                 setFormData(prev => ({...prev, paidFromAccountId: ''}));
+                // إذا لم يوجد خزينة للفرع، نظهر كافة الخزائن المتاحة
+                setAvailableCashAccounts(branchAndGeneralAccounts);
+                setFormData(prev => ({...prev, paidFromAccountId: ''}));
             }
         } else {
-             setAvailableCashAccounts(branchAndGeneralAccounts.filter((acc: CashAccount) => !acc.warehouseId));
+             // في حال الدفع العام بدون فاتورة، نظهر كافة الخزائن المتاحة
+             setAvailableCashAccounts(branchAndGeneralAccounts);
              setFormData(prev => ({...prev, paidFromAccountId: ''}));
         }
     }, [selectedInvoiceDetails, branchAndGeneralAccounts]);
@@ -136,7 +143,14 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { on
         
         onSave({ ...formData, amount: Number(formData.amount), notes: notesToSave });
         
-        setFormData({ date: new Date().toISOString().split('T')[0], amount: 0, supplierId: "", paidFromAccountId: "", notes: "", invoiceId: "" });
+        setFormData({ 
+            date: new Date().toISOString().split('T')[0], 
+            amount: 0, 
+            supplierId: "", 
+            paidFromAccountId: "", 
+            notes: "", 
+            invoiceId: "" 
+        });
     }
 
     return (
@@ -157,7 +171,7 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { on
                     />
                 </div>
                  <div className="space-y-2">
-                    <Label htmlFor="payment-invoice">ربط بفاتورة</Label>
+                    <Label htmlFor="payment-invoice">ربط بفاتورة شراء (اختياري)</Label>
                     <Combobox
                         options={invoiceOptions}
                         value={formData.invoiceId || ''}
@@ -177,7 +191,7 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { on
                     </div>
                 )}
                 <div className="space-y-2">
-                    <Label htmlFor="paid-from">مدفوع من</Label>
+                    <Label htmlFor="paid-from">مدفوع من حساب (خزينة/بنك)</Label>
                     <Combobox
                         options={cashAccountOptions}
                         value={formData.paidFromAccountId}
@@ -188,7 +202,7 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { on
                     />
                 </div>
                  <div className="space-y-2">
-                    <Label htmlFor="payment-amount">المبلغ</Label>
+                    <Label htmlFor="payment-amount">المبلغ المدفوع</Label>
                     <Input id="payment-amount" type="number" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value as any})} placeholder="أدخل مبلغ الدفعة" required/>
                 </div>
                  <div className="space-y-2">
@@ -228,8 +242,24 @@ export default function SupplierPaymentsPage() {
     } = useData();
     const { toast } = useToast();
     const { user } = useAuth();
+
+    const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+    const [paymentToDelete, setPaymentToDelete] = useState<SupplierPayment | null>(null);
+
+    // Aggressive Cleanup for Pointer Events
+    useEffect(() => {
+        const cleanup = () => {
+            if (!isDeleteOpen) {
+                document.body.style.pointerEvents = 'auto';
+                document.body.style.overflow = 'auto';
+            }
+        };
+        cleanup();
+        const timer = setTimeout(cleanup, 500);
+        return () => clearTimeout(timer);
+    }, [isDeleteOpen]);
     
-    // Calculate current balances for cash accounts
+    // حساب الأرصدة الحالية للخزائن
     const cashAccounts: CashAccount[] = useMemo(() => {
         if (loading) return [];
         return rawCashAccounts.map((account: CashAccount) => {
@@ -299,17 +329,20 @@ export default function SupplierPaymentsPage() {
         }
     };
     
-    const handleDelete = async (payment: SupplierPayment) => {
+    const handleDelete = async () => {
+        if (!paymentToDelete) return;
         try {
-            if (payment.invoiceId) {
-                const invoice = purchaseInvoices.find((inv: PurchaseInvoice) => inv.id === payment.invoiceId);
+            if (paymentToDelete.invoiceId) {
+                const invoice = purchaseInvoices.find((inv: PurchaseInvoice) => inv.id === paymentToDelete.invoiceId);
                 if (invoice) {
-                    const newPaidAmount = (invoice.paidAmount || 0) - payment.amount;
-                    await dbAction('purchaseInvoices', 'update', { id: payment.invoiceId, data: { paidAmount: Math.max(0, newPaidAmount) } });
+                    const newPaidAmount = (invoice.paidAmount || 0) - paymentToDelete.amount;
+                    await dbAction('purchaseInvoices', 'update', { id: paymentToDelete.invoiceId, data: { paidAmount: Math.max(0, newPaidAmount) } });
                 }
             }
-            await dbAction('supplierPayments', 'remove', { id: payment.id! });
+            await dbAction('supplierPayments', 'remove', { id: paymentToDelete.id! });
             toast({ title: "تم الحذف بنجاح" });
+            setIsDeleteOpen(false);
+            setPaymentToDelete(null);
         } catch (error) {
             toast({ variant: "destructive", title: "حدث خطأ", description: "فشل الحذف" });
         }
@@ -340,10 +373,10 @@ export default function SupplierPaymentsPage() {
                             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                         </div>
                     ) : (
-                        <div className="w-full overflow-auto">
+                        <div className="w-full overflow-auto border rounded-lg">
                             <Table>
                                 <TableHeader>
-                                    <TableRow>
+                                    <TableRow className="bg-muted/50">
                                         <TableHead>المورد</TableHead>
                                         <TableHead>البيان / المرجع</TableHead>
                                         <TableHead>مدفوعة من</TableHead>
@@ -352,48 +385,42 @@ export default function SupplierPaymentsPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {payments.map((payment: SupplierPayment) => (
+                                    {payments.length > 0 ? payments.map((payment: SupplierPayment) => (
                                         <TableRow key={payment.id}>
                                             <TableCell>
                                                 <div className="font-medium">{getSupplierName(payment.supplierId)}</div>
-                                                <div className="text-sm text-muted-foreground">{new Date(payment.date).toLocaleDateString('ar-EG')}</div>
-                                                <div className="text-xs text-muted-foreground">بواسطة: {payment.createdByName || 'غير معروف'}</div>
+                                                <div className="text-xs text-muted-foreground">{new Date(payment.date).toLocaleDateString('ar-EG')}</div>
+                                                <div className="text-[10px] text-muted-foreground">بواسطة: {payment.createdByName || 'غير معروف'}</div>
                                             </TableCell>
-                                            <TableCell className="text-sm text-muted-foreground">{payment.notes || 'دفعة عامة'}</TableCell>
-                                            <TableCell>{getCashAccountName(payment.paidFromAccountId)}</TableCell>
-                                            <TableCell className="text-center">{payment.amount.toLocaleString()}</TableCell>
+                                            <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">{payment.notes || 'دفعة عامة'}</TableCell>
+                                            <TableCell className="text-xs">{getCashAccountName(payment.paidFromAccountId)}</TableCell>
+                                            <TableCell className="text-center font-bold">{payment.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                                             <TableCell className="text-center">
-                                                <AlertDialog>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button aria-haspopup="true" size="icon" variant="ghost">
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
-                                                            <AlertDialogTrigger asChild>
-                                                                <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
-                                                                    <Trash2 className="ml-2 h-4 w-4" />
-                                                                    حذف
-                                                                </DropdownMenuItem>
-                                                            </AlertDialogTrigger>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>هل أنت متأكد تمامًا؟</AlertDialogTitle>
-                                                            <AlertDialogDescription>هذا الإجراء سيحذف الدفعة بشكل دائم. لا يمكن التراجع عن هذا الإجراء.</AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => handleDelete(payment)}>متابعة</AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
+                                                <DropdownMenu modal={false}>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
+                                                        <DropdownMenuItem className="text-destructive" onSelect={(e) => {
+                                                            e.preventDefault();
+                                                            setPaymentToDelete(payment);
+                                                            setTimeout(() => setIsDeleteOpen(true), 150);
+                                                        }}>
+                                                            <Trash2 className="ml-2 h-4 w-4" />
+                                                            حذف
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
-                                    ))}
+                                    )) : (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">لا توجد مدفوعات مسجلة.</TableCell>
+                                        </TableRow>
+                                    )}
                                 </TableBody>
                             </Table>
                         </div>
@@ -401,6 +428,19 @@ export default function SupplierPaymentsPage() {
                 </CardContent>
             </Card>
         </div>
+
+        <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>هل أنت متأكد تمامًا؟</AlertDialogTitle>
+                    <AlertDialogDescription>هذا الإجراء سيحذف الدفعة بشكل دائم وسيعيد المديونية لحساب المورد. لا يمكن التراجع عن هذا الإجراء.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setIsDeleteOpen(false)}>إلغاء</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">متابعة الحذف</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
       </main>
     </>
   );
