@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Metadata, Viewport } from "next";
@@ -54,8 +53,8 @@ const PWALifecycle = () => {
   }, [isOnline, toast]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.workbox !== undefined) {
-      const wb = window.workbox;
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && (window as any).workbox !== undefined) {
+      const wb = (window as any).workbox;
 
       // A common UX pattern for PWAs is to show a toast when a new version is available.
       wb.addEventListener('installed', (event: any) => {

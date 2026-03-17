@@ -1,6 +1,15 @@
 <svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="192" height="192" rx="40" fill="#3b82f6"/>
-<path d="M60 60H132V132H60V60Z" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M80 85L96 65L112 85" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M96 132V65" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="192" height="192" rx="40" fill="#3b82f6"/>
+  <!-- Shopping Cart Base -->
+  <path d="M50 60H65L75 125H140L155 75H75" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="85" cy="145" r="10" fill="white"/>
+  <circle cx="130" cy="145" r="10" fill="white"/>
+  <!-- Barcode Stripes -->
+  <rect x="85" y="85" width="4" height="25" fill="white" opacity="0.8"/>
+  <rect x="95" y="85" width="2" height="25" fill="white" opacity="0.8"/>
+  <rect x="103" y="85" width="6" height="25" fill="white" opacity="0.8"/>
+  <rect x="115" y="85" width="2" height="25" fill="white" opacity="0.8"/>
+  <!-- Financial Action Badge -->
+  <circle cx="145" cy="50" r="30" fill="#10b981" stroke="#3b82f6" stroke-width="4"/>
+  <path d="M135 50H155M145 40V60" stroke="white" stroke-width="6" stroke-linecap="round"/>
 </svg>
