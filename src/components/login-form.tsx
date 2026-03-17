@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Loader2, LogIn } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
@@ -18,6 +18,20 @@ export const LoginForm = () => {
     const [isLoading, setIsLoading] = useState(false);
     const { toast } = useToast();
     const router = useRouter();
+
+    // Aggressive Cleanup for Pointer Events and Scroll
+    // This ensures that even if a modal was open during logout, the body is unlocked.
+    useEffect(() => {
+        const cleanup = () => {
+            if (typeof document !== 'undefined') {
+                document.body.style.pointerEvents = 'auto';
+                document.body.style.overflow = 'auto';
+            }
+        };
+        cleanup();
+        const timer = setTimeout(cleanup, 300);
+        return () => clearTimeout(timer);
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -56,7 +70,11 @@ export const LoginForm = () => {
                         {error && <p className="text-destructive text-sm">{error}</p>}
                     </CardContent>
                     <CardFooter>
-                        <Button type="submit" className="w-full" disabled={isLoading}>
+                        <Button 
+                            type="submit" 
+                            className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold" 
+                            disabled={isLoading}
+                        >
                             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
                             تسجيل الدخول
                         </Button>
