@@ -44,7 +44,7 @@ interface Branch {
   address: string;
 }
 
-const BranchForm = ({ branch, onSave, onClose, allWarehouses }: { branch?: Branch, onSave: (branch: Partial<Branch> & { createCashAccount?: boolean, createPosTerminal?: boolean, posTerminalName?: string, posTerminalCode?: string }) => void, onClose: () => void, allWarehouses: Branch[] }) => {
+const BranchForm = ({ branch, onSave, onClose, allWarehouses }: { branch?: Branch, onSave: (branch: Partial<Branch> & { createCashAccount?: boolean, createPosTerminal?: boolean, posTerminalName?: string, posTerminalCode?: string }) => Promise<void>, onClose: () => void, allWarehouses: Branch[] }) => {
   const [formData, setFormData] = React.useState<Partial<Branch>>(
     branch || { name: "", address: "", code: "" }
   );
@@ -68,7 +68,7 @@ const BranchForm = ({ branch, onSave, onClose, allWarehouses }: { branch?: Branc
     }
     
     if (createPosTerminal && (!posTerminalName || !posTerminalCode)) {
-         toast({ variant: "destructive", title: "خطأ", description: "الرجاء إدخال اسم وكود لنقطة البيع." });
+         toast({ variant: "destructive", title: "خطأ", description: "الرجاء إدخل اسم وكود لنقطة البيع." });
         return;
     }
 

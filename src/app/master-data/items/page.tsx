@@ -39,7 +39,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { BarcodePrintDialog } from "@/components/barcode-print-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { PlusCircle, Trash2, Loader2, QrCode, TrendingUp, Search, Component, Save, History, Edit, MoreHorizontal, X } from "lucide-react";
+import { PlusCircle, Trash2, Loader2, QrCode, TrendingUp, Search, Component, Save, History, Edit, MoreHorizontal, X, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Combobox } from "@/components/ui/combobox";
 import { useAuth } from "@/contexts/auth-context";
@@ -49,7 +49,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Checkbox } from "@/components/ui/checkbox";
-import { BarcodePreview } from "@/components/barcode-preview";
 import { Separator } from "@/components/ui/separator";
 
 
@@ -184,14 +183,6 @@ const MatrixGeneratorDialog = ({ onSave, onOpenChange, itemSections, itemCategor
     const [selectedUDF1, setSelectedUDF1] = useState<string[]>([]);
     const [selectedUDF2, setSelectedUDF2] = useState<string[]>([]);
     
-    const findParent = useCallback((childId: string, childList: any[], parentIdField: string, parentList: any[]) => {
-      if(!childList || !parentList) return null;
-      const child = childList.find(c => c.id === childId);
-      if (!child) return null;
-      const parent = parentList.find(p => p.id === child[parentIdField]);
-      return parent || null;
-    }, []);
-
     const sectionOptions = useMemo(() => itemSections.map(s => ({ value: s.id, label: s.name })), [itemSections]);
     const categoryOptions = useMemo(() => {
         if (!baseItem.sectionId) return [];
@@ -494,7 +485,7 @@ const ComponentManagement = ({ item, onSave, allItems }: {
     );
 }
 
-function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGroups, itemSubCategories1, itemSubCategories2, allItems, settings, inventorySections, dbAction, getNextId }: { 
+function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGroups, itemSubCategories1, itemSubCategories2, allItems, settings, inventorySections, dbAction, getNextId, itemColors, itemSizes }: { 
     item?: Item, 
     onSave: (item: Omit<Item, 'id' | 'code'> & { id?: string, code?: string }) => Promise<void>,
     onClose: () => void, 
@@ -523,14 +514,6 @@ function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGro
 
   const { toast } = useToast();
   
-  const findParent = useCallback((childId: string, childList: any[], parentIdField: string, parentList: any[]) => {
-      if(!childList || !parentList) return null;
-      const child = childList.find(c => c.id === childId);
-      if (!child) return null;
-      const parent = parentList.find(p => p.id === child[parentIdField]);
-      return parent || null;
-  }, []);
-
     useEffect(() => {
         const { itemGroupId, categoryId, sectionId } = formData;
         
@@ -860,7 +843,7 @@ function ItemForm({ item, onSave, onClose, itemSections, itemCategories, itemGro
 }
 
 export default function ItemsPage() {
-    const { allItems, dbAction, loading: dataLoading, itemSections, itemCategories, itemGroups, itemSubCategories1, itemSubCategories2, itemColors, itemSizes, settings, inventorySections, getNextId } = useData();
+    const { allItems, dbAction, loading: dataLoading, itemSections, itemCategories, itemGroups, itemSubCategories1, itemSubCategories2, itemColors, itemSizes, settings, inventorySections, getNextId, barcodeDesigns } = useData();
     const { toast } = useToast();
     const { can } = usePermissions();
     const [searchTerm, setSearchTerm] = useState("");
@@ -1220,7 +1203,7 @@ export default function ItemsPage() {
                                     <Edit className="ml-2 h-4 w-4" /> تعديل
                                   </DropdownMenuItem>
                                 )}
-                                 <BarcodePrintDialog item={item} barcodeDesigns={[]} trigger={
+                                 <BarcodePrintDialog item={item} barcodeDesigns={barcodeDesigns} trigger={
                                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                                         <QrCode className="ml-2 h-4 w-4" /> طباعة باركود
                                     </DropdownMenuItem>
