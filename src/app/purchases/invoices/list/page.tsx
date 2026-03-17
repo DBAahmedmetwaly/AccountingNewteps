@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,11 +34,12 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useData } from '@/contexts/data-provider';
 import { Combobox } from '@/components/ui/combobox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { InvoiceTemplate } from '@/components/invoice-template';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface PurchaseInvoice {
   id: string;
@@ -51,7 +52,7 @@ interface PurchaseInvoice {
   items: any[];
 }
 
-const InvoiceItemsDialog = ({ items }: { items: any[] }) => (
+const InvoiceItemsTable = ({ items }: { items: any[] }) => (
     <div className="max-h-96 overflow-y-auto mt-4">
         <Table>
             <TableHeader>
@@ -90,7 +91,22 @@ export default function PurchaseInvoicesListPage() {
     receiptStatus: 'all'
   });
 
-  const [selectedInvoiceForItems, setSelectedInvoiceForItems] = useState<any>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [isItemsOpen, setIsItemsOpen] = useState(false);
+  const [isPrintOpen, setIsPrintOpen] = useState(false);
+
+  // Aggressive Cleanup for Pointer Events and Scroll
+  useEffect(() => {
+    const cleanup = () => {
+        if (!isItemsOpen && !isPrintOpen) {
+            document.body.style.pointerEvents = 'auto';
+            document.body.style.overflow = 'auto';
+        }
+    };
+    cleanup();
+    const timer = setTimeout(cleanup, 500);
+    return () => clearTimeout(timer);
+  }, [isItemsOpen, isPrintOpen]);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -163,7 +179,7 @@ export default function PurchaseInvoicesListPage() {
   return (
     <>
       <PageHeader title="سجل فواتير الشراء" />
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
+      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6 printable-area">
         <Card className="no-print">
             <CardHeader>
                 <CardTitle>فلاتر البحث</CardTitle>
@@ -269,43 +285,19 @@ export default function PurchaseInvoicesListPage() {
                                         <DropdownMenuContent align="end" className="w-56">
                                             <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
                                             
-                                            <Dialog>
-                                                <DialogTrigger asChild>
-                                                    <DropdownMenuItem onSelect={e => e.preventDefault()}>
-                                                        <Eye className="ml-2 h-4 w-4 text-blue-500" /> عرض الأصناف
-                                                    </DropdownMenuItem>
-                                                </DialogTrigger>
-                                                <DialogContent className="max-w-3xl">
-                                                    <DialogHeader>
-                                                        <DialogTitle>تفاصيل فاتورة شراء رقم {invoice.invoiceNumber}</DialogTitle>
-                                                    </DialogHeader>
-                                                    <InvoiceItemsDialog items={invoice.items} />
-                                                </DialogContent>
-                                            </Dialog>
+                                            <DropdownMenuItem onSelect={() => {
+                                                setSelectedInvoice(invoice);
+                                                setTimeout(() => setIsItemsOpen(true), 150);
+                                            }}>
+                                                <Eye className="ml-2 h-4 w-4 text-blue-500" /> عرض الأصناف
+                                            </DropdownMenuItem>
 
-                                            <Dialog>
-                                                <DialogTrigger asChild>
-                                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                                        <Printer className="ml-2 h-4 w-4" /> عرض / طباعة
-                                                    </DropdownMenuItem>
-                                                </DialogTrigger>
-                                                <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
-                                                    <DialogHeader className="p-4 bg-muted/30">
-                                                        <DialogTitle>طباعة الفاتورة {invoice.invoiceNumber}</DialogTitle>
-                                                    </DialogHeader>
-                                                    <div className="flex-1 overflow-y-auto p-4 bg-white">
-                                                        <div className="printable-area bg-white text-black">
-                                                            <InvoiceTemplate invoice={invoice} company={companySettings} customer={suppliers.find(s => s.id === invoice.supplierId)} isPurchase={true} />
-                                                        </div>
-                                                    </div>
-                                                    <div className="p-4 border-t flex justify-end gap-2 bg-background no-print">
-                                                        <Button onClick={() => handleShare(invoice)} variant="outline" className="bg-green-500 text-white hover:bg-green-600 hover:text-white">
-                                                            <MessageCircle className="ml-2 h-4 w-4" /> واتساب
-                                                        </Button>
-                                                        <Button onClick={handlePrint}><Printer className="ml-2 h-4 w-4" />طباعة</Button>
-                                                    </div>
-                                                </DialogContent>
-                                            </Dialog>
+                                            <DropdownMenuItem onSelect={() => {
+                                                setSelectedInvoice(invoice);
+                                                setTimeout(() => setIsPrintOpen(true), 150);
+                                            }}>
+                                                <Printer className="ml-2 h-4 w-4" /> عرض / طباعة
+                                            </DropdownMenuItem>
 
                                             <DropdownMenuSeparator />
                                             <DropdownMenuItem onClick={() => router.push(`/purchases/invoices/${invoice.id}/edit`)} disabled={!isEditable}>
@@ -337,6 +329,44 @@ export default function PurchaseInvoicesListPage() {
           </CardContent>
         </Card>
       </main>
+
+      {/* Items Details Dialog */}
+      <Dialog open={isItemsOpen} onOpenChange={setIsItemsOpen}>
+        <DialogContent className="max-w-3xl">
+            <DialogHeader>
+                <DialogTitle>تفاصيل أصناف فاتورة شراء رقم {selectedInvoice?.invoiceNumber}</DialogTitle>
+            </DialogHeader>
+            <InvoiceItemsTable items={selectedInvoice?.items || []} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Print View Dialog */}
+      <Dialog open={isPrintOpen} onOpenChange={setIsPrintOpen}>
+        <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+            <DialogHeader className="p-4 bg-muted/30">
+                <DialogTitle>طباعة الفاتورة {selectedInvoice?.invoiceNumber}</DialogTitle>
+                <DialogDescription>معاينة الفاتورة قبل الطباعة.</DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="flex-1 bg-white">
+                <div className="printable-area bg-white text-black p-4 flex justify-center">
+                    {selectedInvoice && (
+                        <InvoiceTemplate 
+                            invoice={selectedInvoice} 
+                            company={companySettings} 
+                            customer={suppliers.find(s => s.id === selectedInvoice.supplierId)} 
+                            isPurchase={true} 
+                        />
+                    )}
+                </div>
+            </ScrollArea>
+            <DialogFooter className="p-4 border-t flex justify-end gap-2 bg-background no-print">
+                <Button onClick={() => selectedInvoice && handleShare(selectedInvoice)} variant="outline" className="bg-green-500 text-white hover:bg-green-600 hover:text-white">
+                    <MessageCircle className="ml-2 h-4 w-4" /> واتساب
+                </Button>
+                <Button onClick={handlePrint}><Printer className="ml-2 h-4 w-4" />طباعة</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
