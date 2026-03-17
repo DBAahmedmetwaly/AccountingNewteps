@@ -272,7 +272,7 @@ export default function StockInPage() {
         toDate: '',
     });
 
-    // Aggressive Cleanup for Pointer Events
+    // Aggressive Cleanup for Pointer Events and Scroll
     useEffect(() => {
         const cleanup = () => {
             document.body.style.pointerEvents = 'auto';
@@ -480,10 +480,14 @@ export default function StockInPage() {
                                                     </TableCell>
                                                     <TableCell className="text-center">
                                                         <div className="flex justify-center gap-2">
-                                                            <Button variant="ghost" size="icon" onClick={() => router.push(`/inventory/stock-in/${record.id}`)} title="عرض التفاصيل">
+                                                            <Button variant="ghost" size="icon" onClick={() => {
+                                                                setTimeout(() => router.push(`/inventory/stock-in/${record.id}`), 150);
+                                                            }} title="عرض التفاصيل">
                                                                 <Eye className="h-4 w-4 text-blue-500" />
                                                             </Button>
-                                                            <Button variant="ghost" size="icon" onClick={() => router.push(`/inventory/stock-in/${record.id}`)} title="طباعة">
+                                                            <Button variant="ghost" size="icon" onClick={() => {
+                                                                setTimeout(() => router.push(`/inventory/stock-in/${record.id}`), 150);
+                                                            }} title="طباعة">
                                                                 <Printer className="h-4 w-4" />
                                                             </Button>
                                                         </div>

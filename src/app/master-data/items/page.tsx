@@ -336,7 +336,7 @@ const MatrixGeneratorDialog = ({ onSave, onOpenChange, itemSections, itemCategor
                     </div>
                 </div>
 
-                <div className="space-y-4 p-4 border rounded-md">
+                <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
                      <h3 className="font-semibold">2. تحديد الحقول المخصصة (UDF)</h3>
                      <div className="space-y-2">
                         <Label>مجموعة فرعية 1 (مثال: اللون)</Label>
@@ -869,12 +869,13 @@ export default function ItemsPage() {
     const [isMatrixOpen, setIsMatrixOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<any>(null);
     const [isEditOpen, setIsEditOpen] = useState(false);
+    const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
     const router = useRouter();
 
     // Aggressive Cleanup for Pointer Events and Scroll
     useEffect(() => {
         const cleanup = () => {
-            if (!isEditOpen && !isMatrixOpen && !isPriceUpdateOpen) {
+            if (!isEditOpen && !isMatrixOpen && !isPriceUpdateOpen && !isDeleteAlertOpen) {
                 document.body.style.pointerEvents = 'auto';
                 document.body.style.overflow = 'auto';
             }
@@ -882,7 +883,7 @@ export default function ItemsPage() {
         cleanup();
         const timer = setTimeout(cleanup, 500);
         return () => clearTimeout(timer);
-    }, [isEditOpen, isMatrixOpen, isPriceUpdateOpen]);
+    }, [isEditOpen, isMatrixOpen, isPriceUpdateOpen, isDeleteAlertOpen]);
 
     const [filters, setFilters] = useState({
         sectionId: '',

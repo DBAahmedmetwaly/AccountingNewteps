@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -88,6 +89,7 @@ export default function SalesInvoicesListPage() {
   const [isSharing, setIsSharing] = useState(false);
   const [sharingData, setSharingData] = useState<{ invoice: SaleInvoice, type: 'A4' | 'Thermal' } | null>(null);
 
+  // Aggressive Cleanup for Pointer Events and Scroll
   useEffect(() => {
     const cleanup = () => {
         if (!printModal.open && !isSharing && !itemsModal.open) {
@@ -438,7 +440,7 @@ export default function SalesInvoicesListPage() {
                 </div>
             </ScrollArea>
             <DialogFooter className="p-4 border-t bg-muted/10 shrink-0 flex gap-2 sm:justify-end">
-                <Button variant="ghost" onClick={() => setPrintModal({ ...printModal, open: false })}>إغلاق</Button>
+                <Button variant="ghost" onClick={() => setPrintModal({ ...printModal, open: false })}>إإغلاق</Button>
                 <Button onClick={handlePrint} className="gap-2"><Printer className="h-4 w-4" />طباعة</Button>
             </DialogFooter>
         </DialogContent>

@@ -56,7 +56,7 @@ export default function StockOutListPage() {
     toDate: "",
   });
 
-  // Aggressive Cleanup for Pointer Events
+  // Aggressive Cleanup for Pointer Events and Scroll
   useEffect(() => {
     const cleanup = () => {
         document.body.style.pointerEvents = 'auto';
@@ -193,10 +193,14 @@ export default function StockOutListPage() {
                           <TableCell className="text-xs">{record.createdByName || '---'}</TableCell>
                            <TableCell className="text-center no-print">
                              <div className="flex justify-center gap-2">
-                                <Button variant="ghost" size="icon" onClick={() => router.push(`/inventory/stock-out/${record.id}`)} title="عرض وتفاصيل">
+                                <Button variant="ghost" size="icon" onClick={() => {
+                                    setTimeout(() => router.push(`/inventory/stock-out/${record.id}`), 150);
+                                }} title="عرض وتفاصيل">
                                     <Eye className="h-4 w-4 text-blue-500" />
                                 </Button>
-                                <Button variant="ghost" size="icon" onClick={() => router.push(`/inventory/stock-out/${record.id}`)} title="طباعة">
+                                <Button variant="ghost" size="icon" onClick={() => {
+                                    setTimeout(() => router.push(`/inventory/stock-out/${record.id}`), 150);
+                                }} title="طباعة">
                                     <Printer className="h-4 w-4" />
                                 </Button>
                              </div>
