@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useMemo } from "react";
@@ -129,8 +128,9 @@ const CustomerForm = ({ customer, onSave, onClose, allCustomers }: { customer?: 
 
 
 export default function CustomersPage() {
-  const { customers, salesInvoices, posSales, customerPayments, salesReturns, loading, dbAction } = useData();
+  const { customers, salesInvoices, posSales, posReturns, customerPayments, salesReturns, loading, dbAction } = useData();
   const router = useRouter();
+  const { toast } = useToast();
   
   const customersWithBalance = useMemo(() => {
     return customers.map((customer: Customer) => {
@@ -167,7 +167,24 @@ export default function CustomersPage() {
   };
 
   const handleDelete = (id: string) => {
+    // Check if customer has any linked transactions
+    const hasSalesInvoices = salesInvoices.some((inv: any) => inv.customerId === id);
+    const hasPosSales = posSales.some((sale: any) => sale.customerId === id);
+    const hasReturns = salesReturns.some((ret: any) => ret.customerId === id);
+    const hasPosReturns = posReturns.some((ret: any) => ret.customerId === id);
+    const hasPayments = customerPayments.some((pay: any) => pay.customerId === id);
+
+    if (hasSalesInvoices || hasPosSales || hasReturns || hasPosReturns || hasPayments) {
+        toast({
+            variant: "destructive",
+            title: "لا يمكن الحذف",
+            description: "لا يمكن حذف هذا العميل لوجود حركات مالية أو مبيعات مرتبطة به في النظام. يمكنك تعطيله أو تغيير بياناته بدلاً من حذفه.",
+        });
+        return;
+    }
+
     dbAction('customers', 'remove', { id });
+    toast({ title: "تم الحذف بنجاح" });
   };
 
   return (
@@ -281,5 +298,3 @@ export default function CustomersPage() {
     </>
   );
 }
-
-    

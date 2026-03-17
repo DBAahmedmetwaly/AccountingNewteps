@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useMemo } from "react";
@@ -35,6 +34,7 @@ import {
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent as UIDialogContent, DialogHeader as UIDialogHeader, DialogTitle as UIDialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 
 interface Supplier {
   id?: string;
@@ -137,8 +137,9 @@ const SupplierForm = ({ supplier, onSave, onClose }: { supplier?: Supplier, onSa
 
 
 export default function SuppliersPage() {
-  const { suppliers, purchaseInvoices, supplierPayments, purchaseReturns, items, loading, dbAction } = useData();
+  const { suppliers, purchaseInvoices, purchaseOrders, supplierPayments, purchaseReturns, items, loading, dbAction } = useData();
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const { toast } = useToast();
   
   const suppliersWithBalance = useMemo(() => {
     return suppliers.map((supplier: Supplier) => {
@@ -165,7 +166,23 @@ export default function SuppliersPage() {
   };
 
   const handleDelete = (id: string) => {
+    // Check if supplier has any linked transactions
+    const hasPurchaseInvoices = purchaseInvoices.some((p: any) => p.supplierId === id);
+    const hasPurchaseOrders = purchaseOrders.some((o: any) => o.supplierId === id);
+    const hasReturns = purchaseReturns.some((r: any) => r.supplierId === id);
+    const hasPayments = supplierPayments.some((pay: any) => pay.supplierId === id);
+
+    if (hasPurchaseInvoices || hasPurchaseOrders || hasReturns || hasPayments) {
+        toast({
+            variant: "destructive",
+            title: "لا يمكن الحذف",
+            description: "لا يمكن حذف هذا المورد لوجود حركات شراء، أوامر توريد، أو مديونيات مرتبطة به في النظام.",
+        });
+        return;
+    }
+
     dbAction('suppliers', 'remove', { id });
+    toast({ title: "تم الحذف بنجاح" });
   };
 
   return (
@@ -175,7 +192,7 @@ export default function SuppliersPage() {
           title="إضافة مورد جديد"
           description="أدخل تفاصيل المورد الجديد هنا."
           triggerButton={
-            <Button size="sm" className="gap-1">
+            <Button size="sm" className="gap-1" disabled={loading}>
               <PlusCircle className="h-4 w-4" />
               إضافة مورد
             </Button>
@@ -185,7 +202,6 @@ export default function SuppliersPage() {
         </AddEntityDialog>
       </PageHeader>
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
-       <Dialog onOpenChange={(open) => !open && setSelectedSupplier(null)}>
         <Card>
           <CardHeader>
             <CardTitle>الموردون</CardTitle>
@@ -259,14 +275,14 @@ export default function SuppliersPage() {
                                             </DropdownMenu>
                                             <AlertDialogContent>
                                                 <AlertDialogHeader>
-                                                    <AlertDialogTitle>هل أنت متأكد تمامًا؟</AlertDialogTitle>
-                                                    <AlertDialogDescription>
-                                                        هذا الإجراء سيحذف المورد بشكل دائم. لا يمكن التراجع عن هذا الإجراء.
-                                                    </AlertDialogDescription>
+                                                <AlertDialogTitle>هل أنت متأكد تمامًا؟</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    هذا الإجراء سيحذف المورد بشكل دائم. لا يمكن التراجع عن هذا الإجراء.
+                                                </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
-                                                    <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={() => handleDelete(supplier.id!)}>متابعة</AlertDialogAction>
+                                                <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                                <AlertDialogAction onClick={() => handleDelete(supplier.id!)}>متابعة</AlertDialogAction>
                                                 </AlertDialogFooter>
                                             </AlertDialogContent>
                                         </AlertDialog>
@@ -285,5 +301,3 @@ export default function SuppliersPage() {
     </>
   );
 }
-
-    
