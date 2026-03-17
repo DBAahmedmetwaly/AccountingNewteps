@@ -37,6 +37,8 @@ import { Combobox } from '@/components/ui/combobox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { InvoiceTemplate } from '@/components/invoice-template';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 interface PurchaseInvoice {
   id: string;
