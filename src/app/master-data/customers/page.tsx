@@ -55,7 +55,7 @@ interface CustomerPayment { id: string; customerId: string; amount: number; }
 interface SalesReturn { id: string; customerId: string; total: number; }
 
 
-const CustomerForm = ({ customer, onSave, onClose, allCustomers }: { customer?: Customer, onSave: (customer: Customer) => void, onClose: () => void, allCustomers: Customer[] }) => {
+const CustomerForm = ({ customer, onSave, onClose, allCustomers, hasInvoices }: { customer?: Customer, onSave: (customer: Customer) => void, onClose: () => void, allCustomers: Customer[], hasInvoices: boolean }) => {
   const [formData, setFormData] = useState<Customer>(
     customer || { name: "", openingBalance: 0, creditLimit: 0, phone: "", address: "", allowCredit: false }
   );
@@ -93,8 +93,9 @@ const CustomerForm = ({ customer, onSave, onClose, allCustomers }: { customer?: 
     <>
       <div className="space-y-4 py-2">
         <div className="space-y-2">
-          <Label htmlFor="customer-name">اسم العميل</Label>
-          <Input id="customer-name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+          <Label htmlFor="customer-name" className={hasInvoices ? "text-muted-foreground" : ""}>اسم العميل</Label>
+          <Input id="customer-name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} disabled={hasInvoices} className={hasInvoices ? "bg-muted" : ""} />
+          {hasInvoices && <p className="text-[10px] text-amber-600 font-semibold">لا يمكن تعديل الاسم لوجود فواتير مرتبطة.</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="customer-phone">رقم الهاتف</Label>
@@ -105,8 +106,8 @@ const CustomerForm = ({ customer, onSave, onClose, allCustomers }: { customer?: 
           <Input id="customer-address" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="opening-balance">رصيد أول المدة</Label>
-          <Input id="opening-balance" type="number" value={formData.openingBalance} onChange={(e) => setFormData({...formData, openingBalance: Number(e.target.value)})} />
+          <Label htmlFor="opening-balance" className={hasInvoices ? "text-muted-foreground" : ""}>رصيد أول المدة</Label>
+          <Input id="opening-balance" type="number" value={formData.openingBalance} onChange={(e) => setFormData({...formData, openingBalance: Number(e.target.value)})} disabled={hasInvoices} className={hasInvoices ? "bg-muted" : ""} />
         </div>
          <div className="space-y-2">
           <Label htmlFor="credit-limit">حد الائتمان</Label>
@@ -132,6 +133,15 @@ export default function CustomersPage() {
   const router = useRouter();
   const { toast } = useToast();
   
+  const checkHasInvoices = (id: string) => {
+    const hasSalesInvoices = salesInvoices.some((inv: any) => inv.customerId === id);
+    const hasPosSales = posSales.some((sale: any) => sale.customerId === id);
+    const hasReturns = salesReturns.some((ret: any) => ret.customerId === id);
+    const hasPosReturns = posReturns.some((ret: any) => ret.customerId === id);
+    const hasPayments = customerPayments.some((pay: any) => pay.customerId === id);
+    return hasSalesInvoices || hasPosSales || hasReturns || hasPosReturns || hasPayments;
+  };
+
   const customersWithBalance = useMemo(() => {
     return customers.map((customer: Customer) => {
         const approvedSalesInvoices = salesInvoices.filter((s: SaleInvoice) => s.customerId === customer.id && s.status === 'approved');
@@ -167,14 +177,7 @@ export default function CustomersPage() {
   };
 
   const handleDelete = (id: string) => {
-    // Check if customer has any linked transactions
-    const hasSalesInvoices = salesInvoices.some((inv: any) => inv.customerId === id);
-    const hasPosSales = posSales.some((sale: any) => sale.customerId === id);
-    const hasReturns = salesReturns.some((ret: any) => ret.customerId === id);
-    const hasPosReturns = posReturns.some((ret: any) => ret.customerId === id);
-    const hasPayments = customerPayments.some((pay: any) => pay.customerId === id);
-
-    if (hasSalesInvoices || hasPosSales || hasReturns || hasPosReturns || hasPayments) {
+    if (checkHasInvoices(id)) {
         toast({
             variant: "destructive",
             title: "لا يمكن الحذف",
@@ -200,7 +203,7 @@ export default function CustomersPage() {
             </Button>
           }
         >
-          <CustomerForm onSave={handleSave} onClose={() => {}} allCustomers={customers} />
+          <CustomerForm onSave={handleSave} onClose={() => {}} allCustomers={customers} hasInvoices={false} />
         </AddEntityDialog>
       </PageHeader>
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
@@ -262,7 +265,7 @@ export default function CustomersPage() {
                                                             </DropdownMenuItem>
                                                         }
                                                     >
-                                                    <CustomerForm customer={customer} onSave={handleSave} onClose={() => {}} allCustomers={customers}/>
+                                                    <CustomerForm customer={customer} onSave={handleSave} onClose={() => {}} allCustomers={customers} hasInvoices={checkHasInvoices(customer.id)} />
                                                     </AddEntityDialog>
                                                     <AlertDialogTrigger asChild>
                                                         <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>

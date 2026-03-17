@@ -93,7 +93,7 @@ const SupplierItemsDialog = ({ supplier, allItems }: { supplier: Supplier | null
 };
 
 
-const SupplierForm = ({ supplier, onSave, onClose }: { supplier?: Supplier, onSave: (supplier: Supplier) => void, onClose: () => void }) => {
+const SupplierForm = ({ supplier, onSave, onClose, hasInvoices }: { supplier?: Supplier, onSave: (supplier: Supplier) => void, onClose: () => void, hasInvoices: boolean }) => {
   const [formData, setFormData] = useState<Supplier>(
     supplier || { name: "", contact: "", openingBalance: 0 }
   );
@@ -110,10 +110,11 @@ const SupplierForm = ({ supplier, onSave, onClose }: { supplier?: Supplier, onSa
     <>
       <div className="grid gap-4 py-4">
         <div className="grid grid-cols-4 items-center gap-4">
-          <Label htmlFor="supplier-name" className="text-right">
+          <Label htmlFor="supplier-name" className={cn("text-right", hasInvoices && "text-muted-foreground")}>
             اسم المورد
           </Label>
-          <Input id="supplier-name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="col-span-3" />
+          <Input id="supplier-name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} disabled={hasInvoices} className={cn("col-span-3", hasInvoices && "bg-muted")} />
+          {hasInvoices && <div className="col-start-2 col-span-3 text-[10px] text-amber-600 font-semibold">لا يمكن تعديل الاسم لوجود فواتير مرتبطة.</div>}
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="supplier-contact" className="text-right">
@@ -122,10 +123,10 @@ const SupplierForm = ({ supplier, onSave, onClose }: { supplier?: Supplier, onSa
           <Input id="supplier-contact" value={formData.contact} onChange={(e) => setFormData({...formData, contact: e.target.value})} className="col-span-3" />
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
-          <Label htmlFor="opening-balance" className="text-right">
+          <Label htmlFor="opening-balance" className={cn("text-right", hasInvoices && "text-muted-foreground")}>
             رصيد أول المدة
           </Label>
-          <Input id="opening-balance" type="number" value={formData.openingBalance} onChange={(e) => setFormData({...formData, openingBalance: e.target.value as any})} className="col-span-3" />
+          <Input id="opening-balance" type="number" value={formData.openingBalance} onChange={(e) => setFormData({...formData, openingBalance: e.target.value as any})} disabled={hasInvoices} className={cn("col-span-3", hasInvoices && "bg-muted")} />
         </div>
       </div>
       <div className="flex justify-end">
@@ -135,12 +136,24 @@ const SupplierForm = ({ supplier, onSave, onClose }: { supplier?: Supplier, onSa
   );
 };
 
+// Internal utility function for the file
+function cn(...classes: (string | boolean | undefined)[]) {
+  return classes.filter(Boolean).join(" ");
+}
+
 
 export default function SuppliersPage() {
   const { suppliers, purchaseInvoices, supplierPayments, purchaseReturns, items, loading, dbAction } = useData();
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const { toast } = useToast();
   
+  const checkHasInvoices = (id: string) => {
+    const hasPurchaseInvoices = purchaseInvoices.some((p: any) => p.supplierId === id);
+    const hasReturns = purchaseReturns.some((r: any) => r.supplierId === id);
+    const hasPayments = supplierPayments.some((pay: any) => pay.supplierId === id);
+    return hasPurchaseInvoices || hasReturns || hasPayments;
+  };
+
   const suppliersWithBalance = useMemo(() => {
     return suppliers.map((supplier: Supplier) => {
         const supplierPurchases: PurchaseInvoice[] = purchaseInvoices.filter((p: PurchaseInvoice) => p.supplierId === supplier.id);
@@ -166,11 +179,7 @@ export default function SuppliersPage() {
   };
 
   const handleDelete = (id: string) => {
-    const hasPurchaseInvoices = purchaseInvoices.some((p: any) => p.supplierId === id);
-    const hasReturns = purchaseReturns.some((r: any) => r.supplierId === id);
-    const hasPayments = supplierPayments.some((pay: any) => pay.supplierId === id);
-
-    if (hasPurchaseInvoices || hasReturns || hasPayments) {
+    if (checkHasInvoices(id)) {
         toast({
             variant: "destructive",
             title: "لا يمكن الحذف",
@@ -196,7 +205,7 @@ export default function SuppliersPage() {
             </Button>
           }
         >
-          {({onClose}) => <SupplierForm onSave={handleSave} onClose={onClose}/>}
+          {({onClose}) => <SupplierForm onSave={handleSave} onClose={onClose} hasInvoices={false} />}
         </AddEntityDialog>
       </PageHeader>
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
@@ -261,7 +270,7 @@ export default function SuppliersPage() {
                                                               </DropdownMenuItem>
                                                           }
                                                       >
-                                                      {({onClose}) => <SupplierForm supplier={supplier} onSave={handleSave} onClose={onClose}/>}
+                                                      {({onClose}) => <SupplierForm supplier={supplier} onSave={handleSave} onClose={onClose} hasInvoices={checkHasInvoices(supplier.id!)} />}
                                                       </AddEntityDialog>
                                                       <AlertDialogTrigger asChild>
                                                           <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
