@@ -855,19 +855,6 @@ export default function ItemsPage() {
     const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
     const router = useRouter();
 
-    // Aggressive Cleanup for Pointer Events and Scroll
-    useEffect(() => {
-        const cleanup = () => {
-            if (!isEditOpen && !isMatrixOpen && !isPriceUpdateOpen && !isDeleteAlertOpen) {
-                document.body.style.pointerEvents = 'auto';
-                document.body.style.overflow = 'auto';
-            }
-        };
-        cleanup();
-        const timer = setTimeout(cleanup, 500);
-        return () => clearTimeout(timer);
-    }, [isEditOpen, isMatrixOpen, isPriceUpdateOpen, isDeleteAlertOpen]);
-
     const [filters, setFilters] = useState({
         sectionId: '',
         categoryId: '',

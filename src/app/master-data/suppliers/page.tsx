@@ -166,7 +166,6 @@ export default function SuppliersPage() {
   };
 
   const handleDelete = (id: string) => {
-    // Check if supplier has any linked transactions
     const hasPurchaseInvoices = purchaseInvoices.some((p: any) => p.supplierId === id);
     const hasReturns = purchaseReturns.some((r: any) => r.supplierId === id);
     const hasPayments = supplierPayments.some((pay: any) => pay.supplierId === id);

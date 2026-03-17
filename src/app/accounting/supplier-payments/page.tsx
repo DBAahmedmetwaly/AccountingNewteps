@@ -48,6 +48,8 @@ interface CashAccount {
     id: string;
     name: string;
     warehouseId?: string;
+    userId?: string;
+    salesRepId?: string;
     openingBalance?: number;
     currentBalance?: number; // Added to check balance
 }
@@ -63,14 +65,6 @@ interface PurchaseInvoice {
 
 /**
  * مكون `PaymentForm`
- * @param {object} props - الخصائص المستلمة.
- * @param {Function} props.onSave - دالة يتم استدعاؤها لحفظ بيانات الدفعة.
- * @param {Supplier[]} props.suppliers - قائمة الموردين.
- * @param {CashAccount[]} props.cashAccounts - قائمة الحسابات النقدية.
- * @param {PurchaseInvoice[]} props.purchaseInvoices - قائمة فواتير الشراء.
- * @returns {JSX.Element} نموذج لإضافة أو تعديل دفعة مورد.
- * هذا المكون مسؤول عن عرض نموذج لإدخال دفعة جديدة لمورد،
- * ويشمل حقول التاريخ، المورد، المبلغ، الحساب المدفوع منه، والملاحظات، مع إمكانية ربط الدفعة بفاتورة شراء.
  */
 const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { onSave: (data: Omit<SupplierPayment, 'id' | 'receiptNumber'>) => void, suppliers: Supplier[], cashAccounts: CashAccount[], purchaseInvoices: PurchaseInvoice[] }) => {
     // حالة (state) لتخزين بيانات النموذج
@@ -83,14 +77,17 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { on
         invoiceId: "" 
     });
     
-    // `useMemo` لتحسين الأداء عن طريق حساب خيارات الموردين مرة واحدة فقط.
+    // فلترة الخزائن لاستبعاد عهد المناديب تماماً
+    const branchAndGeneralAccounts = useMemo(() => {
+        return cashAccounts.filter(acc => !acc.userId && !acc.salesRepId);
+    }, [cashAccounts]);
+
     const supplierOptions = React.useMemo(() => suppliers.map((s: Supplier) => ({ value: s.id, label: s.name })), [suppliers]);
-    const [availableCashAccounts, setAvailableCashAccounts] = useState(cashAccounts);
     
-    // `useMemo` لحساب خيارات الحسابات النقدية.
+    const [availableCashAccounts, setAvailableCashAccounts] = useState(branchAndGeneralAccounts);
+    
     const cashAccountOptions = React.useMemo(() => availableCashAccounts.map((c: CashAccount) => ({ value: c.id, label: `${c.name} (المتاح: ${c.currentBalance?.toLocaleString() || 0})` })), [availableCashAccounts]);
 
-    // `useMemo` لترشيح فواتير المورد المحدد التي لها رصيد متبقي.
     const supplierInvoicesWithBalance = useMemo(() => {
         if (!formData.supplierId) return [];
         return purchaseInvoices.filter((inv: PurchaseInvoice) => {
@@ -100,13 +97,11 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { on
         });
     }, [formData.supplierId, purchaseInvoices]);
 
-    // `useMemo` للعثور على تفاصيل الفاتورة المحددة.
     const selectedInvoiceDetails = useMemo(() => {
         if (!formData.invoiceId) return null;
         return supplierInvoicesWithBalance.find((inv: PurchaseInvoice) => inv.id === formData.invoiceId);
     }, [formData.invoiceId, supplierInvoicesWithBalance]);
     
-    // `useMemo` لتجهيز خيارات الفواتير لعرضها في الكومبوبوكس.
     const invoiceOptions = React.useMemo(() => {
         return supplierInvoicesWithBalance.map((inv: PurchaseInvoice) => ({
             value: inv.id,
@@ -114,31 +109,23 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { on
         }));
     }, [supplierInvoicesWithBalance]);
     
-    // `useEffect` لتحديث الحسابات النقدية المتاحة بناءً على الفاتورة المحددة.
     useEffect(() => {
         if (selectedInvoiceDetails?.warehouseId) {
-            const branchCashAccount = cashAccounts.find((acc: CashAccount) => acc.warehouseId === selectedInvoiceDetails.warehouseId);
+            const branchCashAccount = branchAndGeneralAccounts.find((acc: CashAccount) => acc.warehouseId === selectedInvoiceDetails.warehouseId);
             if (branchCashAccount) {
-                setAvailableCashAccounts([branchCashAccount]);
+                setAvailableCashAccounts([branchCashAccount, ...branchAndGeneralAccounts.filter(acc => !acc.warehouseId)]);
                 setFormData(prev => ({...prev, paidFromAccountId: branchCashAccount.id}));
             } else {
-                setAvailableCashAccounts(cashAccounts.filter((acc: CashAccount) => !acc.warehouseId)); // Fallback to general accounts
+                setAvailableCashAccounts(branchAndGeneralAccounts.filter((acc: CashAccount) => !acc.warehouseId)); 
                  setFormData(prev => ({...prev, paidFromAccountId: ''}));
             }
         } else {
-             // الدفعات العامة يمكن أن تكون من أي حساب غير مرتبط بفرع
-             setAvailableCashAccounts(cashAccounts.filter((acc: CashAccount) => !acc.warehouseId));
+             setAvailableCashAccounts(branchAndGeneralAccounts.filter((acc: CashAccount) => !acc.warehouseId));
              setFormData(prev => ({...prev, paidFromAccountId: ''}));
         }
-    }, [selectedInvoiceDetails, cashAccounts]);
+    }, [selectedInvoiceDetails, branchAndGeneralAccounts]);
 
 
-    /**
-     * دالة `handleSubmit`
-     * @param {React.FormEvent} e - كائن الحدث.
-     * يتم استدعاؤها عند إرسال النموذج. تقوم بمنع السلوك الافتراضي، واستدعاء دالة الحفظ `onSave`
-     * مع تمرير بيانات النموذج، ثم إعادة تعيين النموذج.
-     */
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         
@@ -209,7 +196,6 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { on
                     <Textarea id="payment-notes" value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="أدخل أي ملاحظات (اختياري)" disabled={!!formData.invoiceId} />
                 </div>
             </div>
-             {/* تنبيه يوضح القيد المحاسبي المتوقع */}
              <Alert className="mt-4">
                 <Info className="h-4 w-4" />
                 <AlertTitle>القيد المحاسبي المتوقع</AlertTitle>
@@ -228,13 +214,7 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices }: { on
     );
 };
 
-/**
- * المكون الرئيسي لصفحة مدفوعات الموردين `SupplierPaymentsPage`.
- * هذا المكون يدير حالة الصفحة ويعرض نموذج لإضافة دفعة جديدة وجدول بالدفعات المسجلة.
- * @returns {JSX.Element} واجهة مستخدم كاملة لإدارة مدفوعات الموردين.
- */
 export default function SupplierPaymentsPage() {
-    // استدعاء السياقات للحصول على البيانات والدوال اللازمة
     const { 
         supplierPayments: payments, 
         suppliers, 
@@ -242,9 +222,8 @@ export default function SupplierPaymentsPage() {
         purchaseInvoices, 
         dbAction, 
         getNextId,
-        // Data for balance calculation
         customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions,
-        expenses, employeeAdvances,
+        expenses, employeeAdvances, posSales,
         loading 
     } = useData();
     const { toast } = useToast();
@@ -260,6 +239,12 @@ export default function SupplierPaymentsPage() {
             salesInvoices.forEach((s: any) => { if (s.status === 'approved' && s.paidToAccountId === account.id) balance += (s.paidAmount || 0) });
             exceptionalIncomes.forEach((i:any) => { if (i.paidToAccountId === account.id) balance += i.amount });
             treasuryTransactions.forEach((tx: any) => { if (tx.accountId === account.id && tx.type === 'deposit') balance += tx.amount });
+            posSales.forEach((sale: any) => {
+                if (account.warehouseId && sale.warehouseId === account.warehouseId) {
+                    const totalPaidOnSale = sale.paidAmount ?? sale.payments?.reduce((sum: number, p: any) => sum + p.amount, 0) ?? sale.total;
+                    balance += totalPaidOnSale;
+                }
+            });
 
             expenses.forEach((ex: any) => { if (ex.paidFromAccountId === account.id) balance -= ex.amount });
             payments.forEach((sp: any) => { if (sp.paidFromAccountId === account.id) balance -= sp.amount });
@@ -268,33 +253,16 @@ export default function SupplierPaymentsPage() {
             
             return { ...account, currentBalance: balance };
         });
-    }, [loading, rawCashAccounts, customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions, expenses, payments, employeeAdvances]);
+    }, [loading, rawCashAccounts, customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions, expenses, payments, employeeAdvances, posSales]);
     
-    /**
-     * دالة `getSupplierName`
-     * @param {string} supplierId - معرف المورد.
-     * @returns {string} اسم المورد أو 'غير معروف'.
-     */
      const getSupplierName = (supplierId: string) => {
         return suppliers.find((s: Supplier) => s.id === supplierId)?.name || 'غير معروف';
     };
 
-    /**
-     * دالة `getCashAccountName`
-     * @param {string} accountId - معرف الحساب النقدي.
-     * @returns {string} اسم الحساب أو 'غير معروف'.
-     */
     const getCashAccountName = (accountId: string) => {
         return cashAccounts.find((acc: CashAccount) => acc.id === accountId)?.name || 'غير معروف';
     }
 
-    /**
-     * دالة `handleSave`
-     * @param {Omit<SupplierPayment, 'id' | 'receiptNumber'>} data - بيانات الدفعة الجديدة.
-     * دالة غير متزامنة لحفظ دفعة جديدة في قاعدة البيانات.
-     * تقوم بإنشاء رقم إيصال فريد، إضافة بيانات المستخدم، ثم حفظ الدفعة.
-     * إذا كانت الدفعة مرتبطة بفاتورة، تقوم بتحديث المبلغ المدفوع في الفاتورة.
-     */
     const handleSave = async (data: Omit<SupplierPayment, 'id' | 'receiptNumber'>) => {
         const account = cashAccounts.find((acc: CashAccount) => acc.id === data.paidFromAccountId);
         if (!account) {
@@ -317,7 +285,6 @@ export default function SupplierPaymentsPage() {
             };
             await dbAction('supplierPayments', 'add', newPayment);
             
-            // تحديث الفاتورة إذا كانت الدفعة مرتبطة بها
             if (data.invoiceId) {
                 const invoice = purchaseInvoices.find((inv: PurchaseInvoice) => inv.id === data.invoiceId);
                 if (invoice) {
@@ -332,15 +299,8 @@ export default function SupplierPaymentsPage() {
         }
     };
     
-    /**
-     * دالة `handleDelete`
-     * @param {SupplierPayment} payment - كائن الدفعة المراد حذفها.
-     * دالة غير متزامنة لحذف دفعة من قاعدة البيانات.
-     * تقوم بعكس تأثير الدفعة على الفاتورة المرتبطة (إن وجدت) ثم تحذف سجل الدفعة.
-     */
     const handleDelete = async (payment: SupplierPayment) => {
         try {
-             // عكس قيمة الدفعة من الفاتورة المرتبطة
             if (payment.invoiceId) {
                 const invoice = purchaseInvoices.find((inv: PurchaseInvoice) => inv.id === payment.invoiceId);
                 if (invoice) {
@@ -360,26 +320,21 @@ export default function SupplierPaymentsPage() {
       <PageHeader title="مدفوعات الموردين" />
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
         <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-5">
-            {/* بطاقة نموذج الإضافة */}
             <Card className="lg:col-span-2">
             <CardHeader>
                 <CardTitle>إضافة دفعة جديدة</CardTitle>
-                <CardDescription>
-                سجل الدفعات التي تمت للموردين لتسوية حساباتهم.
-                </CardDescription>
+                <CardDescription>سجل الدفعات التي تمت للموردين لتسوية حساباتهم.</CardDescription>
             </CardHeader>
             <CardContent>
                 <PaymentForm onSave={handleSave} suppliers={suppliers} cashAccounts={cashAccounts} purchaseInvoices={purchaseInvoices} />
             </CardContent>
             </Card>
             
-            {/* بطاقة جدول السجلات */}
             <Card className="lg:col-span-3">
                 <CardHeader>
                     <CardTitle>سجل المدفوعات</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {/* عرض مؤشر تحميل أثناء جلب البيانات */}
                     {loading ? (
                         <div className="flex justify-center items-center py-10">
                             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -397,7 +352,6 @@ export default function SupplierPaymentsPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {/* عرض كل دفعة في صف بالجدول */}
                                     {payments.map((payment: SupplierPayment) => (
                                         <TableRow key={payment.id}>
                                             <TableCell>
@@ -409,13 +363,11 @@ export default function SupplierPaymentsPage() {
                                             <TableCell>{getCashAccountName(payment.paidFromAccountId)}</TableCell>
                                             <TableCell className="text-center">{payment.amount.toLocaleString()}</TableCell>
                                             <TableCell className="text-center">
-                                                {/* قائمة منسدلة تحتوي على إجراءات (حذف) */}
                                                 <AlertDialog>
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
                                                             <Button aria-haspopup="true" size="icon" variant="ghost">
                                                                 <MoreHorizontal className="h-4 w-4" />
-                                                                <span className="sr-only">قائمة</span>
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
@@ -428,13 +380,10 @@ export default function SupplierPaymentsPage() {
                                                             </AlertDialogTrigger>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
-                                                    {/* مربع حوار تأكيد الحذف */}
                                                     <AlertDialogContent>
                                                         <AlertDialogHeader>
                                                             <AlertDialogTitle>هل أنت متأكد تمامًا؟</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                هذا الإجراء سيحذف الدفعة بشكل دائم. إذا كانت الدفعة مرتبطة بفاتورة، فسيتم عكس قيمتها من المبلغ المدفوع في الفاتورة. لا يمكن التراجع عن هذا الإجراء.
-                                                            </AlertDialogDescription>
+                                                            <AlertDialogDescription>هذا الإجراء سيحذف الدفعة بشكل دائم. لا يمكن التراجع عن هذا الإجراء.</AlertDialogDescription>
                                                         </AlertDialogHeader>
                                                         <AlertDialogFooter>
                                                             <AlertDialogCancel>إلغاء</AlertDialogCancel>
@@ -456,7 +405,3 @@ export default function SupplierPaymentsPage() {
     </>
   );
 }
-
-    
-
-    

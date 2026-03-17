@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -39,7 +38,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { InvoiceTemplate } from '@/components/invoice-template';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-
 interface PurchaseInvoice {
   id: string;
   invoiceNumber: string;
@@ -50,54 +48,47 @@ interface PurchaseInvoice {
   total: number;
   items: any[];
 }
-interface Supplier { id: string; name: string; }
-interface Warehouse { id: string; name: string; }
-interface InventoryClosing { id: string; warehouseId: string; closingDate: string; }
-interface StockInRecord { id: string; purchaseInvoiceId?: string; }
 
 const InvoiceItemsDialog = ({ items }: { items: any[] }) => (
-    <DialogContent>
-        <DialogHeader>
-            <DialogTitle>تفاصيل أصناف الفاتورة</DialogTitle>
-        </DialogHeader>
+    <div className="max-h-96 overflow-y-auto mt-4">
         <Table>
             <TableHeader>
                 <TableRow>
                     <TableHead>الصنف</TableHead>
                     <TableHead>الباركود</TableHead>
                     <TableHead className="text-center">الكمية</TableHead>
-                    <TableHead className="text-center">سعر الشراء (التكلفة)</TableHead>
-                    <TableHead className="text-center">سعر البيع</TableHead>
+                    <TableHead className="text-center">سعر الشراء</TableHead>
+                    <TableHead className="text-center">الإجمالي</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
                 {items && items.map((item, idx) => (
                     <TableRow key={idx}>
-                        <TableCell>{item.name}</TableCell>
-                        <TableCell className="font-mono">{item.code || 'N/A'}</TableCell>
-                        <TableCell className="text-center">{item.qty}</TableCell>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell className="font-mono text-xs">{item.code || 'N/A'}</TableCell>
+                        <TableCell className="text-center font-bold">{item.qty}</TableCell>
                         <TableCell className="text-center">{item.cost?.toLocaleString() || '-'}</TableCell>
-                        <TableCell className="text-center">{(item as any).sellingPrice?.toLocaleString() || '-'}</TableCell>
+                        <TableCell className="text-center font-semibold">{item.total?.toLocaleString() || '-'}</TableCell>
                     </TableRow>
                 ))}
             </TableBody>
         </Table>
-    </DialogContent>
+    </div>
 )
-
 
 export default function PurchaseInvoicesListPage() {
   const { purchaseInvoices: invoices, suppliers, warehouses, inventoryClosings, stockInRecords, settings, loading } = useData();
   const router = useRouter();
 
   const [filters, setFilters] = useState({
-    supplierId: "",
-    warehouseId: "",
+    supplierId: "all",
+    warehouseId: "all",
     fromDate: "",
     toDate: "",
-    receiptStatus: 'all' // all, received, not_received
+    receiptStatus: 'all'
   });
 
+  const [selectedInvoiceForItems, setSelectedInvoiceForItems] = useState<any>(null);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -108,8 +99,8 @@ export default function PurchaseInvoicesListPage() {
 
   const lastClosingDates = useMemo(() => {
     const dates = new Map<string, Date>();
-    warehouses.forEach((wh: Warehouse) => {
-        const closings = inventoryClosings.filter((c: InventoryClosing) => c.warehouseId === wh.id);
+    warehouses.forEach((wh: any) => {
+        const closings = inventoryClosings.filter((c: any) => c.warehouseId === wh.id);
         if (closings.length > 0) {
             const lastDate = new Date(Math.max(...closings.map(c => new Date(c.closingDate).getTime())));
             dates.set(wh.id, lastDate);
@@ -119,9 +110,8 @@ export default function PurchaseInvoicesListPage() {
   }, [warehouses, inventoryClosings]);
 
   const receivedInvoiceIds = useMemo(() => {
-    return new Set(stockInRecords.filter((rec: StockInRecord) => rec.purchaseInvoiceId).map((rec: StockInRecord) => rec.purchaseInvoiceId));
+    return new Set(stockInRecords.filter((rec: any) => rec.purchaseInvoiceId).map((rec: any) => rec.purchaseInvoiceId));
   }, [stockInRecords]);
-
 
   const filteredInvoices = useMemo(() => {
     return invoices.map((invoice: any) => {
@@ -137,11 +127,10 @@ export default function PurchaseInvoicesListPage() {
       if (from) from.setHours(0,0,0,0);
       if (to) to.setHours(23,59,59,999);
 
-
       if (from && invoiceDate < from) return false;
       if (to && invoiceDate > to) return false;
-      if (filters.supplierId && filters.supplierId !== 'all' && invoice.supplierId !== filters.supplierId) return false;
-      if (filters.warehouseId && filters.warehouseId !== 'all' && invoice.warehouseId !== filters.warehouseId) return false;
+      if (filters.supplierId !== 'all' && invoice.supplierId !== filters.supplierId) return false;
+      if (filters.warehouseId !== 'all' && invoice.warehouseId !== filters.warehouseId) return false;
       if (filters.receiptStatus === 'received' && !invoice.isReceived) return false;
       if (filters.receiptStatus === 'not_received' && invoice.isReceived) return false;
       
@@ -152,36 +141,28 @@ export default function PurchaseInvoicesListPage() {
   const companySettings = useMemo(() => settings?.main?.general || {}, [settings]);
 
   const handlePrint = () => {
-    setTimeout(() => window.print(), 100);
+    window.print();
   };
   
-    const handleShare = (invoice: PurchaseInvoice) => {
+  const handleShare = (invoice: PurchaseInvoice) => {
     const text = `
-*فاتورة شراء*
----------------------
-*رقم الفاتورة:* ${invoice.invoiceNumber}
-*التاريخ:* ${new Date(invoice.date).toLocaleDateString('ar-EG')}
+*فاتورة شراء رقم: ${invoice.invoiceNumber}*
+------------------------------------
 *المورد:* ${invoice.supplierName}
-*إجمالي الفاتورة:* ${invoice.total.toLocaleString()} ج.م
-
-لمشاهدة التفاصيل:
-${window.location.origin}/purchases/invoices/list
-    `; // A generic link as we don't have a public details page yet.
-    const encodedText = encodeURIComponent(text);
+*التاريخ:* ${new Date(invoice.date).toLocaleDateString('ar-EG')}
+*الإجمالي:* ${invoice.total.toLocaleString()} ج.م
+------------------------------------
+تم الاستلام في: ${warehouses.find(w => w.id === invoice.warehouseId)?.name || 'المستودع'}
+    `;
+    const encodedText = encodeURIComponent(text.trim());
     window.open(`https://wa.me/?text=${encodedText}`);
   };
 
-
   return (
     <>
-      <PageHeader title="سجل فواتير الشراء">
-        <Button size="sm" className="gap-1" onClick={() => router.push('/purchases/invoices')}>
-          <PlusCircle className="h-4 w-4" />
-          إضافة فاتورة شراء
-        </Button>
-      </PageHeader>
+      <PageHeader title="سجل فواتير الشراء" />
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
-        <Card>
+        <Card className="no-print">
             <CardHeader>
                 <CardTitle>فلاتر البحث</CardTitle>
             </CardHeader>
@@ -231,11 +212,15 @@ ${window.location.origin}/purchases/invoices/list
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>قائمة فواتير الشراء</CardTitle>
-            <CardDescription>
-              عرض وتعديل جميع فواتير الشراء المسجلة.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+                <CardTitle>قائمة فواتير الشراء</CardTitle>
+                <CardDescription>عرض وتتبع فواتير الشراء المسجلة.</CardDescription>
+            </div>
+            <Button size="sm" className="gap-1 no-print" onClick={() => router.push('/purchases/invoices')}>
+                <PlusCircle className="h-4 w-4" />
+                فاتورة جديدة
+            </Button>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -250,92 +235,95 @@ ${window.location.origin}/purchases/invoices/list
                       <TableHead>رقم الفاتورة</TableHead>
                       <TableHead>المورد</TableHead>
                       <TableHead>التاريخ</TableHead>
-                      <TableHead>ملاحظات</TableHead>
+                      <TableHead>الحالة</TableHead>
                       <TableHead className="text-center">الإجمالي</TableHead>
-                      <TableHead className="text-center w-[100px]">الإجراءات</TableHead>
+                      <TableHead className="text-center w-[100px] no-print">الإجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredInvoices && filteredInvoices.length > 0 ? (
                       filteredInvoices.map((invoice:any) => {
-                        const supplier = suppliers.find((s:any) => s.id === invoice.supplierId);
                         const isEditable = !invoice.isLocked && !invoice.isReceived;
                         return (
-                        <Dialog key={invoice.id}>
-                            <TableRow className={!isEditable ? 'bg-muted/30' : ''}>
-                                <TableCell className="font-mono">{invoice.invoiceNumber}</TableCell>
+                            <TableRow key={invoice.id} className={cn(!isEditable && 'bg-muted/30')}>
+                                <TableCell className="font-mono font-bold">{invoice.invoiceNumber}</TableCell>
                                 <TableCell>{invoice.supplierName}</TableCell>
-                                <TableCell>{new Date(invoice.date).toLocaleDateString('ar-EG')}</TableCell>
+                                <TableCell className="text-xs">{new Date(invoice.date).toLocaleDateString('ar-EG')}</TableCell>
                                 <TableCell>
-                                    <span className="flex items-center gap-2 text-muted-foreground">
                                     {invoice.isReceived ? (
-                                        <span className="flex items-center gap-1 text-green-600"><CheckCircle className="h-4 w-4"/> تم الاستلام</span>
+                                        <Badge variant="default" className="bg-green-600"><CheckCircle className="h-3 w-3 ml-1"/> تم الاستلام</Badge>
                                     ) : (
-                                        <span className="flex items-center gap-1 text-amber-600"><FileText className="h-4 w-4"/> لم تستلم</span>
+                                        <Badge variant="outline" className="text-amber-600 border-amber-200"><FileText className="h-3 w-3 ml-1"/> لم تستلم</Badge>
                                     )}
-                                    </span>
                                 </TableCell>
-                                <TableCell className="text-center">{invoice.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                                <TableCell className="text-center">
-                                    <DropdownMenu>
+                                <TableCell className="text-center font-bold">{invoice.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                                <TableCell className="text-center no-print">
+                                    <DropdownMenu modal={false}>
                                         <DropdownMenuTrigger asChild>
                                             <Button aria-haspopup="true" size="icon" variant="ghost">
                                                 <MoreHorizontal className="h-4 w-4" />
-                                                <span className="sr-only">قائمة</span>
                                             </Button>
                                         </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
+                                        <DropdownMenuContent align="end" className="w-56">
                                             <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
-                                            <DialogTrigger asChild>
-                                                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                                    <Eye className="ml-2 h-4 w-4" /> عرض الأصناف
-                                                </DropdownMenuItem>
-                                            </DialogTrigger>
+                                            
+                                            <Dialog>
+                                                <DialogTrigger asChild>
+                                                    <DropdownMenuItem onSelect={e => e.preventDefault()}>
+                                                        <Eye className="ml-2 h-4 w-4 text-blue-500" /> عرض الأصناف
+                                                    </DropdownMenuItem>
+                                                </DialogTrigger>
+                                                <DialogContent className="max-w-3xl">
+                                                    <DialogHeader>
+                                                        <DialogTitle>تفاصيل فاتورة شراء رقم {invoice.invoiceNumber}</DialogTitle>
+                                                    </DialogHeader>
+                                                    <InvoiceItemsDialog items={invoice.items} />
+                                                </DialogContent>
+                                            </Dialog>
+
                                             <Dialog>
                                                 <DialogTrigger asChild>
                                                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                                                         <Printer className="ml-2 h-4 w-4" /> عرض / طباعة
                                                     </DropdownMenuItem>
                                                 </DialogTrigger>
-                                                <DialogContent className="max-w-4xl p-0">
-                                                    <DialogHeader className="p-4">
+                                                <DialogContent className="max-w-4xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+                                                    <DialogHeader className="p-4 bg-muted/30">
                                                         <DialogTitle>طباعة الفاتورة {invoice.invoiceNumber}</DialogTitle>
-                                                        <DialogDescription>معاينة الفاتورة قبل الطباعة.</DialogDescription>
                                                     </DialogHeader>
-                                                    <div className="printable-area bg-white text-black">
-                                                        <InvoiceTemplate invoice={invoice} company={companySettings} customer={supplier} isPurchase={true} />
+                                                    <div className="flex-1 overflow-y-auto p-4 bg-white">
+                                                        <div className="printable-area bg-white text-black">
+                                                            <InvoiceTemplate invoice={invoice} company={companySettings} customer={suppliers.find(s => s.id === invoice.supplierId)} isPurchase={true} />
+                                                        </div>
                                                     </div>
-                                                    <div className="p-4 border-t flex justify-end no-print">
-                                                         <Button onClick={() => handleShare(invoice)} variant="outline" className="bg-green-500 text-white hover:bg-green-600 hover:text-white ml-2">
+                                                    <div className="p-4 border-t flex justify-end gap-2 bg-background no-print">
+                                                        <Button onClick={() => handleShare(invoice)} variant="outline" className="bg-green-500 text-white hover:bg-green-600 hover:text-white">
                                                             <MessageCircle className="ml-2 h-4 w-4" /> واتساب
                                                         </Button>
                                                         <Button onClick={handlePrint}><Printer className="ml-2 h-4 w-4" />طباعة</Button>
                                                     </div>
                                                 </DialogContent>
                                             </Dialog>
+
                                             <DropdownMenuSeparator />
                                             <DropdownMenuItem onClick={() => router.push(`/purchases/invoices/${invoice.id}/edit`)} disabled={!isEditable}>
-                                                <Edit className="ml-2 h-4 w-4" /> تعديل
+                                                <Edit className="ml-2 h-4 w-4" /> تعديل البيانات
                                             </DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => router.push(`/reports/supplier-statement?supplierId=${invoice.supplierId}&toDate=${invoice.date}`)}>
-                                                <FileSearch className="ml-2 h-4 w-4" />
-                                                كشف حساب المورد
+                                                <FileSearch className="ml-2 h-4 w-4" /> كشف حساب المورد
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => router.push(`/purchases/returns/new?invoiceId=${invoice.id}`)} disabled={!isEditable}>
-                                                <Undo2 className="ml-2 h-4 w-4" />
-                                                مرتجع
+                                            <DropdownMenuItem onClick={() => router.push(`/purchases/returns/new?invoiceId=${invoice.id}`)} disabled={invoice.isLocked}>
+                                                <Undo2 className="ml-2 h-4 w-4 text-amber-600" /> إجراء مرتجع
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </TableCell>
                             </TableRow>
-                             <InvoiceItemsDialog items={invoice.items} />
-                           </Dialog>
                         )
                       })
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                        <TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic">
                           لا توجد فواتير مسجلة تطابق الفلاتر المحددة.
                         </TableCell>
                       </TableRow>
