@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
@@ -191,6 +190,11 @@ export default function CustomersPage() {
       dbAction('customers', 'add', customer);
       toast({ title: "تمت إضافة العميل بنجاح" });
     }
+  };
+
+  const handleEditClick = (customer: Customer) => {
+    setEditingCustomer(customer);
+    setTimeout(() => setIsEditOpen(true), 150);
   };
 
   const handleDelete = (id: string) => {
