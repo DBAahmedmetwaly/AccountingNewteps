@@ -1,4 +1,3 @@
-
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -47,6 +46,8 @@ export default function NewSalesReturnPage() {
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(searchParams.get('invoiceId'));
   const [items, setItems] = useState<ReturnItem[]>([]);
   
+  const [subtotal, setSubtotal] = useState(0);
+  const [discount, setDiscount] = useState(0);
   const [total, setTotal] = useState(0);
   const [paidAmount, setPaidAmount] = useState(0);
   const [paidFromAccountId, setPaidFromAccountId] = useState("");
@@ -159,7 +160,8 @@ export default function NewSalesReturnPage() {
   
   useEffect(() => {
     const newTotal = items.reduce((acc, item) => acc + item.total, 0);
-    setTotal(newTotal);
+    setSubtotal(newTotal);
+    setTotal(newTotal - discount);
   }, [items, discount]);
 
   const currentCustomerBalance = useMemo(() => {
