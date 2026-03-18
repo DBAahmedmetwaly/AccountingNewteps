@@ -200,10 +200,7 @@ export default function DashboardPage() {
             let itemTotalBalance = 0;
             
             warehousesToConsider.forEach((warehouse: any) => {
-                // Find all inventory records for this warehouse
                 const warehouseInventory = inventory.filter((inv: any) => inv.warehouseId === warehouse.id);
-                
-                // For each section in the warehouse, look for the item
                 warehouseInventory.forEach((sectionRecord: any) => {
                     if (sectionRecord.items && sectionRecord.items[item.id]) {
                         const itemData = sectionRecord.items[item.id];
@@ -216,28 +213,25 @@ export default function DashboardPage() {
             return sum + (itemTotalBalance * itemCost);
         }, 0);
 
-        // --- Recalculate AR and AP correctly including opening balances ---
+        // --- Correct AR/AP Logic ---
         let ar = 0;
         customers.forEach((c: any) => {
             let balance = Number(c.openingBalance) || 0;
             
-            // Add approved sales
+            // Add unpaid portions of invoices
             salesInvoices.filter((s:any) => s.status === 'approved' && s.customerId === c.id && isWarehouseAllowed(s.warehouseId))
                 .forEach((s: any) => balance += (Number(s.total) - Number(s.paidAmount || 0)));
                 
-            // Add POS sales
             posSales.filter((s:any) => s.customerId === c.id && isWarehouseAllowed(s.warehouseId))
                 .forEach((s: any) => balance += (Number(s.total) - Number(s.paidAmount || 0)));
             
-            // Subtract payments
-            customerPayments.filter((p: any) => p.customerId === c.id)
-                .forEach((p: any) => {
-                    if (filteredCashAccountIds.has(p.paidToAccountId)) balance -= Number(p.amount);
-                });
+            // Subtract Standalone Payments only (linked ones are handled by s.paidAmount)
+            customerPayments.filter((p: any) => p.customerId === c.id && !p.invoiceId)
+                .forEach((p: any) => balance -= Number(p.amount));
             
-            // Subtract returns
+            // Subtract Net Returns
             salesReturns.filter((r: any) => r.customerId === c.id && isWarehouseAllowed(r.warehouseId))
-                .forEach((r: any) => balance -= Number(r.total));
+                .forEach((r: any) => balance -= (Number(r.total) - Number(r.paidAmount || 0)));
                 
             ar += balance;
         });
@@ -246,29 +240,27 @@ export default function DashboardPage() {
         suppliers.forEach((s: any) => {
             let balance = Number(s.openingBalance) || 0;
             
-            // Add purchases
+            // Add unpaid portions
             purchaseInvoices.filter((p: any) => p.supplierId === s.id && isWarehouseAllowed(p.warehouseId))
                 .forEach((p: any) => balance += (Number(p.total) - Number(p.paidAmount || 0)));
                 
-            // Subtract payments
-            supplierPayments.filter((p: any) => p.supplierId === s.id)
-                .forEach((p: any) => {
-                    if (filteredCashAccountIds.has(p.paidFromAccountId)) balance -= Number(p.amount);
-                });
+            // Subtract Standalone Payments
+            supplierPayments.filter((p: any) => p.supplierId === s.id && !p.invoiceId)
+                .forEach((p: any) => balance -= Number(p.amount));
                 
-            // Subtract returns
+            // Subtract Net Returns
             purchaseReturns.filter((r: any) => r.supplierId === s.id && isWarehouseAllowed(r.warehouseId))
-                .forEach((r: any) => balance -= Number(r.total));
+                .forEach((r: any) => balance -= (Number(r.total) - Number(r.paidAmount || 0)));
                 
             ap += balance;
         });
 
-        // Aggregates for new KPIs
         const totalExpenses = expenses.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
         const totalPurchases = filteredData.purchases.reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
         const totalSalesReturns = filteredData.salesReturnsFiltered.reduce((sum: number, r: any) => sum + Number(r.total || 0), 0);
         const totalPurchaseReturns = filteredData.purchaseReturnsFiltered.reduce((sum: number, r: any) => sum + Number(r.total || 0), 0);
         const totalReturns = totalSalesReturns + totalPurchaseReturns;
+        
         let totalCOGS = 0;
         let netProfit = 0;
         filteredData.sales.forEach((sale: any) => {
@@ -294,7 +286,6 @@ export default function DashboardPage() {
             customersCount: customers.length,
             suppliersCount: suppliers.length,
             productsCount: items.length,
-            // Explanation of total balances
             balanceExplanation: `إجمالي السيولة النقدية في ${filteredCashAccounts.length} حساب/خزينة تابعة للفروع المختارة.`
         };
     }, [
@@ -460,7 +451,6 @@ export default function DashboardPage() {
                           options={warehouseOptions}
                           value={filters.warehouseId}
                           onValueChange={(v) => {
-                              // If value is empty (unselected in Combobox logic), reset to 'all'
                               handleFilterChange("warehouseId", v || "all");
                           }}
                           placeholder="كل الفروع"

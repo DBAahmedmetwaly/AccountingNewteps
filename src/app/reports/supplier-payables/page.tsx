@@ -134,20 +134,20 @@ export default function SupplierPayablesReport() {
         return suppliers.map((supplier: Supplier) => {
             let balance = Number(supplier.openingBalance) || 0;
 
-            // 1. إضافة المبالغ المتبقية من فواتير الشراء
+            // 1. Debits: Purchase Invoices (Unpaid only)
             const supplierPurchases = purchaseInvoices.filter((p: PurchaseInvoice) => p.supplierId === supplier.id);
             supplierPurchases.forEach((p: any) => {
                 balance += (Number(p.total) - Number(p.paidAmount || 0));
             });
 
-            // 2. طرح المدفوعات المنفصلة (التي لم تربط بفاتورة شراء محددة)
-            const filteredPayments = supplierPayments.filter((p: SupplierPayment) => p.supplierId === supplier.id && !p.invoiceId);
-            filteredPayments.forEach((p: any) => {
+            // 2. Credits: Standalone Payments (NOT linked to an invoice)
+            const standalonePayments = (supplierPayments || []).filter((p: SupplierPayment) => p.supplierId === supplier.id && !p.invoiceId);
+            standalonePayments.forEach((p: any) => {
                 balance -= Number(p.amount);
             });
 
-            // 3. طرح المرتجعات (المبالغ التي لم تُسترد نقداً من المورد)
-            const filteredReturns = purchaseReturns.filter((r: PurchaseReturn) => r.supplierId === supplier.id);
+            // 3. Credits: Returns (Net value not refunded in cash)
+            const filteredReturns = (purchaseReturns || []).filter((r: PurchaseReturn) => r.supplierId === supplier.id);
             filteredReturns.forEach((r: any) => {
                 balance -= (Number(r.total) - Number(r.paidAmount || 0));
             });
@@ -178,9 +178,7 @@ export default function SupplierPayablesReport() {
             .slice(0, 10);
     }, [filteredSuppliers]);
     
-    const handlePaymentSaved = () => {
-       // DataProvider will auto-update
-    };
+    const handlePaymentSaved = () => {};
 
   return (
     <>

@@ -155,17 +155,27 @@ export default function SuppliersPage() {
 
   const suppliersWithBalance = useMemo(() => {
     return suppliers.map((supplier: Supplier) => {
+        let balance = Number(supplier.openingBalance) || 0;
+
+        // 1. Debits: Purchase Invoices (Add unpaid parts)
         const supplierPurchases = (purchaseInvoices || []).filter((p: any) => p.supplierId === supplier.id);
-        const filteredPayments = (supplierPayments || []).filter((p: any) => p.supplierId === supplier.id);
+        supplierPurchases.forEach((p: any) => {
+            balance += (Number(p.total) - Number(p.paidAmount || 0));
+        });
+
+        // 2. Credits: Standalone Payments (NOT linked to an invoice)
+        const standalonePayments = (supplierPayments || []).filter((p: any) => p.supplierId === supplier.id && !p.invoiceId);
+        standalonePayments.forEach((p: any) => {
+            balance -= Number(p.amount);
+        });
+
+        // 3. Credits: Returns (Net value not refunded in cash)
         const filteredReturns = (purchaseReturns || []).filter((r: any) => r.supplierId === supplier.id);
+        filteredReturns.forEach((r: any) => {
+            balance -= (Number(r.total) - Number(r.paidAmount || 0));
+        });
 
-        const totalPurchases = supplierPurchases.reduce((acc, p) => acc + p.total, 0);
-        const totalPaidOnInvoice = supplierPurchases.reduce((acc, p) => acc + (p.paidAmount || 0), 0);
-        const totalSeparatePayments = filteredPayments.reduce((acc, p) => acc + p.amount, 0);
-        const totalReturns = filteredReturns.reduce((acc, r) => acc + r.total, 0);
-
-        const currentBalance = (supplier.openingBalance || 0) + totalPurchases - totalPaidOnInvoice - totalSeparatePayments - totalReturns;
-        return { ...supplier, currentBalance };
+        return { ...supplier, currentBalance: balance };
     });
   }, [suppliers, purchaseInvoices, supplierPayments, purchaseReturns]);
 
@@ -190,6 +200,11 @@ export default function SuppliersPage() {
     }
     dbAction('suppliers', 'remove', { id });
     toast({ title: "تم الحذف بنجاح" });
+  };
+
+  const handleEditClick = (supplier: Supplier) => {
+    setEditingSupplier(supplier);
+    setTimeout(() => setIsEditOpen(true), 150);
   };
 
   return (
@@ -242,7 +257,7 @@ export default function SuppliersPage() {
                                               <Badge variant="secondary">{supplier.items?.length || 0}</Badge>
                                           </Button>
                                       </TableCell>
-                                      <TableCell className="text-center font-bold text-primary">{supplier.currentBalance.toLocaleString()}</TableCell>
+                                      <TableCell className="text-center font-bold text-primary">{supplier.currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                                       <TableCell className="text-center">
                                           <AlertDialog>
                                               <DropdownMenu modal={false}>
@@ -253,10 +268,7 @@ export default function SuppliersPage() {
                                                   </DropdownMenuTrigger>
                                                   <DropdownMenuContent align="end">
                                                       <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
-                                                      <DropdownMenuItem onSelect={() => {
-                                                          setEditingSupplier(supplier);
-                                                          setTimeout(() => setIsEditOpen(true), 150);
-                                                      }}>
+                                                      <DropdownMenuItem onSelect={() => handleEditClick(supplier)}>
                                                           <Edit className="ml-2 h-4 w-4" /> تعديل
                                                       </DropdownMenuItem>
                                                       <AlertDialogTrigger asChild>

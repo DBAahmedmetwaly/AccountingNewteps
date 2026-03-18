@@ -148,22 +148,40 @@ export default function CustomersPage() {
 
   const customersWithBalance = useMemo(() => {
     return customers.map((customer: Customer) => {
-        const approvedSalesInvoices = (salesInvoices || []).filter((s: any) => s.customerId === customer.id && s.status === 'approved');
-        const customerPosSales = (posSales || []).filter((s: any) => s.customerId === customer.id);
-        const filteredPayments = (customerPayments || []).filter((p: any) => p.customerId === customer.id);
-        const filteredReturns = (salesReturns || []).filter((r: any) => r.customerId === customer.id);
-
-        let balance = customer.openingBalance || 0;
-        approvedSalesInvoices.forEach((inv: any) => { balance += inv.total; });
-        customerPosSales.forEach((sale: any) => { balance += sale.total; });
-        approvedSalesInvoices.forEach((inv: any) => { balance -= (inv.paidAmount || 0); });
-        customerPosSales.forEach((sale: any) => { balance -= (sale.paidAmount || 0); });
-        filteredPayments.forEach((payment: any) => { balance -= payment.amount; });
-        filteredReturns.forEach((ret: any) => { balance -= ret.total; });
+        let balance = Number(customer.openingBalance) || 0;
         
-        return { ...customer, currentBalance: balance };
+        // 1. Approved Sales Invoices (Add unpaid parts)
+        const approvedSales = salesInvoices.filter((s: any) => s.customerId === customer.id && s.status === 'approved');
+        approvedSales.forEach((inv: any) => { 
+            balance += (Number(inv.total) - Number(inv.paidAmount || 0)); 
+        });
+
+        // 2. POS Sales (Add unpaid parts)
+        const customerPosSales = posSales.filter((s: any) => s.customerId === customer.id);
+        customerPosSales.forEach((sale: any) => { 
+            balance += (Number(sale.total) - Number(sale.paidAmount || 0)); 
+        });
+
+        // 3. Standalone Payments (Subtract payments NOT linked to an invoice to avoid double subtraction)
+        const standalonePayments = customerPayments.filter((p: any) => p.customerId === customer.id && !p.invoiceId);
+        standalonePayments.forEach((payment: any) => { 
+            balance -= Number(payment.amount); 
+        });
+
+        // 4. Returns (Subtract net return value)
+        const returns = salesReturns.filter((r: any) => r.customerId === customer.id);
+        returns.forEach((ret: any) => { 
+            balance -= (Number(ret.total) - Number(ret.paidAmount || 0)); 
+        });
+
+        const pReturns = posReturns.filter((r: any) => r.customerId === customer.id);
+        pReturns.forEach((ret: any) => {
+            balance -= (Number(ret.total) - Number(ret.paidAmount || 0));
+        });
+        
+        return { ...customer, currentBalance: balance, invoiceCount: approvedSales.length + customerPosSales.length };
     });
-  }, [customers, salesInvoices, posSales, customerPayments, salesReturns]);
+  }, [customers, salesInvoices, posSales, customerPayments, salesReturns, posReturns]);
 
   const handleSave = (customer: Customer) => {
     if (customer.id) {
@@ -233,8 +251,8 @@ export default function CustomersPage() {
                                     <TableCell className="font-medium">{customer.name}</TableCell>
                                     <TableCell className="hidden md:table-cell">{customer.phone || '-'}</TableCell>
                                     <TableCell className="text-center">{customer.creditLimit?.toLocaleString() || '0'}</TableCell>
-                                    <TableCell className={cn("text-center font-bold", customer.currentBalance > 0 ? "text-destructive" : "text-primary")}>
-                                        {customer.currentBalance.toLocaleString()}
+                                    <TableCell className={cn("text-center font-bold", customer.currentBalance > 0.01 ? "text-destructive" : "text-primary")}>
+                                        {customer.currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </TableCell>
                                     <TableCell className="text-center">
                                          <AlertDialog>
@@ -250,10 +268,7 @@ export default function CustomersPage() {
                                                         <List className="ml-2 h-4 w-4" /> كشف حساب
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
-                                                    <DropdownMenuItem onSelect={() => {
-                                                        setEditingCustomer(customer);
-                                                        setTimeout(() => setIsEditOpen(true), 150);
-                                                    }}>
+                                                    <DropdownMenuItem onSelect={() => handleEditClick(customer)}>
                                                         <Edit className="ml-2 h-4 w-4" /> تعديل
                                                     </DropdownMenuItem>
                                                     <AlertDialogTrigger asChild>

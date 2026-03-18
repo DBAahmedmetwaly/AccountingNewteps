@@ -128,7 +128,7 @@ const QuickPaymentDialog = ({ customer, onSave }: { customer: any, onSave: () =>
 };
 
 export default function CustomerReceivablesReport() {
-    const { customers, salesInvoices, posSales, posReturns, customerPayments, salesReturns, loading, dbAction } = useData();
+    const { customers, salesInvoices, posSales, posReturns, customerPayments, salesReturns, loading } = useData();
     const isMobile = useIsMobile();
     const [searchTerm, setSearchTerm] = useState("");
     
@@ -138,32 +138,32 @@ export default function CustomerReceivablesReport() {
         return customers.map((customer: Customer) => {
             let balance = Number(customer.openingBalance) || 0;
             
-            // 1. إضافة المبالغ المتبقية من فواتير البيع المعتمدة
+            // 1. Debits: Approved Sales (Total - PaidAmount) gives current unpaid per invoice
             const approvedSales = salesInvoices.filter((s: SaleInvoice) => s.customerId === customer.id && s.status === 'approved');
             approvedSales.forEach((inv: SaleInvoice) => { 
                 balance += (Number(inv.total) - Number(inv.paidAmount || 0)); 
             });
 
-            // 2. إضافة المبالغ المتبقية من فواتير الكاشير
+            // 2. Debits: POS Sales (Total - PaidAmount)
             const customerPosSales = posSales.filter((s: PosSale) => s.customerId === customer.id);
             customerPosSales.forEach((sale: PosSale) => { 
                 balance += (Number(sale.total) - Number(sale.paidAmount || 0)); 
             });
 
-            // 3. طرح المدفوعات غير المرتبطة بفواتير (لأن المدفوعات المرتبطة تم طرحها بالفعل في paidAmount)
-            const filteredPayments = customerPayments.filter((p: CustomerPayment) => p.customerId === customer.id && !p.invoiceId);
-            filteredPayments.forEach((payment: CustomerPayment) => { 
+            // 3. Credits: Standalone Payments (NOT linked to an invoice)
+            const standalonePayments = customerPayments.filter((p: CustomerPayment) => p.customerId === customer.id && !p.invoiceId);
+            standalonePayments.forEach((payment: CustomerPayment) => { 
                 balance -= Number(payment.amount); 
             });
 
-            // 4. طرح المرتجعات (المبالغ التي لم تُرد نقداً للعميل)
-            const filteredReturns = salesReturns.filter((r: SalesReturn) => r.customerId === customer.id);
-            filteredReturns.forEach((ret: SalesReturn) => { 
+            // 4. Credits: Returns (Net value not refunded in cash)
+            const returns = salesReturns.filter((r: SalesReturn) => r.customerId === customer.id);
+            returns.forEach((ret: SalesReturn) => { 
                 balance -= (Number(ret.total) - Number(ret.paidAmount || 0)); 
             });
 
-            const filteredPosReturns = posReturns.filter((r: PosReturn) => r.customerId === customer.id);
-            filteredPosReturns.forEach((ret: PosReturn) => {
+            const pReturns = posReturns.filter((r: PosReturn) => r.customerId === customer.id);
+            pReturns.forEach((ret: PosReturn) => {
                 balance -= (Number(ret.total) - Number(ret.paidAmount || 0));
             });
 
@@ -195,9 +195,7 @@ export default function CustomerReceivablesReport() {
     }, [filteredCustomers]);
     
     // Placeholder for refresh logic
-    const handlePaymentSaved = () => {
-       // DataProvider will auto-update
-    };
+    const handlePaymentSaved = () => {};
 
   return (
     <>
