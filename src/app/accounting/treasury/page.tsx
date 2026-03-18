@@ -143,6 +143,7 @@ export default function TreasuryPage() {
         posSales,
         payrollRecords,
         purchaseInvoices,
+        profitDistributions,
         dbAction, 
         getNextId,
         loading
@@ -235,7 +236,7 @@ export default function TreasuryPage() {
 
             return { ...account, currentBalance: balance };
         });
-    }, [rawCashAccounts, transactions, expenses, supplierPayments, employeeAdvances, customerPayments, salesInvoices, posSales, exceptionalIncomes, payrollRecords, purchaseInvoices]);
+    }, [rawCashAccounts, transactions, expenses, supplierPayments, employeeAdvances, customerPayments, salesInvoices, posSales, exceptionalIncomes, payrollRecords, purchaseInvoices, profitDistributions]);
     
     const sortedTransactions = useMemo(() => {
         return [...transactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());

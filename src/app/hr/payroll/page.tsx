@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -175,7 +174,8 @@ export default function PayrollPage() {
         getNextId, 
         loading,
         customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions,
-        expenses, supplierPayments, employeeAdvances: allAdvances, posSales
+        expenses, supplierPayments, employeeAdvances: allAdvances, posSales,
+        profitDistributions, payrollRecords
      } = useData();
     const { user } = useAuth();
     const { toast } = useToast();
@@ -188,25 +188,37 @@ export default function PayrollPage() {
         const balances = new Map<string, number>();
         cashAccounts.forEach((account: any) => {
             let balance = account.openingBalance || 0;
-            customerPayments.forEach((p: CustomerPayment) => { if(p.paidToAccountId === account.id) balance += p.amount });
-            salesInvoices.forEach((s: SaleInvoice) => { if (s.status === 'approved' && s.paidToAccountId === account.id) balance += (s.paidAmount || 0) });
-            exceptionalIncomes.forEach((i:any) => { if (i.paidToAccountId === account.id) balance += i.amount });
-            treasuryTransactions.forEach((tx: TreasuryTransaction) => { if (tx.accountId === account.id && tx.type === 'deposit') balance += tx.amount });
-             posSales.forEach((sale: PosSale) => {
-                if (account.warehouseId && sale.warehouseId === account.warehouseId) {
-                    const totalPaidOnSale = sale.paidAmount ?? sale.payments?.reduce((sum, p) => sum + p.amount, 0) ?? sale.total;
-                    balance += totalPaidOnSale;
+
+            customerPayments.filter((p:any) => p.paidToAccountId === account.id).forEach((p:any) => balance += p.amount);
+            salesInvoices.filter((s:any) => s.status === 'approved' && s.paidToAccountId === account.id).forEach((s: any) => {
+                const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
+                const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
+                if (initialCash > 0) balance += initialCash;
+            });
+            posSales.forEach((s: any) => {
+                const targetId = s.paidToAccountId || (account.warehouseId && s.warehouseId === account.warehouseId ? account.id : null);
+                if (targetId === account.id) {
+                    const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
+                    const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
+                    if (initialCash > 0) balance += initialCash;
                 }
             });
+            exceptionalIncomes.filter((i:any) => i.paidToAccountId === account.id).forEach((i:any) => balance += i.amount);
+            treasuryTransactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'deposit' && !tx.linkedTransaction).forEach((tx: any) => balance += tx.amount);
 
-            expenses.forEach((ex: Expense) => { if (ex.paidFromAccountId === account.id) balance -= ex.amount });
-            supplierPayments.forEach((sp: SupplierPayment) => { if (sp.paidFromAccountId === account.id) balance -= sp.amount });
-            allAdvances.forEach((ea: EmployeeAdvance) => { if (ea.paidFromAccountId === account.id) balance -= ea.amount });
-            treasuryTransactions.forEach((tx: TreasuryTransaction) => { if (tx.accountId === account.id && tx.type === 'withdrawal') balance -= tx.amount });
+            expenses.filter((ex: any) => ex.paidFromAccountId === account.id).forEach((ex: any) => balance -= ex.amount);
+            supplierPayments.filter((sp: any) => sp.paidFromAccountId === account.id).forEach((sp: any) => balance -= sp.amount);
+            allAdvances.filter((ea: any) => ea.paidFromAccountId === account.id).forEach((ea: any) => balance -= ea.amount);
+            profitDistributions.filter((pd: any) => pd.paidFromAccountId === account.id).forEach((pd: any) => balance -= pd.amount);
+            treasuryTransactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: any) => balance -= tx.amount);
+            (payrollRecords || []).filter((pr: any) => pr.paidFromAccountId === account.id).forEach((pr: any) => {
+                balance -= pr.payrollData.reduce((sum: number, p: any) => sum + p.netSalary, 0);
+            });
+
             balances.set(account.id, balance);
         });
         return balances;
-    }, [cashAccounts, customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions, expenses, supplierPayments, allAdvances, posSales]);
+    }, [cashAccounts, customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions, expenses, supplierPayments, allAdvances, posSales, profitDistributions, payrollRecords]);
 
 
     const handlePostJournalEntry = async (accountId: string, payrollDataToPost: PayrollResult[]) => {
@@ -364,6 +376,3 @@ export default function PayrollPage() {
     </>
     );
 }
-
-
-    

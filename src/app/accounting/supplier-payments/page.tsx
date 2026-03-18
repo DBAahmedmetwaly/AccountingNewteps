@@ -250,7 +250,7 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices, suppli
                 </div>
                  <div className="space-y-2">
                     <Label htmlFor="payment-notes">ملاحظات</Label>
-                    <Textarea id="payment-notes" value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="أدخل أي ملاحظات (اختياري)" disabled={!!formData.invoiceId} />
+                    <Textarea id="notes" value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="أدخل أي ملاحظات (اختياري)" disabled={!!formData.invoiceId} />
                 </div>
             </div>
              <Alert className="mt-4">
@@ -281,7 +281,7 @@ export default function SupplierPaymentsPage() {
         dbAction, 
         getNextId,
         customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions,
-        expenses, employeeAdvances, posSales,
+        expenses, employeeAdvances, posSales, profitDistributions, payrollRecords,
         loading 
     } = useData();
     const { toast } = useToast();
@@ -309,25 +309,40 @@ export default function SupplierPaymentsPage() {
         return rawCashAccounts.map((account: CashAccount) => {
             let balance = account.openingBalance || 0;
 
-            customerPayments.forEach((p:any) => { if(p.paidToAccountId === account.id) balance += p.amount });
-            salesInvoices.forEach((s: any) => { if (s.status === 'approved' && s.paidToAccountId === account.id) balance += (s.paidAmount || 0) });
-            exceptionalIncomes.forEach((i:any) => { if (i.paidToAccountId === account.id) balance += i.amount });
-            treasuryTransactions.forEach((tx: any) => { if (tx.accountId === account.id && tx.type === 'deposit') balance += tx.amount });
-            posSales.forEach((sale: any) => {
-                if (account.warehouseId && sale.warehouseId === account.warehouseId) {
-                    const totalPaidOnSale = sale.paidAmount ?? sale.payments?.reduce((sum: number, p: any) => sum + p.amount, 0) ?? sale.total;
-                    balance += totalPaidOnSale;
+            customerPayments.filter((p:any) => p.paidToAccountId === account.id).forEach((p:any) => balance += p.amount);
+            salesInvoices.filter((s:any) => s.status === 'approved' && s.paidToAccountId === account.id).forEach((s: any) => {
+                const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
+                const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
+                if (initialCash > 0) balance += initialCash;
+            });
+            posSales.forEach((s: any) => {
+                const targetId = s.paidToAccountId || (account.warehouseId && s.warehouseId === account.warehouseId ? account.id : null);
+                if (targetId === account.id) {
+                    const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
+                    const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
+                    if (initialCash > 0) balance += initialCash;
                 }
             });
+            exceptionalIncomes.filter((i:any) => i.paidToAccountId === account.id).forEach((i:any) => balance += i.amount);
+            treasuryTransactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'deposit' && !tx.linkedTransaction).forEach((tx: any) => balance += tx.amount);
 
-            expenses.forEach((ex: any) => { if (ex.paidFromAccountId === account.id) balance -= ex.amount });
-            payments.forEach((sp: any) => { if (sp.paidFromAccountId === account.id) balance -= sp.amount });
-            employeeAdvances.forEach((ea: any) => { if (ea.paidFromAccountId === account.id) balance -= ea.amount });
-            treasuryTransactions.forEach((tx: any) => { if (tx.accountId === account.id && tx.type === 'withdrawal') balance -= tx.amount });
+            payments.filter((sp: any) => sp.paidFromAccountId === account.id).forEach((sp: any) => balance -= sp.amount);
+            purchaseInvoices.filter((p: any) => p.paidFromAccountId === account.id).forEach((p: any) => {
+                const linkedPaymentsTotal = payments.filter(sp => sp.invoiceId === p.id).reduce((sum, sp) => sum + sp.amount, 0);
+                const initialPaid = (p.paidAmount || 0) - linkedPaymentsTotal;
+                if (initialPaid > 0) balance -= initialPaid;
+            });
+            expenses.filter((ex: any) => ex.paidFromAccountId === account.id).forEach((ex: any) => balance -= ex.amount);
+            employeeAdvances.filter((ea: any) => ea.paidFromAccountId === account.id).forEach((ea: any) => balance -= ea.amount);
+            profitDistributions.filter((pd: any) => pd.paidFromAccountId === account.id).forEach((pd: any) => balance -= pd.amount);
+            treasuryTransactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: any) => balance -= tx.amount);
+            (payrollRecords || []).filter((pr: any) => pr.paidFromAccountId === account.id).forEach((pr: any) => {
+                balance -= pr.payrollData.reduce((sum: number, p: any) => sum + p.netSalary, 0);
+            });
             
             return { ...account, currentBalance: balance };
         });
-    }, [loading, rawCashAccounts, customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions, expenses, payments, employeeAdvances, posSales]);
+    }, [loading, rawCashAccounts, customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions, expenses, payments, employeeAdvances, posSales, purchaseInvoices, profitDistributions, payrollRecords]);
     
      const getSupplierName = (supplierId: string) => {
         return suppliers.find((s: Supplier) => s.id === supplierId)?.name || 'غير معروف';

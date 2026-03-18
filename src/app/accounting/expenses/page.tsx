@@ -269,7 +269,7 @@ export default function ExpensesPage() {
     const { 
         expenses, warehouses, cashAccounts: rawCashAccounts, 
         customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions,
-        supplierPayments, employeeAdvances, posSales,
+        supplierPayments, employeeAdvances, posSales, profitDistributions, payrollRecords,
         dbAction, getNextId, loading: dataLoading 
     } = useData();
 
@@ -284,25 +284,35 @@ export default function ExpensesPage() {
         return rawCashAccounts.map((account: CashAccount) => {
             let balance = account.openingBalance || 0;
 
-            customerPayments.forEach((p:any) => { if(p.paidToAccountId === account.id) balance += p.amount });
-            salesInvoices.forEach((s: any) => { if (s.status === 'approved' && s.paidToAccountId === account.id) balance += (s.paidAmount || 0) });
-            exceptionalIncomes.forEach((i:any) => { if (i.paidToAccountId === account.id) balance += i.amount });
-            treasuryTransactions.forEach((tx: any) => { if (tx.accountId === account.id && tx.type === 'deposit') balance += tx.amount });
-             posSales.forEach((sale: PosSale) => {
-                if (account.warehouseId && sale.warehouseId === account.warehouseId) {
-                    const totalPaidOnSale = sale.paidAmount ?? sale.payments?.reduce((sum, p) => sum + p.amount, 0) ?? sale.total;
-                    balance += totalPaidOnSale;
+            customerPayments.filter((p:any) => p.paidToAccountId === account.id).forEach((p:any) => balance += p.amount);
+            salesInvoices.filter((s:any) => s.status === 'approved' && s.paidToAccountId === account.id).forEach((s: any) => {
+                const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
+                const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
+                if (initialCash > 0) balance += initialCash;
+            });
+            posSales.forEach((s: any) => {
+                const targetId = s.paidToAccountId || (account.warehouseId && s.warehouseId === account.warehouseId ? account.id : null);
+                if (targetId === account.id) {
+                    const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
+                    const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
+                    if (initialCash > 0) balance += initialCash;
                 }
             });
+            exceptionalIncomes.filter((i:any) => i.paidToAccountId === account.id).forEach((i:any) => balance += i.amount);
+            treasuryTransactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'deposit' && !tx.linkedTransaction).forEach((tx: any) => balance += tx.amount);
 
-            expenses.forEach((ex: any) => { if (ex.paidFromAccountId === account.id && ex.status !== 'pending') balance -= ex.amount });
-            supplierPayments.forEach((sp: any) => { if (sp.paidFromAccountId === account.id) balance -= sp.amount });
-            employeeAdvances.forEach((ea: any) => { if (ea.paidFromAccountId === account.id) balance -= ea.amount });
-            treasuryTransactions.forEach((tx: any) => { if (tx.accountId === account.id && tx.type === 'withdrawal') balance -= tx.amount });
+            expenses.filter((ex: any) => ex.paidFromAccountId === account.id && ex.status !== 'pending').forEach((ex: any) => balance -= ex.amount);
+            supplierPayments.filter((sp: any) => sp.paidFromAccountId === account.id).forEach((sp: any) => balance -= sp.amount);
+            employeeAdvances.filter((ea: any) => ea.paidFromAccountId === account.id).forEach((ea: any) => balance -= ea.amount);
+            profitDistributions.filter((pd: any) => pd.paidFromAccountId === account.id).forEach((pd: any) => balance -= pd.amount);
+            treasuryTransactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: any) => balance -= tx.amount);
+            (payrollRecords || []).filter((pr: any) => pr.paidFromAccountId === account.id).forEach((pr: any) => {
+                balance -= pr.payrollData.reduce((sum: number, p: any) => sum + p.netSalary, 0);
+            });
             
             return { ...account, currentBalance: balance };
         });
-    }, [dataLoading, rawCashAccounts, customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions, expenses, supplierPayments, employeeAdvances, posSales]);
+    }, [dataLoading, rawCashAccounts, customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions, expenses, supplierPayments, employeeAdvances, posSales, profitDistributions, payrollRecords]);
 
     const getCashAccountName = (accountId: string) => {
         return cashAccounts.find((acc: CashAccount) => acc.id === accountId)?.name || 'غير معروف';
