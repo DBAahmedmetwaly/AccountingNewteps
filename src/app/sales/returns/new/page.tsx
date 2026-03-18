@@ -152,7 +152,7 @@ export default function NewSalesReturnPage() {
       }
     } else {
         setItems([]);
-        setSupplierId("");
+        setCustomerId("");
         setWarehouseId("");
     }
   }, [selectedInvoiceId, allSales, allItemsData, salesReturns]);
@@ -160,7 +160,7 @@ export default function NewSalesReturnPage() {
   useEffect(() => {
     const newTotal = items.reduce((acc, item) => acc + item.total, 0);
     setTotal(newTotal);
-  }, [items]);
+  }, [items, discount]);
 
   const currentCustomerBalance = useMemo(() => {
     if (!customerId) return 0;
