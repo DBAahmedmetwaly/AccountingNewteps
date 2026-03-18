@@ -31,20 +31,21 @@ import { calculateStockForItemInWarehouse } from "@/lib/inventory-utils";
 
 // Data Interfaces
 interface Item { id: string; name: string; cost?: number; reorderPoint?: number; }
-interface Sale { date: string; warehouseId?: string; total: number; items: { id: string; qty: number; cost?: number; }[]; discount: number; subtotal: number; }
-interface Purchase { date: string; warehouseId: string; total: number; paidAmount?: number; }
+interface Sale { id: string; date: string; warehouseId?: string; total: number; items: { id: string; qty: number; cost?: number; }[]; discount: number; subtotal: number; paidAmount?: number; }
+interface Purchase { id: string; date: string; warehouseId: string; total: number; paidAmount?: number; }
 interface Customer { openingBalance: number; }
 interface Supplier { openingBalance: number; }
-interface CustomerPayment { amount: number; }
-interface SupplierPayment { amount: number; }
+interface CustomerPayment { amount: number; paidToAccountId: string; invoiceId?: string; }
+interface SupplierPayment { amount: number; paidFromAccountId: string; invoiceId?: string; }
 interface SalesReturn { total: number; }
 interface PurchaseReturn { total: number; }
-interface CashAccount { openingBalance: number; }
-interface Expense { amount: number; }
-interface ExceptionalIncome { amount: number; }
-interface TreasuryTransaction { type: 'deposit' | 'withdrawal'; amount: number; linkedTransaction?: boolean; }
-interface EmployeeAdvance { amount: number; }
-interface ProfitDistribution { amount: number; }
+interface CashAccount { id: string; openingBalance: number; warehouseId?: string; }
+interface Expense { amount: number; paidFromAccountId: string; }
+interface ExceptionalIncome { amount: number; paidToAccountId: string; }
+interface TreasuryTransaction { type: 'deposit' | 'withdrawal'; amount: number; accountId: string; linkedTransaction?: boolean; }
+interface EmployeeAdvance { amount: number; paidFromAccountId: string; }
+interface ProfitDistribution { amount: number; paidFromAccountId: string; }
+interface PayrollRecord { payrollData: { netSalary: number }[]; paidFromAccountId: string; }
 
 const chartConfig = {
   sales: { label: "المبيعات", color: "hsl(var(--chart-1))" },
@@ -59,7 +60,7 @@ export default function DashboardPage() {
         cashAccounts, expenses, exceptionalIncomes, treasuryTransactions,
         employeeAdvances, profitDistributions, inventory, warehouses, loading, stockOutRecords,
         inventoryClosings, stockInRecords, stockTransferRecords, stockAdjustmentRecords,
-        posReturns, stockIssuesToReps, stockReturnsFromReps
+        posReturns, stockIssuesToReps, stockReturnsFromReps, payrollRecords
     } = useData();
     const { user } = useAuth();
     const isMobile = useIsMobile();
@@ -146,52 +147,76 @@ export default function DashboardPage() {
 
         let totalCash = filteredCashAccounts.reduce((sum: number, acc: CashAccount) => sum + (acc.openingBalance || 0), 0);
         
+        // Deposits
         customerPayments.forEach((p: CustomerPayment) => {
-            if (filteredCashAccountIds.has((p as any).paidToAccountId)) totalCash += p.amount;
+            if (filteredCashAccountIds.has(p.paidToAccountId)) totalCash += p.amount;
         });
         
         exceptionalIncomes.forEach((i: ExceptionalIncome) => {
-            if (filteredCashAccountIds.has((i as any).paidToAccountId)) totalCash += i.amount;
+            if (filteredCashAccountIds.has(i.paidToAccountId)) totalCash += i.amount;
         });
         
         treasuryTransactions.filter((tx: TreasuryTransaction) => tx.type === 'deposit' && !tx.linkedTransaction).forEach((tx: TreasuryTransaction) => {
-            if (filteredCashAccountIds.has((tx as any).accountId)) totalCash += tx.amount;
+            if (filteredCashAccountIds.has(tx.accountId)) totalCash += tx.amount;
         });
         
-        salesInvoices.filter((s:any) => s.status === 'approved' && isWarehouseAllowed(s.warehouseId)).forEach((s: any) => {
-            totalCash += s.paidAmount || 0;
-        });
-        
-        posSales.filter((s: any) => isWarehouseAllowed(s.warehouseId)).forEach((s: any) => {
-            if (s.payments && s.payments.length > 0) {
-                 s.payments.forEach((p:any) => totalCash += p.amount);
-            } else {
-                totalCash += s.paidAmount || 0
+        // Correct Sales Intake logic to avoid double counting
+        const approvedSales = salesInvoices.filter((s:any) => s.status === 'approved' && isWarehouseAllowed(s.warehouseId));
+        approvedSales.forEach((s: any) => {
+            if (filteredCashAccountIds.has(s.paidToAccountId)) {
+                const linkedPaymentsTotal = customerPayments
+                    .filter((p: CustomerPayment) => p.invoiceId === s.id)
+                    .reduce((sum, p) => sum + p.amount, 0);
+                const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
+                if (initialCash > 0) totalCash += initialCash;
             }
         });
         
+        posSales.filter((s: any) => isWarehouseAllowed(s.warehouseId)).forEach((s: any) => {
+            if (filteredCashAccountIds.has(s.paidToAccountId)) {
+                const linkedPaymentsTotal = customerPayments
+                    .filter((p: CustomerPayment) => p.invoiceId === s.id)
+                    .reduce((sum, p) => sum + p.amount, 0);
+                const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
+                if (initialCash > 0) totalCash += initialCash;
+            }
+        });
+        
+        // Withdrawals
         expenses.forEach((e: Expense) => {
-            if (filteredCashAccountIds.has((e as any).paidFromAccountId)) totalCash -= e.amount;
+            if (filteredCashAccountIds.has(e.paidFromAccountId)) totalCash -= e.amount;
         });
         
         supplierPayments.forEach((p: SupplierPayment) => {
-            if (filteredCashAccountIds.has((p as any).paidFromAccountId)) totalCash -= p.amount;
+            if (filteredCashAccountIds.has(p.paidFromAccountId)) totalCash -= p.amount;
         });
         
-        purchaseInvoices.filter((p: Purchase) => isWarehouseAllowed(p.warehouseId)).forEach((p: Purchase) => {
-            totalCash -= (p.paidAmount || 0);
+        purchaseInvoices.filter((p: any) => isWarehouseAllowed(p.warehouseId)).forEach((p: any) => {
+            if (filteredCashAccountIds.has(p.paidFromAccountId)) {
+                const linkedPaymentsTotal = supplierPayments
+                    .filter((sp: SupplierPayment) => sp.invoiceId === p.id)
+                    .reduce((sum, sp) => sum + sp.amount, 0);
+                const initialPaid = (p.paidAmount || 0) - linkedPaymentsTotal;
+                if (initialPaid > 0) totalCash -= initialPaid;
+            }
         });
         
         employeeAdvances.forEach((ea: EmployeeAdvance) => {
-            if (filteredCashAccountIds.has((ea as any).paidFromAccountId)) totalCash -= ea.amount;
+            if (filteredCashAccountIds.has(ea.paidFromAccountId)) totalCash -= ea.amount;
         });
         
         profitDistributions.forEach((pd: ProfitDistribution) => {
-            if (filteredCashAccountIds.has((pd as any).paidFromAccountId)) totalCash -= pd.amount;
+            if (filteredCashAccountIds.has(pd.paidFromAccountId)) totalCash -= pd.amount;
         });
         
         treasuryTransactions.filter((tx: TreasuryTransaction) => tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: TreasuryTransaction) => {
-            if (filteredCashAccountIds.has((tx as any).accountId)) totalCash -= tx.amount;
+            if (filteredCashAccountIds.has(tx.accountId)) totalCash -= tx.amount;
+        });
+
+        payrollRecords?.forEach((pr: any) => {
+            if (filteredCashAccountIds.has(pr.paidFromAccountId)) {
+                totalCash -= pr.payrollData.reduce((sum: number, p: any) => sum + p.netSalary, 0);
+            }
         });
 
         const warehousesToConsider = warehouses.filter((w: any) => isWarehouseAllowed(w.id));
@@ -217,41 +242,28 @@ export default function DashboardPage() {
         let ar = 0;
         customers.forEach((c: any) => {
             let balance = Number(c.openingBalance) || 0;
-            
-            // Add unpaid portions of invoices
             salesInvoices.filter((s:any) => s.status === 'approved' && s.customerId === c.id && isWarehouseAllowed(s.warehouseId))
                 .forEach((s: any) => balance += (Number(s.total) - Number(s.paidAmount || 0)));
-                
             posSales.filter((s:any) => s.customerId === c.id && isWarehouseAllowed(s.warehouseId))
-                .forEach((s: any) => balance += (Number(s.total) - Number(s.paidAmount || 0)));
-            
-            // Subtract Standalone Payments only (linked ones are handled by s.paidAmount)
+                .forEach((s:any) => balance += (Number(s.total) - Number(s.paidAmount || 0)));
             customerPayments.filter((p: any) => p.customerId === c.id && !p.invoiceId)
                 .forEach((p: any) => balance -= Number(p.amount));
-            
-            // Subtract Net Returns
             salesReturns.filter((r: any) => r.customerId === c.id && isWarehouseAllowed(r.warehouseId))
                 .forEach((r: any) => balance -= (Number(r.total) - Number(r.paidAmount || 0)));
-                
+            posReturns.filter((r: any) => r.customerId === c.id && isWarehouseAllowed(r.warehouseId))
+                .forEach((r: any) => balance -= (Number(r.total) - Number(r.paidAmount || 0)));
             ar += balance;
         });
 
         let ap = 0;
         suppliers.forEach((s: any) => {
             let balance = Number(s.openingBalance) || 0;
-            
-            // Add unpaid portions
             purchaseInvoices.filter((p: any) => p.supplierId === s.id && isWarehouseAllowed(p.warehouseId))
                 .forEach((p: any) => balance += (Number(p.total) - Number(p.paidAmount || 0)));
-                
-            // Subtract Standalone Payments
             supplierPayments.filter((p: any) => p.supplierId === s.id && !p.invoiceId)
                 .forEach((p: any) => balance -= Number(p.amount));
-                
-            // Subtract Net Returns
             purchaseReturns.filter((r: any) => r.supplierId === s.id && isWarehouseAllowed(r.warehouseId))
                 .forEach((r: any) => balance -= (Number(r.total) - Number(r.paidAmount || 0)));
-                
             ap += balance;
         });
 
@@ -291,7 +303,7 @@ export default function DashboardPage() {
     }, [
         cashAccounts, customerPayments, exceptionalIncomes, treasuryTransactions, expenses, 
         supplierPayments, purchaseInvoices, employeeAdvances, profitDistributions, customers, 
-        salesInvoices, posSales, salesReturns, suppliers, purchaseReturns, inventory, items, warehouses, filters.warehouseId, user, filteredData
+        salesInvoices, posSales, salesReturns, suppliers, purchaseReturns, inventory, items, warehouses, filters.warehouseId, user, filteredData, posReturns, payrollRecords
     ]);
 
     const handleRecomputeInventoryValue = () => {
@@ -336,7 +348,7 @@ export default function DashboardPage() {
 
     const salesAndProfitChartData = useMemo(() => {
         const dailyData: { [date: string]: { sales: number; profit: number } } = {};
-        filteredData.sales.forEach((sale: Sale) => {
+        filteredData.sales.forEach((sale: any) => {
             const date = new Date(sale.date).toISOString().split('T')[0];
             if (!dailyData[date]) dailyData[date] = { sales: 0, profit: 0 };
             
@@ -345,7 +357,7 @@ export default function DashboardPage() {
             }, 0);
             
             dailyData[date].sales += sale.total;
-            dailyData[date].profit += (sale.subtotal - saleCost - sale.discount);
+            dailyData[date].profit += ((sale.subtotal || sale.total) - saleCost - (sale.discount || 0));
         });
         
         return Object.entries(dailyData).map(([date, data]) => ({ date: new Date(date).toLocaleDateString('ar-EG', {month: 'short', day: 'numeric'}), ...data }))
@@ -354,7 +366,7 @@ export default function DashboardPage() {
     
     const topBranchesChartData = useMemo(() => {
         const branchSales: {[id: string]: number} = {};
-        filteredData.sales.forEach((s: Sale) => {
+        filteredData.sales.forEach((s: any) => {
             if(s.warehouseId) {
                 branchSales[s.warehouseId] = (branchSales[s.warehouseId] || 0) + s.total;
             }

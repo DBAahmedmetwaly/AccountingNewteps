@@ -1,5 +1,4 @@
 
-
 "use client";
 
 // استيراد المكونات والأدوات اللازمة
@@ -34,7 +33,7 @@ interface CashAccount {
     openingBalance: number;
     salesRepId?: string;
     userId?: string;
-    warehouseId?: string; // Add warehouseId
+    warehouseId?: string;
 }
 
 interface TreasuryTransaction {
@@ -52,25 +51,19 @@ interface TreasuryTransaction {
 }
 
 interface Expense { id: string; amount: number; paidFromAccountId: string; expenseType: string; }
-interface SupplierPayment { id: string; amount: number; paidFromAccountId: string; }
+interface SupplierPayment { id: string; amount: number; paidFromAccountId: string; invoiceId?: string; }
 interface EmployeeAdvance { id: string; amount: number; paidFromAccountId: string; date: string; }
-interface CustomerPayment { id: string; amount: number; paidToAccountId: string; }
+interface CustomerPayment { id: string; amount: number; paidToAccountId: string; invoiceId?: string; }
 interface SaleInvoice { id: string; paidAmount?: number; paidToAccountId?: string; status?: 'approved'|'pending' }
-interface PosSale { id: string; warehouseId: string; date: string; payments: { method: string, amount: number }[]; paidAmount?: number; total: number; }
+interface PosSale { id: string; warehouseId: string; date: string; payments: { method: string, amount: number }[]; paidAmount?: number; total: number; paidToAccountId?: string; }
 interface PayrollRecord { id: string; date: string; paidFromAccountId: string; payrollData: { netSalary: number }[] }
+interface PurchaseInvoice { id: string; paidAmount?: number; paidFromAccountId?: string; }
 
 
 /**
  * مكون `TransactionForm`
- * @param {object} props - الخصائص المستلمة.
- * @param {Function} props.onSave - دالة يتم استدعاؤها لحفظ بيانات الحركة.
- * @param {CashAccount[]} props.cashAccounts - قائمة الحسابات النقدية.
- * @param {Function} props.onClose - دالة لإغلاق الحوار بعد الحفظ.
- * @returns {JSX.Element} نموذج لإضافة حركة خزينة جديدة (إيداع أو سحب).
- * هذا المكون مسؤول عن عرض نموذج لإدخال عمليات إيداع رأس المال أو المسحوبات الشخصية.
  */
 const TransactionForm = ({ onSave, cashAccounts, onClose }: { onSave: (data: Omit<TreasuryTransaction, 'id' | 'receiptNumber'>) => void, cashAccounts: CashAccount[], onClose: () => void }) => {
-    // حالة (state) لتخزين بيانات النموذج
     const [formData, setFormData] = useState<Omit<TreasuryTransaction, 'id' | 'receiptNumber'>>({
         date: new Date().toISOString().split('T')[0],
         amount: 0,
@@ -79,12 +72,6 @@ const TransactionForm = ({ onSave, cashAccounts, onClose }: { onSave: (data: Omi
         type: "deposit",
     });
 
-    /**
-     * دالة `handleSubmit`
-     * @param {React.FormEvent} e - كائن الحدث.
-     * يتم استدعاؤها عند إرسال النموذج. تقوم بمنع السلوك الافتراضي، واستدعاء دالة الحفظ `onSave`
-     * مع تمرير بيانات النموذج، ثم إعادة تعيين النموذج وإغلاق الحوار.
-     */
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         await onSave({ ...formData, amount: Number(formData.amount) });
@@ -98,7 +85,6 @@ const TransactionForm = ({ onSave, cashAccounts, onClose }: { onSave: (data: Omi
         onClose();
     };
     
-    // ترشيح الحسابات لاستبعاد خزائن المناديب من عمليات الإيداع/السحب المباشرة
     const filteredAccounts = cashAccounts.filter((acc: CashAccount) => !acc.salesRepId && !acc.userId);
 
     return (
@@ -144,12 +130,6 @@ const TransactionForm = ({ onSave, cashAccounts, onClose }: { onSave: (data: Omi
     );
 };
 
-/**
- * المكون الرئيسي لصفحة الخزينة `TreasuryPage`.
- * هذا المكون مسؤول عن عرض أرصدة جميع الحسابات النقدية، والسماح بإضافة حركات إيداع وسحب،
- * وعرض سجل بهذه الحركات.
- * @returns {JSX.Element} واجهة مستخدم كاملة لإدارة حركة الخزينة.
- */
 export default function TreasuryPage() {
     const { 
         treasuryTransactions: transactions, 
@@ -161,8 +141,8 @@ export default function TreasuryPage() {
         salesInvoices,
         exceptionalIncomes,
         posSales,
-        paymentMethods,
         payrollRecords,
+        purchaseInvoices,
         dbAction, 
         getNextId,
         loading
@@ -171,18 +151,8 @@ export default function TreasuryPage() {
     const { toast } = useToast();
     const { user } = useAuth();
     
-    /**
-     * دالة `getAccountName`
-     * @param {string} accountId - معرف الحساب.
-     * @returns {string} اسم الحساب أو 'غير معروف'.
-     */
     const getAccountName = (accountId: string) => rawCashAccounts.find((acc: CashAccount) => acc.id === accountId)?.name || 'غير معروف';
     
-    /**
-     * دالة `getAccountTypeIcon`
-     * @param {string} accountId - معرف الحساب.
-     * @returns {JSX.Element | null} أيقونة تمثل نوع الحساب (خزينة، بنك، عهدة).
-     */
     const getAccountTypeIcon = (accountId: string) => {
         const account = rawCashAccounts.find((acc: CashAccount) => acc.id === accountId);
         if (!account) return null;
@@ -191,15 +161,9 @@ export default function TreasuryPage() {
         return <Wallet className="h-4 w-4 text-muted-foreground" />;
     };
 
-    /**
-     * دالة `handleSave`
-     * @param {Omit<TreasuryTransaction, 'id' | 'receiptNumber'>} data - بيانات الحركة الجديدة.
-     * دالة غير متزامنة لحفظ حركة خزينة جديدة في قاعدة البيانات.
-     */
     const handleSave = async (data: Omit<TreasuryTransaction, 'id' | 'receiptNumber'>) => {
         try {
             const receiptNumber = `ح-خ-${await getNextId('treasuryTransaction')}`;
-            
             const newTransaction: TreasuryTransaction = {
                 ...data,
                 receiptNumber,
@@ -213,47 +177,66 @@ export default function TreasuryPage() {
         }
     };
 
-    // `useMemo` لحساب الرصيد الحالي لكل حساب نقدي.
-    // يتم حساب الرصيد بجمع رصيد أول المدة مع كل الإيداعات وطرح كل المسحوبات.
+    // Corrected Balance Calculation logic to avoid double counting
     const cashAccounts = useMemo(() => {
-
         return rawCashAccounts.map((account: CashAccount) => {
             let balance = account.openingBalance || 0;
 
-            // Deposits
-            customerPayments.forEach((p:CustomerPayment) => { if(p.paidToAccountId === account.id) balance += p.amount });
-            salesInvoices.forEach((s:SaleInvoice) => { if (s.status === 'approved' && s.paidToAccountId === account.id) balance += (s.paidAmount || 0) });
-            exceptionalIncomes.forEach((i:any) => { if (i.paidToAccountId === account.id) balance += i.amount });
-            transactions.forEach((tx: TreasuryTransaction) => { if (tx.accountId === account.id && tx.type === 'deposit') balance += tx.amount });
+            // --- INFLOWS ---
+            // 1. Standalone Customer Payments
+            customerPayments.filter((p:any) => p.paidToAccountId === account.id).forEach((p:any) => balance += p.amount);
+            
+            // 2. Initial Cash Intake from Sales (excluding portion already recorded as customerPayments)
+            salesInvoices.filter((s:any) => s.status === 'approved' && s.paidToAccountId === account.id).forEach((s: any) => {
+                const linkedPaymentsTotal = customerPayments
+                    .filter((p: CustomerPayment) => p.invoiceId === s.id)
+                    .reduce((sum, p) => sum + p.amount, 0);
+                const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
+                if (initialCash > 0) balance += initialCash;
+            });
 
-            posSales.forEach((sale: PosSale) => {
-                if (account.warehouseId && sale.warehouseId === account.warehouseId) {
-                    const totalPaidOnSale = sale.paidAmount ?? sale.payments?.reduce((sum, p) => sum + p.amount, 0) ?? sale.total;
-                    balance += totalPaidOnSale;
+            posSales.forEach((s: any) => {
+                // Determine target account: either specified or derived from branch
+                const targetId = s.paidToAccountId || (account.warehouseId && s.warehouseId === account.warehouseId ? account.id : null);
+                if (targetId === account.id) {
+                    const linkedPaymentsTotal = customerPayments
+                        .filter((p: CustomerPayment) => p.invoiceId === s.id)
+                        .reduce((sum, p) => sum + p.amount, 0);
+                    const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
+                    if (initialCash > 0) balance += initialCash;
                 }
             });
 
-            // Withdrawals
-            expenses.forEach((ex: Expense) => { if (ex.paidFromAccountId === account.id) balance -= ex.amount });
-            supplierPayments.forEach((sp: SupplierPayment) => { if (sp.paidFromAccountId === account.id) balance -= sp.amount });
-            employeeAdvances.forEach((ea: EmployeeAdvance) => { if (ea.paidFromAccountId === account.id) balance -= ea.amount });
-            transactions.forEach((tx: TreasuryTransaction) => { if (tx.accountId === account.id && tx.type === 'withdrawal') balance -= tx.amount });
-            (payrollRecords || []).forEach((pr: PayrollRecord) => {
-                if (pr.paidFromAccountId === account.id) {
-                    const totalNetSalary = pr.payrollData.reduce((sum, p) => sum + p.netSalary, 0);
-                    balance -= totalNetSalary;
-                }
+            // 3. Other Inflows
+            exceptionalIncomes.filter((i:any) => i.paidToAccountId === account.id).forEach((i:any) => balance += i.amount);
+            transactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'deposit' && !tx.linkedTransaction).forEach((tx: any) => balance += tx.amount);
+
+            // --- OUTFLOWS ---
+            // 1. Standalone Supplier Payments
+            supplierPayments.filter((sp: any) => sp.paidFromAccountId === account.id).forEach((sp: any) => balance -= sp.amount);
+
+            // 2. Initial Cash Payments for Purchases (excluding portion recorded as supplierPayments)
+            purchaseInvoices.filter((p: any) => p.paidFromAccountId === account.id).forEach((p: any) => {
+                const linkedPaymentsTotal = supplierPayments
+                    .filter((sp: SupplierPayment) => sp.invoiceId === p.id)
+                    .reduce((sum, sp) => sum + sp.amount, 0);
+                const initialPaid = (p.paidAmount || 0) - linkedPaymentsTotal;
+                if (initialPaid > 0) balance -= initialPaid;
             });
 
+            // 3. Other Outflows
+            expenses.filter((ex: any) => ex.paidFromAccountId === account.id).forEach((ex: any) => balance -= ex.amount);
+            employeeAdvances.filter((ea: any) => ea.paidFromAccountId === account.id).forEach((ea: any) => balance -= ea.amount);
+            profitDistributions.filter((pd: any) => pd.paidFromAccountId === account.id).forEach((pd: any) => balance -= pd.amount);
+            transactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: any) => balance -= tx.amount);
+            (payrollRecords || []).filter((pr: any) => pr.paidFromAccountId === account.id).forEach((pr: any) => {
+                balance -= pr.payrollData.reduce((sum: number, p: any) => sum + p.netSalary, 0);
+            });
 
-            return {
-                ...account,
-                currentBalance: balance
-            };
+            return { ...account, currentBalance: balance };
         });
-    }, [rawCashAccounts, transactions, expenses, supplierPayments, employeeAdvances, customerPayments, salesInvoices, posSales, exceptionalIncomes, paymentMethods, payrollRecords]);
+    }, [rawCashAccounts, transactions, expenses, supplierPayments, employeeAdvances, customerPayments, salesInvoices, posSales, exceptionalIncomes, payrollRecords, purchaseInvoices]);
     
-    // `useMemo` لترتيب حركات الخزينة حسب التاريخ لعرضها في الجدول.
     const sortedTransactions = useMemo(() => {
         return [...transactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [transactions]);
@@ -264,7 +247,6 @@ export default function TreasuryPage() {
       <PageHeader title="إدارة حركة الخزينة" />
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
         
-         {/* بطاقة عرض أرصدة الحسابات */}
          <Card>
             <CardHeader>
                 <CardTitle>أرصدة الحسابات</CardTitle>
@@ -297,7 +279,6 @@ export default function TreasuryPage() {
          </Card>
 
         <div className="grid gap-6 lg:grid-cols-5">
-            {/* بطاقة نموذج الإضافة */}
             <Card className="lg:col-span-2">
             <CardHeader>
                 <CardTitle>إضافة حركة جديدة (رأس مال/مسحوبات)</CardTitle>
@@ -310,7 +291,6 @@ export default function TreasuryPage() {
             </CardContent>
             </Card>
             
-            {/* بطاقة جدول السجلات */}
             <Card className="lg:col-span-3">
                 <CardHeader>
                     <CardTitle>سجل حركات رأس المال والمسحوبات</CardTitle>
@@ -332,7 +312,7 @@ export default function TreasuryPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {sortedTransactions.map((tx: TreasuryTransaction) => (
+                                    {sortedTransactions.map((tx: any) => (
                                         <TableRow key={tx.id}>
                                             <TableCell>
                                                 <div className="flex items-center gap-2 font-medium">
@@ -370,7 +350,3 @@ export default function TreasuryPage() {
     </>
     );
 }
-
-    
-
-    
