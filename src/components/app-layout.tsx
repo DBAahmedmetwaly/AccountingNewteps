@@ -88,7 +88,7 @@ import {
   ArrowLeft,
   Moon,
   Sun,
-  LayoutGrid, // Added
+  LayoutGrid, 
   ClipboardPlus,
   Scale,
   Loader2,
@@ -310,7 +310,7 @@ export const navStructure = [
     { type: 'collapsible', title: dictionary.nav.customersAndSales, icon: <UserSquare />, modules: ['customers_data', 'sales_invoices', 'sales_returns', 'accounting_customerPayments'], children: [
         { type: 'link', href: '/master-data/customers', module: 'customers_data', title: dictionary.nav.customersData },
         { type: 'link', href: '/sales/invoices/list', module: 'sales_invoices', title: dictionary.nav.salesInvoices },
-        { type: 'link', href: '/sales/returns/new', module: 'sales_returns', title: dictionary.nav.salesReturns },
+        { type: 'link', href: '/sales/returns', module: 'sales_returns', title: dictionary.nav.salesReturns },
         { type: 'link', href: '/accounting/customer-payments', module: 'accounting_customerPayments', title: dictionary.nav.customerPayments },
     ]},
     { type: 'collapsible', title: dictionary.nav.suppliersAndPurchases, icon: <Building2 />, modules: ['suppliers_data', 'purchases_invoices', 'purchases_orders', 'purchases_returns', 'accounting_supplierPayments'], children: [

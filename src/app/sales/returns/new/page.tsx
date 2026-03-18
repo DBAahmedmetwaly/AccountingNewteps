@@ -1,3 +1,4 @@
+
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -159,9 +160,9 @@ export default function NewSalesReturnPage() {
   }, [selectedInvoiceId, allSales, allItemsData, salesReturns]);
   
   useEffect(() => {
-    const newTotal = items.reduce((acc, item) => acc + item.total, 0);
-    setSubtotal(newTotal);
-    setTotal(newTotal - discount);
+    const newSubtotal = items.reduce((acc, item) => acc + item.total, 0);
+    setSubtotal(newSubtotal);
+    setTotal(newSubtotal - discount);
   }, [items, discount]);
 
   const currentCustomerBalance = useMemo(() => {
