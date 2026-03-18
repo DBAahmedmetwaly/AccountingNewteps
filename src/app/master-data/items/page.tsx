@@ -274,6 +274,7 @@ const MatrixGeneratorDialog = ({ onSave, onOpenChange, itemSections, itemCategor
                     const udf1Code = String(udf1?.code || '00').padStart(2, '0');
                     const udf2Code = String(udf2?.code || '00').padStart(2, '0');
                     const itemIndexCode = String(nextId).padStart(3, '0');
+                    const parentIdCode = '000'; // Fixed the missing variable
 
                     const base = `${clothingPrefix}${sectionCode}${categoryCode}${parentIdCode}${udf1Code}${udf2Code}${itemIndexCode}`.slice(0, 12);
                     const checkDigit = calculateEan13CheckDigit(base);
