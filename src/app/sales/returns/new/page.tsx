@@ -1,3 +1,4 @@
+
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -7,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Trash2, Save, Loader2, Info, Wallet } from "lucide-react";
+import { Trash2, Save, Loader2, Info, Wallet, AlertTriangle } from "lucide-react";
 import React, { useState, useEffect, useMemo } from "react";
 import { useData } from "@/contexts/data-provider";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +17,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { useAuth } from "@/contexts/auth-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface ReturnItem {
   id: string; 
@@ -79,11 +81,34 @@ export default function NewSalesReturnPage() {
   }, [allSales, filters]);
 
   const invoiceOptions = useMemo(() => {
-      return filteredInvoices.map((inv: any) => ({
-          value: inv.id,
-          label: `${inv.invoiceNumber} - ${inv.customerName} - (${new Date(inv.date).toLocaleDateString('ar-EG')})`
-      }));
-  }, [filteredInvoices]);
+      return filteredInvoices.map((inv: any) => {
+          // Calculate if fully or partially returned
+          const previousReturns = (salesReturns || []).filter((r: any) => String(r.originalInvoiceId) === String(inv.id));
+          const totalSold = (inv.items || []).reduce((acc: number, item: any) => acc + item.qty, 0);
+          const totalReturned = previousReturns.reduce((acc: number, r: any) => {
+              return acc + (r.items || []).reduce((subAcc: number, item: any) => subAcc + item.qty, 0);
+          }, 0);
+
+          let statusLabel = '';
+          let isFull = false;
+          let isPartial = false;
+
+          if (totalReturned >= totalSold && totalSold > 0) {
+              statusLabel = '[مرتجعة كلياً]';
+              isFull = true;
+          } else if (totalReturned > 0) {
+              statusLabel = `[مرتجع جزئي: ${totalReturned}/${totalSold}]`;
+              isPartial = true;
+          }
+
+          return {
+              value: inv.id,
+              label: `${inv.invoiceNumber} - ${inv.customerName} ${statusLabel}`,
+              isFull,
+              isPartial
+          };
+      });
+  }, [filteredInvoices, salesReturns]);
 
   const customerOptions = useMemo(() => ([{value: 'all', label: 'كل العملاء'}, ...allCustomersData.map((c:any) => ({value: c.id, label: c.name}))]), [allCustomersData]);
   const warehouseOptions = useMemo(() => ([{value: 'all', label: 'كل المخازن'}, ...allWarehousesData.map((w:any) => ({value: w.id, label: w.name}))]), [allWarehousesData]);
@@ -95,7 +120,6 @@ export default function NewSalesReturnPage() {
         setCustomerId(invoice.customerId);
         setWarehouseId(invoice.warehouseId);
 
-        // Calculate previous returns
         const previousReturns = (salesReturns || []).filter((r: any) => String(r.originalInvoiceId) === String(selectedInvoiceId));
         const prevReturnedByItem = new Map<string, number>();
         previousReturns.forEach((r: any) => {
@@ -128,7 +152,7 @@ export default function NewSalesReturnPage() {
       }
     } else {
         setItems([]);
-        setCustomerId("");
+        setSupplierId("");
         setWarehouseId("");
     }
   }, [selectedInvoiceId, allSales, allItemsData, salesReturns]);
@@ -162,12 +186,12 @@ export default function NewSalesReturnPage() {
 
     salesReturns.filter((r: any) => r.customerId === customerId)
         .forEach((r: any) => {
-            balance -= (Number(r.total) - Number(r.paidAmount || 0));
+            balance -= Number(r.total);
         });
     
     posReturns.filter((r: any) => r.customerId === customerId)
         .forEach((r: any) => {
-            balance -= (Number(r.total) - Number(r.paidAmount || 0));
+            balance -= Number(r.total);
         });
 
     return balance;
@@ -226,9 +250,6 @@ export default function NewSalesReturnPage() {
         toast({ variant: 'destructive', title: 'بيانات ناقصة', description: 'يرجى اختيار الخزينة التي تم دفع المبلغ منها.' });
         return;
     }
-
-    const invoice = allSales.find((inv: any) => inv.id === selectedInvoiceId);
-    if (!invoice) return;
 
     setIsSaving(true);
     try {
@@ -420,13 +441,21 @@ export default function NewSalesReturnPage() {
                     </Card>
                     <div className="space-y-2">
                         <Label htmlFor="invoice-select">اختر فاتورة البيع</Label>
-                        <Combobox
-                            options={invoiceOptions}
-                            value={selectedInvoiceId || ''}
-                            onValueChange={setSelectedInvoiceId}
-                            placeholder="اختر فاتورة..."
-                            emptyMessage="لا توجد فواتير تطابق البحث."
-                        />
+                        <div className="w-full">
+                            <Combobox
+                                options={invoiceOptions}
+                                value={selectedInvoiceId || ''}
+                                onValueChange={setSelectedInvoiceId}
+                                placeholder="اختر فاتورة..."
+                                emptyMessage="لا توجد فواتير تطابق البحث."
+                                className="w-full"
+                            />
+                        </div>
+                        {/* Legend for colors */}
+                        <div className="flex gap-4 mt-2 text-xs">
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-100 border border-red-300 rounded"/> مرتجعة كلياً</div>
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-amber-50 border border-amber-200 rounded"/> مرتجعة جزئياً</div>
+                        </div>
                     </div>
                 </div>
             ) : (

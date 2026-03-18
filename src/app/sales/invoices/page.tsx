@@ -1,3 +1,4 @@
+
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -331,7 +332,7 @@ export default function SalesInvoicePage() {
              setNewItem(prev => ({
                  ...prev, 
                  price: unit.price || (item.price || 0) * unit.factor,
-                 code: unit.barcode || item.code || ''
+                 code: unit.barcode || item.code || '' // Update code from unit or fallback to item
              }));
         }
     }
