@@ -53,6 +53,11 @@ interface CashAccount {
     salesRepId?: string;
 }
 
+interface Warehouse {
+    id: string;
+    name: string;
+}
+
 interface SaleInvoice {
   id: string;
   invoiceNumber: string;
@@ -65,7 +70,7 @@ interface SaleInvoice {
 
 const d = dictionary.pages.customerPayments;
 
-const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices }: { onSave: (data: Omit<CustomerPayment, 'id' | 'receiptNumber'>) => void, customers: Customer[], cashAccounts: CashAccount[], salesInvoices: SaleInvoice[] }) => {
+const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices, warehouses }: { onSave: (data: Omit<CustomerPayment, 'id' | 'receiptNumber'>) => void, customers: Customer[], cashAccounts: CashAccount[], salesInvoices: SaleInvoice[], warehouses: Warehouse[] }) => {
     const [formData, setFormData] = useState<Omit<CustomerPayment, 'id' | 'receiptNumber'>>({ 
         date: new Date().toISOString().split('T')[0], 
         amount: 0, 
@@ -78,7 +83,14 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices }: { onSav
     const [availableCashAccounts, setAvailableCashAccounts] = useState<CashAccount[]>([]);
     
     const customerOptions = React.useMemo(() => customers.map((c: Customer) => ({ value: c.id, label: c.name })), [customers]);
-    const cashAccountOptions = React.useMemo(() => availableCashAccounts.map((c: CashAccount) => ({ value: c.id, label: c.name })), [availableCashAccounts]);
+    
+    const cashAccountOptions = React.useMemo(() => {
+        return availableCashAccounts.map((c: CashAccount) => {
+            const warehouse = warehouses.find(w => w.id === c.warehouseId);
+            const label = warehouse ? `${c.name} (${warehouse.name})` : c.name;
+            return { value: c.id, label };
+        });
+    }, [availableCashAccounts, warehouses]);
 
     const customerInvoicesWithBalance = useMemo(() => {
         if (!formData.customerId) return [];
@@ -112,7 +124,7 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices }: { onSav
             // 2. إذا كانت هناك فاتورة مختارة، نبحث عن خزينة الفرع التابع لها
             const branchCashAccount = nonRepAccounts.find((acc: CashAccount) => acc.warehouseId === selectedInvoiceDetails.warehouseId);
             if (branchCashAccount) {
-                // إذا وجدت خزينة للفرع، هي الخيار الوحيد (أو الأول)
+                // إذا وجدت خزينة للفرع، هي الخيار المفضل
                 filtered = [branchCashAccount];
                 setFormData(prev => ({...prev, paidToAccountId: branchCashAccount.id}));
             } else {
@@ -121,9 +133,8 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices }: { onSav
                 setFormData(prev => ({...prev, paidToAccountId: ''}));
             }
         } else {
-             // 3. في حال عدم اختيار فاتورة، نظهر الخزائن العامة والبنوك فقط
-             filtered = nonRepAccounts.filter(acc => !acc.warehouseId);
-             setFormData(prev => ({...prev, paidToAccountId: ''}));
+             // 3. في حال عدم اختيار فاتورة، نظهر كل الخزائن (فروع وعامة) عدا المناديب
+             filtered = nonRepAccounts;
         }
         
         setAvailableCashAccounts(filtered);
@@ -180,7 +191,7 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices }: { onSav
                         options={cashAccountOptions}
                         value={formData.paidToAccountId}
                         onValueChange={v => setFormData({...formData, paidToAccountId: v})}
-                        placeholder={availableCashAccounts.length === 0 ? "لا توجد خزينة متاحة للفرع" : d.selectReceiveAccount}
+                        placeholder={availableCashAccounts.length === 0 ? "لا توجد خزينة متاحة" : d.selectReceiveAccount}
                         emptyMessage={d.noAccountFound}
                         disabled={availableCashAccounts.length === 0}
                     />
@@ -218,6 +229,7 @@ export default function CustomerPaymentsPage() {
         customers, 
         cashAccounts, 
         salesInvoices, 
+        warehouses,
         dbAction, 
         getNextId, 
         loading 
@@ -287,7 +299,7 @@ export default function CustomerPaymentsPage() {
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                {loading ? <Loader2 className='animate-spin' /> : <PaymentForm onSave={handleSave} customers={customers} cashAccounts={cashAccounts} salesInvoices={salesInvoices} />}
+                {loading ? <Loader2 className='animate-spin' /> : <PaymentForm onSave={handleSave} customers={customers} cashAccounts={cashAccounts} salesInvoices={salesInvoices} warehouses={warehouses} />}
             </CardContent>
             </Card>
             
