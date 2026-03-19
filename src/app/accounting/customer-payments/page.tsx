@@ -1,5 +1,4 @@
 
-
 "use client";
 
 // استيراد المكونات والأدوات اللازمة
@@ -50,6 +49,8 @@ interface CashAccount {
     id: string;
     name: string;
     warehouseId?: string;
+    userId?: string;
+    salesRepId?: string;
 }
 
 interface SaleInvoice {
@@ -74,7 +75,7 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices }: { onSav
         invoiceId: "",
     });
     
-    const [availableCashAccounts, setAvailableCashAccounts] = useState(cashAccounts);
+    const [availableCashAccounts, setAvailableCashAccounts] = useState<CashAccount[]>([]);
     
     const customerOptions = React.useMemo(() => customers.map((c: Customer) => ({ value: c.id, label: c.name })), [customers]);
     const cashAccountOptions = React.useMemo(() => availableCashAccounts.map((c: CashAccount) => ({ value: c.id, label: c.name })), [availableCashAccounts]);
@@ -84,7 +85,7 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices }: { onSav
         return salesInvoices.filter((inv: SaleInvoice) => {
             if (inv.customerId !== formData.customerId || inv.status !== 'approved') return false;
             const remaining = inv.total - (inv.paidAmount || 0);
-            return remaining > 0;
+            return remaining > 0.01;
         });
     }, [formData.customerId, salesInvoices]);
 
@@ -100,25 +101,38 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices }: { onSav
         }));
     }, [customerInvoicesWithBalance]);
     
+    // منطق فلترة الحسابات: استبعاد عهد المناديب دائماً واختيار خزينة الفرع أو العامة
     useEffect(() => {
+        // 1. استبعاد أي حساب مرتبط بمندوب (يملك userId أو salesRepId)
+        const nonRepAccounts = cashAccounts.filter(acc => !acc.userId && !acc.salesRepId);
+        
+        let filtered: CashAccount[] = [];
+
         if (selectedInvoiceDetails?.warehouseId) {
-            const branchCashAccount = cashAccounts.find((acc: CashAccount) => acc.warehouseId === selectedInvoiceDetails.warehouseId);
+            // 2. إذا كانت هناك فاتورة مختارة، نبحث عن خزينة الفرع التابع لها
+            const branchCashAccount = nonRepAccounts.find((acc: CashAccount) => acc.warehouseId === selectedInvoiceDetails.warehouseId);
             if (branchCashAccount) {
-                setAvailableCashAccounts([branchCashAccount]);
+                // إذا وجدت خزينة للفرع، هي الخيار الوحيد (أو الأول)
+                filtered = [branchCashAccount];
                 setFormData(prev => ({...prev, paidToAccountId: branchCashAccount.id}));
             } else {
-                setAvailableCashAccounts(cashAccounts.filter((acc: CashAccount) => !acc.warehouseId)); 
-                 setFormData(prev => ({...prev, paidToAccountId: ''}));
+                // إذا لم توجد خزينة للفرع، نظهر الخزائن العامة (بدون فرع)
+                filtered = nonRepAccounts.filter(acc => !acc.warehouseId);
+                setFormData(prev => ({...prev, paidToAccountId: ''}));
             }
         } else {
-             setAvailableCashAccounts(cashAccounts.filter((acc: CashAccount) => !acc.warehouseId));
+             // 3. في حال عدم اختيار فاتورة، نظهر الخزائن العامة والبنوك فقط
+             filtered = nonRepAccounts.filter(acc => !acc.warehouseId);
              setFormData(prev => ({...prev, paidToAccountId: ''}));
         }
+        
+        setAvailableCashAccounts(filtered);
     }, [selectedInvoiceDetails, cashAccounts]);
 
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (!formData.paidToAccountId) return;
         onSave({ ...formData, amount: Number(formData.amount) });
         setFormData({ date: new Date().toISOString().split('T')[0], amount: 0, customerId: "", paidToAccountId: "", notes: "", invoiceId: "" });
     }
@@ -135,7 +149,7 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices }: { onSav
                     <Combobox
                         options={customerOptions}
                         value={formData.customerId}
-                        onValueChange={v => setFormData({...formData, customerId: v})}
+                        onValueChange={v => setFormData({...formData, customerId: v, invoiceId: ''})}
                         placeholder={`${dictionary.general.selectPlaceholder} ${dictionary.general.customer}...`}
                         emptyMessage={`${dictionary.general.notFound} ${dictionary.general.customer}.`}
                     />
@@ -161,14 +175,14 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices }: { onSav
                     </div>
                 )}
                 <div className="space-y-2">
-                    <Label htmlFor="paid-to">{d.receivedIn}</Label>
+                    <Label htmlFor="paid-to">{d.receivedIn} (خزينة الفرع/العامة)</Label>
                     <Combobox
                         options={cashAccountOptions}
                         value={formData.paidToAccountId}
                         onValueChange={v => setFormData({...formData, paidToAccountId: v})}
-                        placeholder={d.selectReceiveAccount}
+                        placeholder={availableCashAccounts.length === 0 ? "لا توجد خزينة متاحة للفرع" : d.selectReceiveAccount}
                         emptyMessage={d.noAccountFound}
-                        disabled={!availableCashAccounts.length}
+                        disabled={availableCashAccounts.length === 0}
                     />
                 </div>
                  <div className="space-y-2">
@@ -189,7 +203,7 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices }: { onSav
                 </AlertDescription>
             </Alert>
             <div className="flex justify-end mt-4">
-                <Button type="submit">
+                <Button type="submit" disabled={!formData.paidToAccountId}>
                     <PlusCircle className="ml-2 h-4 w-4" />
                     {d.savePayment}
                 </Button>
@@ -298,50 +312,56 @@ export default function CustomerPaymentsPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {payments.map((payment : CustomerPayment) => (
-                                        <TableRow key={payment.id}>
-                                            <TableCell>
-                                                <div className="font-medium">{getCustomerName(payment.customerId)}</div>
-                                                <div className="text-sm text-muted-foreground">{new Date(payment.date).toLocaleDateString('ar-EG')}</div>
-                                                <div className="text-xs text-muted-foreground">{d.byUser.replace('{name}', payment.createdByName || d.unknownUser)}</div>
-                                            </TableCell>
-                                            <TableCell>{getCashAccountName(payment.paidToAccountId)}</TableCell>
-                                            <TableCell className="text-center">{payment.amount.toLocaleString()}</TableCell>
-                                            <TableCell className="text-center">
-                                                <AlertDialog>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button aria-haspopup="true" size="icon" variant="ghost">
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                                <span className="sr-only">{d.menu}</span>
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuLabel>{dictionary.general.actions}</DropdownMenuLabel>
-                                                            <AlertDialogTrigger asChild>
-                                                                <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
-                                                                    <Trash2 className="ml-2 h-4 w-4" />
-                                                                    {dictionary.general.delete}
-                                                                </DropdownMenuItem>
-                                                            </AlertDialogTrigger>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>{dictionary.general.confirmDeleteTitle}</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                               {d.deleteConfirmation}
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>{dictionary.general.cancel}</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => handleDelete(payment)}>{dictionary.general.continue}</AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                            </TableCell>
+                                    {payments.length > 0 ? (
+                                        payments.map((payment : CustomerPayment) => (
+                                            <TableRow key={payment.id}>
+                                                <TableCell>
+                                                    <div className="font-medium">{getCustomerName(payment.customerId)}</div>
+                                                    <div className="text-sm text-muted-foreground">{new Date(payment.date).toLocaleDateString('ar-EG')}</div>
+                                                    <div className="text-xs text-muted-foreground">{d.byUser.replace('{name}', payment.createdByName || d.unknownUser)}</div>
+                                                </TableCell>
+                                                <TableCell>{getCashAccountName(payment.paidToAccountId)}</TableCell>
+                                                <TableCell className="text-center font-bold">{payment.amount.toLocaleString()}</TableCell>
+                                                <TableCell className="text-center">
+                                                    <AlertDialog>
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                                    <MoreHorizontal className="h-4 w-4" />
+                                                                    <span className="sr-only">{d.menu}</span>
+                                                                </Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end">
+                                                                <DropdownMenuLabel>{dictionary.general.actions}</DropdownMenuLabel>
+                                                                <AlertDialogTrigger asChild>
+                                                                    <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
+                                                                        <Trash2 className="ml-2 h-4 w-4" />
+                                                                        {dictionary.general.delete}
+                                                                    </DropdownMenuItem>
+                                                                </AlertDialogTrigger>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>{dictionary.general.confirmDeleteTitle}</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                {d.deleteConfirmation}
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>{dictionary.general.cancel}</AlertDialogCancel>
+                                                                <AlertDialogAction onClick={() => handleDelete(payment)}>{dictionary.general.continue}</AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center py-10 text-muted-foreground">لا توجد مقبوضات مسجلة.</TableCell>
                                         </TableRow>
-                                    ))}
+                                    )}
                                 </TableBody>
                             </Table>
                         </div>
