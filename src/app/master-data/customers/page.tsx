@@ -4,7 +4,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, List, Wallet, AlertTriangle, CheckCircle, Save } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, List, Wallet, AlertTriangle, Info, CheckCircle, Save } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -42,6 +42,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/auth-context";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface Customer {
   id?: string;
@@ -268,7 +269,7 @@ export default function CustomersPage() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   
-  const [paymentCustomer, setPaymentCustomer] = useState<any>(null);
+  const [paymentCustomer, setPaymentCustomer] = setPaymentCustomer<any>(null);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
 
   const [userToDelete, setUserToDelete] = useState<Customer | null>(null);

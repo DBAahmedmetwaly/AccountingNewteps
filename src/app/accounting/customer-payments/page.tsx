@@ -26,6 +26,8 @@ import { useData } from '@/contexts/data-provider';
 import { Combobox } from '@/components/ui/combobox';
 import { dictionary } from '@/lib/dictionary';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // تعريف واجهات البيانات (Interfaces) لضمان تطابق أنواع البيانات
 interface CustomerPayment {
