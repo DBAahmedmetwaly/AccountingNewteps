@@ -1,9 +1,10 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, List } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, List, Wallet, AlertTriangle, CheckCircle, Save } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -32,11 +33,15 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { Combobox } from "@/components/ui/combobox";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/auth-context";
 
 interface Customer {
   id?: string;
@@ -47,6 +52,141 @@ interface Customer {
   address?: string;
   allowCredit?: boolean;
 }
+
+const QuickPaymentDialog = ({ customer, onClose }: { customer: any, onClose: () => void }) => {
+    const { cashAccounts, dbAction, getNextId, warehouses } = useData();
+    const { user } = useAuth();
+    const { toast } = useToast();
+    const [amount, setAmount] = useState(customer.currentBalance > 0 ? customer.currentBalance : 0);
+    const [paidToAccountId, setPaidToAccountId] = useState('');
+    const [notes, setNotes] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+
+    const cashAccountOptions = useMemo(() => {
+        return cashAccounts
+            .filter((acc: any) => !acc.userId && !acc.salesRepId) // استبعاد المناديب
+            .map((acc: any) => {
+                const warehouse = warehouses.find(w => w.id === acc.warehouseId);
+                return { 
+                    value: acc.id, 
+                    label: warehouse ? `${acc.name} (${warehouse.name})` : acc.name 
+                };
+            });
+    }, [cashAccounts, warehouses]);
+
+    const handleSavePayment = async () => {
+        if (!amount || amount <= 0 || !paidToAccountId) {
+            toast({ variant: 'destructive', title: 'بيانات غير كاملة', description: 'الرجاء إدخال مبلغ صحيح واختيار حساب الاستلام.' });
+            return;
+        }
+        setIsSaving(true);
+        try {
+            const receiptNumber = `س-ع-${await getNextId('customerPayment')}`;
+            const newPayment = {
+                date: new Date().toISOString(),
+                amount: Number(amount),
+                customerId: customer.id,
+                paidToAccountId,
+                notes: notes || `دفعة سريعة من شاشة العملاء`,
+                receiptNumber,
+                createdById: user?.id,
+                createdByName: user?.name,
+            };
+            await dbAction('customerPayments', 'add', newPayment);
+            toast({ title: 'تم الحفظ بنجاح', description: `تم استلام دفعة من العميل ${customer.name} برقم: ${receiptNumber}` });
+            onClose();
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'خطأ', description: 'فشل حفظ الدفعة.' });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="space-y-6 py-4">
+            <div className={cn(
+                "flex items-center gap-3 p-4 rounded-xl border animate-in fade-in slide-in-from-top-2",
+                customer.currentBalance > 0 ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"
+            )}>
+                <Wallet className={cn("h-6 w-6", customer.currentBalance > 0 ? "text-red-600" : "text-green-600")} />
+                <div className="flex-1">
+                    <span className="text-xs font-medium block text-muted-foreground mb-1">
+                        {customer.currentBalance >= 0 ? "إجمالي المستحق على العميل الآن:" : "المبلغ المستحق للعميل (رصيد دائن):"}
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <span className={cn("text-2xl font-bold", customer.currentBalance > 0 ? "text-red-700" : "text-green-700")}>
+                            {Math.abs(customer.currentBalance).toLocaleString()} ج.م
+                        </span>
+                        {customer.currentBalance < 0 && (
+                            <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
+                                رصيد دائن
+                            </Badge>
+                        )}
+                    </div>
+                </div>
+                {customer.currentBalance < 0 && (
+                    <div className="bg-amber-100 p-2 rounded-full">
+                        <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    </div>
+                )}
+            </div>
+
+            {customer.currentBalance < 0 && (
+                <Alert className="bg-amber-50 border-amber-200">
+                    <Info className="h-4 w-4 text-amber-600" />
+                    <AlertTitle className="text-amber-800">تنبيه محاسبي</AlertTitle>
+                    <AlertDescription className="text-amber-700">
+                        هذا المبلغ مستحق <b>للعميل</b> وليس على العميل. يرجى التأكد من رغبتك في تسجيل مقبوضات إضافية لحساب هذا العميل.
+                    </AlertDescription>
+                </Alert>
+            )}
+
+            <div className="grid gap-4 border-t pt-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="amount" className="font-bold">المبلغ المستلم</Label>
+                        <Input 
+                            id="amount" 
+                            type="number" 
+                            value={amount} 
+                            onChange={e => setAmount(Number(e.target.value))} 
+                            className="text-xl h-12 font-bold border-primary/50 focus:ring-primary" 
+                            onFocus={e => e.target.select()}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="account">إيداع في (الخزينة/البنك)</Label>
+                        <Combobox
+                            options={cashAccountOptions}
+                            value={paidToAccountId}
+                            onValueChange={setPaidToAccountId}
+                            placeholder="اختر حساب الاستلام..."
+                            emptyMessage="لا يوجد خزائن متاحة."
+                        />
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="notes">ملاحظات</Label>
+                    <Textarea 
+                        id="notes" 
+                        value={notes} 
+                        onChange={e => setNotes(e.target.value)} 
+                        placeholder="أدخل أي ملاحظات إضافية هنا..."
+                        className="h-20"
+                    />
+                </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+                <Button variant="ghost" onClick={onClose} disabled={isSaving}>إلغاء</Button>
+                <Button onClick={handleSavePayment} disabled={isSaving || !paidToAccountId || amount <= 0} className="px-8">
+                    {isSaving ? <Loader2 className="animate-spin ml-2 h-4 w-4" /> : <Save className="ml-2 h-4 w-4" />}
+                    تأكيد وحفظ السند
+                </Button>
+            </div>
+        </div>
+    );
+};
 
 const CustomerForm = ({ customer, onSave, onClose, allCustomers, hasInvoices }: { customer?: Customer, onSave: (customer: Customer) => void, onClose: () => void, allCustomers: Customer[], hasInvoices: boolean }) => {
   const [formData, setFormData] = useState<Customer>(
@@ -127,14 +267,20 @@ export default function CustomersPage() {
   
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  
+  const [paymentCustomer, setPaymentCustomer] = useState<any>(null);
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+
+  const [userToDelete, setUserToDelete] = useState<Customer | null>(null);
+  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
 
   // Manual cleanup for pointer-events bug
   useEffect(() => {
-    if (!isEditOpen) {
+    if (!isEditOpen && !isPaymentOpen && !isDeleteAlertOpen) {
         document.body.style.pointerEvents = 'auto';
         document.body.style.overflow = 'auto';
     }
-  }, [isEditOpen]);
+  }, [isEditOpen, isPaymentOpen, isDeleteAlertOpen]);
 
   const checkHasInvoices = (id: string) => {
     const hasSalesInvoices = (salesInvoices || []).some((inv: any) => inv.customerId === id);
@@ -149,25 +295,21 @@ export default function CustomersPage() {
     return customers.map((customer: Customer) => {
         let balance = Number(customer.openingBalance) || 0;
         
-        // 1. Approved Sales Invoices (Add unpaid parts)
         const approvedSales = salesInvoices.filter((s: any) => s.customerId === customer.id && s.status === 'approved');
         approvedSales.forEach((inv: any) => { 
             balance += (Number(inv.total) - Number(inv.paidAmount || 0)); 
         });
 
-        // 2. POS Sales (Add unpaid parts)
         const customerPosSales = posSales.filter((s: any) => s.customerId === customer.id);
         customerPosSales.forEach((sale: any) => { 
             balance += (Number(sale.total) - Number(sale.paidAmount || 0)); 
         });
 
-        // 3. Standalone Payments (Subtract payments NOT linked to an invoice to avoid double subtraction)
         const standalonePayments = customerPayments.filter((p: any) => p.customerId === customer.id && !p.invoiceId);
         standalonePayments.forEach((payment: any) => { 
             balance -= Number(payment.amount); 
         });
 
-        // 4. Returns (Subtract net return value)
         const returns = salesReturns.filter((r: any) => r.customerId === customer.id);
         returns.forEach((ret: any) => { 
             balance -= (Number(ret.total) - Number(ret.paidAmount || 0)); 
@@ -195,6 +337,11 @@ export default function CustomersPage() {
   const handleEditClick = (customer: Customer) => {
     setEditingCustomer(customer);
     setTimeout(() => setIsEditOpen(true), 150);
+  };
+
+  const handlePaymentClick = (customer: any) => {
+      setPaymentCustomer(customer);
+      setTimeout(() => setIsPaymentOpen(true), 150);
   };
 
   const handleDelete = (id: string) => {
@@ -268,16 +415,19 @@ export default function CustomersPage() {
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
+                                                    <DropdownMenuItem onSelect={() => handlePaymentClick(customer)}>
+                                                        <PlusCircle className="ml-2 h-4 w-4 text-green-600" /> تسجيل دفعة
+                                                    </DropdownMenuItem>
                                                     <DropdownMenuItem onSelect={() => router.push(`/reports/customer-statement?customerId=${customer.id}`)}>
                                                         <List className="ml-2 h-4 w-4" /> كشف حساب
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem onSelect={() => handleEditClick(customer)}>
-                                                        <Edit className="ml-2 h-4 w-4" /> تعديل
+                                                        <Edit className="ml-2 h-4 w-4" /> تعديل البيانات
                                                     </DropdownMenuItem>
                                                     <AlertDialogTrigger asChild>
                                                         <DropdownMenuItem className="text-destructive">
-                                                            <Trash2 className="ml-2 h-4 w-4" /> حذف
+                                                            <Trash2 className="ml-2 h-4 w-4" /> حذف العميل
                                                         </DropdownMenuItem>
                                                     </AlertDialogTrigger>
                                                 </DropdownMenuContent>
@@ -317,6 +467,21 @@ export default function CustomersPage() {
                 onClose={() => setIsEditOpen(false)} 
                 allCustomers={customers} 
                 hasInvoices={checkHasInvoices(editingCustomer.id!)} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>تسجيل دفعة جديدة</DialogTitle>
+            <DialogDescription>تسجيل مقبوضات نقدية من العميل: {paymentCustomer?.name}</DialogDescription>
+          </DialogHeader>
+          {paymentCustomer && (
+            <QuickPaymentDialog 
+                customer={paymentCustomer} 
+                onClose={() => setIsPaymentOpen(false)} 
             />
           )}
         </DialogContent>
