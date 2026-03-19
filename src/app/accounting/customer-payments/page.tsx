@@ -212,18 +212,22 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices, warehouse
                     />
                     {formData.customerId && (
                         <div className={cn(
-                            "flex items-center gap-2 p-3 rounded-lg border animate-in fade-in slide-in-from-top-1",
-                            currentCustomerBalance > 0 ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"
+                            "flex items-center gap-3 p-4 rounded-lg border animate-in fade-in slide-in-from-top-1",
+                            currentCustomerBalance > 0 ? "bg-destructive/10 border-destructive/20" : "bg-green-500/10 border-green-500/20"
                         )}>
-                            <Wallet className={cn("h-4 w-4", currentCustomerBalance > 0 ? "text-red-600" : "text-green-600")} />
+                            <Wallet className={cn("h-5 w-5", currentCustomerBalance > 0 ? "text-destructive" : "text-green-600 dark:text-green-400")} />
                             <div className="flex-1">
-                                <span className="text-xs font-medium block">
+                                <span className={cn("text-xs font-semibold block mb-1", currentCustomerBalance > 0 ? "text-destructive/80" : "text-green-700 dark:text-green-300")}>
                                     {currentCustomerBalance >= 0 ? "المستحق على العميل:" : "المستحق للعميل (رصيد دائن):"}
                                 </span>
-                                <Badge variant={currentCustomerBalance > 0 ? "destructive" : "default"} className="text-sm mt-1">
-                                    {Math.abs(currentCustomerBalance).toLocaleString()} ج.م 
-                                    {currentCustomerBalance > 0 ? " (مدين)" : " (له)"}
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                    <span className={cn("text-lg font-bold", currentCustomerBalance > 0 ? "text-destructive" : "text-green-700 dark:text-green-400")}>
+                                        {Math.abs(currentCustomerBalance).toLocaleString()} ج.م 
+                                    </span>
+                                    <Badge variant={currentCustomerBalance > 0 ? "destructive" : "default"} className="text-[10px] py-0 h-5">
+                                        {currentCustomerBalance > 0 ? "مدين" : "له رصيد"}
+                                    </Badge>
+                                </div>
                             </div>
                             {currentCustomerBalance < 0 && (
                                 <TooltipProvider>

@@ -106,37 +106,50 @@ const QuickPaymentDialog = ({ customer, onClose }: { customer: any, onClose: () 
     return (
         <div className="space-y-6 py-4">
             <div className={cn(
-                "flex items-center gap-3 p-4 rounded-xl border animate-in fade-in slide-in-from-top-2",
-                customer.currentBalance > 0 ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"
+                "flex items-center gap-4 p-5 rounded-xl border animate-in fade-in slide-in-from-top-2 shadow-sm",
+                customer.currentBalance > 0 
+                    ? "bg-destructive/10 border-destructive/20" 
+                    : "bg-green-500/10 border-green-500/20"
             )}>
-                <Wallet className={cn("h-6 w-6", customer.currentBalance > 0 ? "text-red-600" : "text-green-600")} />
+                <div className={cn(
+                    "p-3 rounded-full shrink-0",
+                    customer.currentBalance > 0 ? "bg-destructive/20" : "bg-green-500/20"
+                )}>
+                    <Wallet className={cn("h-6 w-6", customer.currentBalance > 0 ? "text-destructive" : "text-green-600 dark:text-green-400")} />
+                </div>
                 <div className="flex-1">
-                    <span className="text-xs font-medium block text-muted-foreground mb-1">
+                    <span className={cn(
+                        "text-xs font-bold block mb-1 uppercase tracking-wider",
+                        customer.currentBalance > 0 ? "text-destructive/80" : "text-green-700 dark:text-green-300"
+                    )}>
                         {customer.currentBalance >= 0 ? "إجمالي المستحق على العميل الآن:" : "المبلغ المستحق للعميل (رصيد دائن):"}
                     </span>
-                    <div className="flex items-center gap-2">
-                        <span className={cn("text-2xl font-bold", customer.currentBalance > 0 ? "text-red-700" : "text-green-700")}>
+                    <div className="flex items-center gap-3">
+                        <span className={cn(
+                            "text-3xl font-black tracking-tight",
+                            customer.currentBalance > 0 ? "text-destructive" : "text-green-700 dark:text-green-400"
+                        )}>
                             {Math.abs(customer.currentBalance).toLocaleString()} ج.م
                         </span>
                         {customer.currentBalance < 0 && (
-                            <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
-                                رصيد دائن
+                            <Badge variant="outline" className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800 font-bold">
+                                رصيد له
                             </Badge>
                         )}
                     </div>
                 </div>
                 {customer.currentBalance < 0 && (
-                    <div className="bg-amber-100 p-2 rounded-full">
-                        <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    <div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full">
+                        <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
                     </div>
                 )}
             </div>
 
             {customer.currentBalance < 0 && (
-                <Alert className="bg-amber-50 border-amber-200">
-                    <Info className="h-4 w-4 text-amber-600" />
-                    <AlertTitle className="text-amber-800">تنبيه محاسبي</AlertTitle>
-                    <AlertDescription className="text-amber-700">
+                <Alert className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800">
+                    <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <AlertTitle className="text-amber-800 dark:text-amber-300 font-bold">تنبيه محاسبي</AlertTitle>
+                    <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm">
                         هذا المبلغ مستحق <b>للعميل</b> وليس على العميل. يرجى التأكد من رغبتك في تسجيل مقبوضات إضافية لحساب هذا العميل.
                     </AlertDescription>
                 </Alert>
@@ -269,7 +282,7 @@ export default function CustomersPage() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   
-  const [paymentCustomer, setPaymentCustomer] = setPaymentCustomer<any>(null);
+  const [paymentCustomer, setPaymentCustomer] = useState<any>(null);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
 
   const [userToDelete, setUserToDelete] = useState<Customer | null>(null);
