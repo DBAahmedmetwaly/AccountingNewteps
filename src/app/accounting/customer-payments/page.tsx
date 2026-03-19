@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Loader2, MoreHorizontal, Edit, Trash2, Info } from "lucide-react";
+import { PlusCircle, Loader2, MoreHorizontal, Edit, Trash2, Info, Wallet, AlertTriangle } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem } from '@/components/ui/dropdown-menu';
@@ -25,6 +25,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useData } from '@/contexts/data-provider';
 import { Combobox } from '@/components/ui/combobox';
 import { dictionary } from '@/lib/dictionary';
+import { Badge } from '@/components/ui/badge';
 
 // تعريف واجهات البيانات (Interfaces) لضمان تطابق أنواع البيانات
 interface CustomerPayment {
@@ -43,6 +44,7 @@ interface CustomerPayment {
 interface Customer {
     id: string;
     name: string;
+    openingBalance?: number;
 }
 
 interface CashAccount {
@@ -70,7 +72,17 @@ interface SaleInvoice {
 
 const d = dictionary.pages.customerPayments;
 
-const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices, warehouses }: { onSave: (data: Omit<CustomerPayment, 'id' | 'receiptNumber'>) => void, customers: Customer[], cashAccounts: CashAccount[], salesInvoices: SaleInvoice[], warehouses: Warehouse[] }) => {
+const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices, warehouses, customerPayments, salesReturns, posSales, posReturns }: { 
+    onSave: (data: Omit<CustomerPayment, 'id' | 'receiptNumber'>) => void, 
+    customers: Customer[], 
+    cashAccounts: CashAccount[], 
+    salesInvoices: SaleInvoice[], 
+    warehouses: Warehouse[],
+    customerPayments: any[],
+    salesReturns: any[],
+    posSales: any[],
+    posReturns: any[]
+}) => {
     const [formData, setFormData] = useState<Omit<CustomerPayment, 'id' | 'receiptNumber'>>({ 
         date: new Date().toISOString().split('T')[0], 
         amount: 0, 
@@ -91,6 +103,45 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices, warehouse
             return { value: c.id, label };
         });
     }, [availableCashAccounts, warehouses]);
+
+    const currentCustomerBalance = useMemo(() => {
+        if (!formData.customerId) return 0;
+        const customer = customers.find(c => c.id === formData.customerId);
+        if (!customer) return 0;
+
+        let balance = Number(customer.openingBalance) || 0;
+        
+        // إضافة فواتير البيع (الجزء غير المسدد)
+        salesInvoices.filter(inv => inv.customerId === formData.customerId && inv.status === 'approved')
+            .forEach(inv => {
+                balance += (Number(inv.total) - Number(inv.paidAmount || 0));
+            });
+
+        // إضافة فواتير الكاشير (الجزء غير المسدد)
+        posSales.filter(sale => sale.customerId === formData.customerId)
+            .forEach(sale => {
+                balance += (Number(sale.total) - Number(sale.paidAmount || 0));
+            });
+
+        // طرح سندات القبض غير المرتبطة بفاتورة (لتجنب الخصم المزدوج)
+        customerPayments.filter(p => p.customerId === formData.customerId && !p.invoiceId)
+            .forEach(p => {
+                balance -= Number(p.amount);
+            });
+
+        // طرح المرتجعات
+        salesReturns.filter(r => r.customerId === formData.customerId)
+            .forEach(r => {
+                balance -= (Number(r.total) - Number(r.paidAmount || 0));
+            });
+            
+        posReturns.filter(r => r.customerId === formData.customerId)
+            .forEach(r => {
+                balance -= (Number(r.total) - Number(r.paidAmount || 0));
+            });
+
+        return balance;
+    }, [formData.customerId, customers, salesInvoices, posSales, customerPayments, salesReturns, posReturns]);
 
     const customerInvoicesWithBalance = useMemo(() => {
         if (!formData.customerId) return [];
@@ -115,25 +166,18 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices, warehouse
     
     // منطق فلترة الحسابات: استبعاد عهد المناديب دائماً واختيار خزينة الفرع أو العامة
     useEffect(() => {
-        // 1. استبعاد أي حساب مرتبط بمندوب (يملك userId أو salesRepId)
         const nonRepAccounts = cashAccounts.filter(acc => !acc.userId && !acc.salesRepId);
-        
         let filtered: CashAccount[] = [];
 
         if (selectedInvoiceDetails?.warehouseId) {
-            // 2. إذا كانت هناك فاتورة مختارة، نبحث عن خزينة الفرع التابع لها
             const branchCashAccount = nonRepAccounts.find((acc: CashAccount) => acc.warehouseId === selectedInvoiceDetails.warehouseId);
             if (branchCashAccount) {
-                // إذا وجدت خزينة للفرع، هي الخيار المفضل
-                filtered = [branchCashAccount];
+                filtered = [branchCashAccount, ...nonRepAccounts.filter(acc => acc.id !== branchCashAccount.id)];
                 setFormData(prev => ({...prev, paidToAccountId: branchCashAccount.id}));
             } else {
-                // إذا لم توجد خزينة للفرع، نظهر الخزائن العامة (بدون فرع)
-                filtered = nonRepAccounts.filter(acc => !acc.warehouseId);
-                setFormData(prev => ({...prev, paidToAccountId: ''}));
+                filtered = nonRepAccounts;
             }
         } else {
-             // 3. في حال عدم اختيار فاتورة، نظهر كل الخزائن (فروع وعامة) عدا المناديب
              filtered = nonRepAccounts;
         }
         
@@ -164,6 +208,35 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices, warehouse
                         placeholder={`${dictionary.general.selectPlaceholder} ${dictionary.general.customer}...`}
                         emptyMessage={`${dictionary.general.notFound} ${dictionary.general.customer}.`}
                     />
+                    {formData.customerId && (
+                        <div className={cn(
+                            "flex items-center gap-2 p-3 rounded-lg border animate-in fade-in slide-in-from-top-1",
+                            currentCustomerBalance > 0 ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"
+                        )}>
+                            <Wallet className={cn("h-4 w-4", currentCustomerBalance > 0 ? "text-red-600" : "text-green-600")} />
+                            <div className="flex-1">
+                                <span className="text-xs font-medium block">
+                                    {currentCustomerBalance >= 0 ? "المستحق على العميل:" : "المستحق للعميل (رصيد دائن):"}
+                                </span>
+                                <Badge variant={currentCustomerBalance > 0 ? "destructive" : "default"} className="text-sm mt-1">
+                                    {Math.abs(currentCustomerBalance).toLocaleString()} ج.م 
+                                    {currentCustomerBalance > 0 ? " (مدين)" : " (له)"}
+                                </Badge>
+                            </div>
+                            {currentCustomerBalance < 0 && (
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <AlertTriangle className="h-5 w-5 text-amber-500 cursor-help" />
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p className="max-w-[200px] text-xs text-center">تنبيه: هذا المبلغ مستحق للعميل وليس على العميل. يرجى التأكد قبل التحصيل.</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            )}
+                        </div>
+                    )}
                 </div>
                  <div className="space-y-2">
                     <Label htmlFor="payment-invoice">{d.linkToInvoice}</Label>
@@ -229,6 +302,9 @@ export default function CustomerPaymentsPage() {
         customers, 
         cashAccounts, 
         salesInvoices, 
+        salesReturns,
+        posSales,
+        posReturns,
         warehouses,
         dbAction, 
         getNextId, 
@@ -299,7 +375,19 @@ export default function CustomerPaymentsPage() {
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                {loading ? <Loader2 className='animate-spin' /> : <PaymentForm onSave={handleSave} customers={customers} cashAccounts={cashAccounts} salesInvoices={salesInvoices} warehouses={warehouses} />}
+                {loading ? <Loader2 className='animate-spin' /> : (
+                    <PaymentForm 
+                        onSave={handleSave} 
+                        customers={customers} 
+                        cashAccounts={cashAccounts} 
+                        salesInvoices={salesInvoices} 
+                        warehouses={warehouses} 
+                        customerPayments={payments}
+                        salesReturns={salesReturns}
+                        posSales={posSales}
+                        posReturns={posReturns}
+                    />
+                )}
             </CardContent>
             </Card>
             
