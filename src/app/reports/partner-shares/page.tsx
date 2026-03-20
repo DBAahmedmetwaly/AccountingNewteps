@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -13,11 +12,11 @@ import { Loader2, Printer } from "lucide-react";
 import React, { useState, useMemo, useEffect } from "react";
 
 // Data interfaces
-interface SaleInvoice { id: string; date: string; total: number; subtotal: number; discount: number; items: { id: string, qty: number, cost?: number}[], warehouseId: string; }
+interface SaleInvoice { id: string; date: string; total: number; subtotal: number; discount: number; items: { id: string, qty: number, cost?: number}[], warehouseId: string; status?: string; }
 interface PosSale { id: string; date: string; total: number; subtotal: number; discount: number; items: { id: string, qty: number, cost?: number}[], warehouseId: string; }
-interface Expense { id: string; date: string; amount: number; warehouseId?: string; }
-interface ExceptionalIncome { id: string; date: string; amount: number; warehouseId?: string; } // Assuming warehouseId can be added
-interface Partner { id: string; name: string; capital: number; profitShare: number; warehouseId: string; }
+interface Expense { id: string; date: string; amount: number; warehouseId?: string; expenseType: string; }
+interface ExceptionalIncome { id: string; date: string; amount: number; warehouseId?: string; description: string; }
+interface Partner { id: string; name: string; capital: number; profitShare: number; warehouseId: string; startDate: string; endDate: string; }
 interface Item { id: string; cost?: number; itemType?: 'manufactured' | 'standard' | 'raw_material'; components?: {itemId: string, quantity: number}[] }
 
 
@@ -53,11 +52,14 @@ export default function PartnerSharesPage() {
         const end = toDate ? new Date(toDate) : new Date();
         end.setHours(23, 59, 59, 999);
 
+        // 1. Calculate Daily Net Profit per Warehouse
         const dailyProfitsByWarehouse: Record<string, Record<string, number>> = {};
         
-        const allSales = [...salesInvoices.filter((s:any) => s.status === 'approved'), ...posSales];
+        const allSales = [
+            ...salesInvoices.filter((s: SaleInvoice) => s.status === 'approved'), 
+            ...posSales
+        ];
 
-        // 1. Calculate daily profit/loss for each warehouse
         allSales.forEach((sale: any) => {
             const saleDate = new Date(sale.date);
             if (saleDate < start || saleDate > end) return;
@@ -94,6 +96,7 @@ export default function PartnerSharesPage() {
             if (expenseDate < start || expenseDate > end) return;
             const dateKey = expenseDate.toISOString().split('T')[0];
             const warehouseId = expense.warehouseId || 'general';
+            
             if (!dailyProfitsByWarehouse[warehouseId]) dailyProfitsByWarehouse[warehouseId] = {};
             if (!dailyProfitsByWarehouse[warehouseId][dateKey]) dailyProfitsByWarehouse[warehouseId][dateKey] = 0;
             dailyProfitsByWarehouse[warehouseId][dateKey] -= expense.amount;
@@ -104,29 +107,50 @@ export default function PartnerSharesPage() {
             if (incomeDate < start || incomeDate > end) return;
             const dateKey = incomeDate.toISOString().split('T')[0];
             const warehouseId = income.warehouseId || 'general';
+            
             if (!dailyProfitsByWarehouse[warehouseId]) dailyProfitsByWarehouse[warehouseId] = {};
             if (!dailyProfitsByWarehouse[warehouseId][dateKey]) dailyProfitsByWarehouse[warehouseId][dateKey] = 0;
             dailyProfitsByWarehouse[warehouseId][dateKey] += income.amount;
         });
 
-        // 2. Distribute daily profits to partners
+        // 2. Distribute Profits Daily based on Partnership Periods
         const partnerShares: Record<string, number> = {};
         partners.forEach((p: Partner) => partnerShares[p.id] = 0);
         
-        partners.forEach((partner: Partner) => {
-            const warehouseId = partner.warehouseId;
-            if (dailyProfitsByWarehouse[warehouseId]) {
-                Object.values(dailyProfitsByWarehouse[warehouseId]).forEach(dailyProfit => {
-                    partnerShares[partner.id] += dailyProfit * (partner.profitShare / 100);
+        // Loop through each warehouse that has profit data
+        Object.entries(dailyProfitsByWarehouse).forEach(([warehouseId, dailyData]) => {
+            // Find partners assigned to this warehouse
+            const relevantPartners = partners.filter((p: Partner) => p.warehouseId === warehouseId);
+            
+            // Loop through each day's profit
+            Object.entries(dailyData).forEach(([dateKey, profit]) => {
+                const currentDate = new Date(dateKey);
+                
+                // Find partners whose period covers this date
+                const activePartnersForDay = relevantPartners.filter((p: Partner) => {
+                    const partnerStart = new Date(p.startDate);
+                    const partnerEnd = new Date(p.endDate);
+                    // Ensure start is beginning of day and end is end of day for comparison
+                    partnerStart.setHours(0,0,0,0);
+                    partnerEnd.setHours(23,59,59,999);
+                    return currentDate >= partnerStart && currentDate <= partnerEnd;
                 });
-            }
+
+                // Add to each active partner's share
+                activePartnersForDay.forEach((partner: Partner) => {
+                    partnerShares[partner.id] += profit * (partner.profitShare / 100);
+                });
+            });
         });
         
-        // 3. Calculate total net income for the period
-        const totalNetIncome = Object.values(dailyProfitsByWarehouse).flatMap(Object.values).reduce((sum, dailyProfit) => sum + dailyProfit, 0);
-        setNetIncome(totalNetIncome);
+        // 3. Calculate total net income for the display summary
+        let totalIncomeCalc = 0;
+        Object.values(dailyProfitsByWarehouse).forEach(whData => {
+            Object.values(whData).forEach(p => totalIncomeCalc += p);
+        });
+        setNetIncome(totalIncomeCalc);
 
-        // 4. Format results
+        // 4. Map results for display
         const results = partners.map((partner: Partner) => {
             return {
                 id: partner.id,
@@ -154,11 +178,12 @@ export default function PartnerSharesPage() {
 
     return (
         <>
-            <PageHeader title="تقرير حصص الشركاء" />
+            <PageHeader title="تقرير حصص الشركاء (حسب فترة الشراكة)" />
             <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
                 <Card className="no-print">
                     <CardHeader>
-                        <CardTitle>تحديد الفترة</CardTitle>
+                        <CardTitle>تحديد الفترة للمراجعة</CardTitle>
+                        <CardDescription>سيقوم النظام بتقسيم الأرباح يومياً وتوزيعها على الشركاء النشطين في كل يوم فقط.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -197,36 +222,40 @@ export default function PartnerSharesPage() {
                                         <TableHead>اسم الشريك</TableHead>
                                         <TableHead className="text-center">رأس المال</TableHead>
                                         <TableHead className="text-center">نسبة الحصة</TableHead>
-                                        <TableHead className="text-center">قيمة حصة الربح</TableHead>
+                                        <TableHead className="text-center">قيمة حصة الربح المستحقة</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {reportData.length > 0 ? reportData.map((partner) => (
                                         <TableRow key={partner.id}>
                                             <TableCell className="font-medium">{partner.name}</TableCell>
-                                            <TableCell className="text-center">{partner.capital.toLocaleString()}</TableCell>
+                                            <TableCell className="text-center">{partner.capital.toLocaleString()} ج.م</TableCell>
                                             <TableCell className="text-center">{partner.profitSharePercentage}%</TableCell>
                                             <TableCell className={`text-center font-semibold ${partner.profitShareValue >= 0 ? 'text-green-600' : 'text-destructive'}`}>
-                                                {partner.profitShareValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                {partner.profitShareValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ج.م
                                             </TableCell>
                                         </TableRow>
                                     )) : (
                                         <TableRow>
                                             <TableCell colSpan={4} className="text-center text-muted-foreground py-10">
-                                                لا يوجد شركاء لعرضهم.
+                                                لا يوجد شركاء لعرضهم في هذه الفترة.
                                             </TableCell>
                                         </TableRow>
                                     )}
                                 </TableBody>
                                 <TableFooter>
                                      <TableRow>
-                                        <TableCell colSpan={3} className="font-bold">إجمالي الأرباح الموزعة</TableCell>
+                                        <TableCell colSpan={3} className="font-bold">إجمالي الحصص الموزعة للفترة</TableCell>
                                         <TableCell className={`text-center font-bold ${totalCalculatedShares >= 0 ? 'text-green-600' : 'text-destructive'}`}>
-                                            {totalCalculatedShares.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            {totalCalculatedShares.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ج.م
                                         </TableCell>
                                     </TableRow>
                                 </TableFooter>
                             </Table>
+                            <div className="mt-6 p-4 bg-muted/30 rounded-lg border border-dashed text-sm">
+                                <h4 className="font-bold mb-2 flex items-center gap-2"><Info className="h-4 w-4"/> ملاحظة محاسبية:</h4>
+                                <p className="text-muted-foreground">يتم احتساب حصة الشريك بناءً على الأرباح المحققة فقط خلال الأيام التي كانت فيها شراكته سارية (بين تاريخ البداية والنهاية المحدد في بطاقة الشريك).</p>
+                            </div>
                         </CardContent>
                     </Card>
                 )}

@@ -1,11 +1,10 @@
 
-
 "use client";
 
 import React, { useState } from "react";
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2 } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, Calendar } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -16,7 +15,6 @@ import {
 import { AddEntityDialog } from "@/components/add-entity-dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import useFirebase from "@/hooks/use-firebase";
 import {
   Table,
   TableBody,
@@ -43,6 +41,8 @@ interface Partner {
   capital: number;
   profitShare: number;
   warehouseId: string;
+  startDate: string;
+  endDate: string;
 }
 
 interface Warehouse {
@@ -52,10 +52,21 @@ interface Warehouse {
 
 const PartnerForm = ({ partner, onSave, onClose, warehouses }: { partner?: Partner, onSave: (partner: Partner) => void, onClose: () => void, warehouses: Warehouse[] }) => {
   const [formData, setFormData] = useState<Partner>(
-    partner || { name: "", capital: 0, profitShare: 0, warehouseId: "" }
+    partner || { 
+        name: "", 
+        capital: 0, 
+        profitShare: 0, 
+        warehouseId: "", 
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 10)).toISOString().split('T')[0]
+    }
   );
 
   const handleSubmit = async () => {
+    if (!formData.name || !formData.warehouseId || !formData.startDate || !formData.endDate) {
+        alert("يرجى ملء جميع الحقول المطلوبة.");
+        return;
+    }
     await onSave({
         ...formData,
         capital: Number(formData.capital),
@@ -74,6 +85,19 @@ const PartnerForm = ({ partner, onSave, onClose, warehouses }: { partner?: Partn
           <Input id="partner-name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="col-span-3" />
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="partner-warehouse" className="text-right">
+            المخزن / الفرع
+          </Label>
+          <Select value={formData.warehouseId} onValueChange={(value) => setFormData({...formData, warehouseId: value})}>
+            <SelectTrigger className="col-span-3">
+              <SelectValue placeholder="اختر المخزن المرتبط" />
+            </SelectTrigger>
+            <SelectContent>
+              {warehouses.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="partner-capital" className="text-right">
             رأس المال
           </Label>
@@ -86,21 +110,16 @@ const PartnerForm = ({ partner, onSave, onClose, warehouses }: { partner?: Partn
             <Input id="partner-share" type="number" value={formData.profitShare} onChange={(e) => setFormData({...formData, profitShare: e.target.value as any})} className="col-span-3" />
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
-          <Label htmlFor="partner-warehouse" className="text-right">
-            المخزن
-          </Label>
-          <Select value={formData.warehouseId} onValueChange={(value) => setFormData({...formData, warehouseId: value})}>
-            <SelectTrigger className="col-span-3">
-              <SelectValue placeholder="اختر المخزن المرتبط" />
-            </SelectTrigger>
-            <SelectContent>
-              {warehouses.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+            <Label htmlFor="start-date" className="text-right">بداية الشراكة</Label>
+            <Input id="start-date" type="date" value={formData.startDate} onChange={(e) => setFormData({...formData, startDate: e.target.value})} className="col-span-3" />
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="end-date" className="text-right">نهاية الشراكة</Label>
+            <Input id="end-date" type="date" value={formData.endDate} onChange={(e) => setFormData({...formData, endDate: e.target.value})} className="col-span-3" />
         </div>
       </div>
       <div className="flex justify-end">
-        <Button onClick={handleSubmit}>حفظ</Button>
+        <Button onClick={handleSubmit}>حفظ بيانات الشريك</Button>
       </div>
     </>
   );
@@ -135,7 +154,7 @@ export default function PartnersPage() {
       <PageHeader title="إدارة الشركاء">
          <AddEntityDialog
           title="إضافة شريك جديد"
-          description="أدخل تفاصيل الشريك الجديد هنا."
+          description="أدخل تفاصيل الشريك وفترة الشراكة لتوزيع الأرباح بدقة."
           triggerButton={
             <Button size="sm" className="gap-1" disabled={loadingData}>
               <PlusCircle className="h-4 w-4" />
@@ -149,9 +168,9 @@ export default function PartnersPage() {
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
         <Card>
           <CardHeader>
-            <CardTitle>الشركاء</CardTitle>
+            <CardTitle>الشركاء وحصص الأرباح</CardTitle>
             <CardDescription>
-              إدارة الشركاء مع رأس المال وحصة الأرباح وربطهم بالمخازن.
+              إدارة الشركاء مع تحديد فترة الشراكة لكل منهم لضمان توزيع عادل للأرباح اليومية.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -165,9 +184,10 @@ export default function PartnersPage() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>اسم الشريك</TableHead>
-                                <TableHead className="text-center hidden sm:table-cell">رأس المال</TableHead>
-                                <TableHead className="text-center hidden sm:table-cell">حصة الأرباح (%)</TableHead>
-                                <TableHead>المخزن</TableHead>
+                                <TableHead>المخزن / الفرع</TableHead>
+                                <TableHead className="text-center">فترة الشراكة</TableHead>
+                                <TableHead className="text-center">رأس المال</TableHead>
+                                <TableHead className="text-center">الحصة (%)</TableHead>
                                 <TableHead className="text-center w-[100px]">الإجراءات</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -175,9 +195,15 @@ export default function PartnersPage() {
                             {partners.map((partner: any) => (
                                 <TableRow key={partner.id}>
                                     <TableCell className="font-medium">{partner.name}</TableCell>
-                                    <TableCell className="text-center hidden sm:table-cell">{partner.capital}</TableCell>
-                                    <TableCell className="text-center hidden sm:table-cell">{partner.profitShare}%</TableCell>
                                     <TableCell>{getWarehouseName(partner.warehouseId)}</TableCell>
+                                    <TableCell className="text-center">
+                                        <div className="flex flex-col text-xs">
+                                            <span>من: {new Date(partner.startDate).toLocaleDateString('ar-EG')}</span>
+                                            <span>إلى: {new Date(partner.endDate).toLocaleDateString('ar-EG')}</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-center">{partner.capital?.toLocaleString()}</TableCell>
+                                    <TableCell className="text-center">{partner.profitShare}%</TableCell>
                                     <TableCell className="text-center">
                                         <AlertDialog>
                                             <DropdownMenu>
@@ -191,7 +217,7 @@ export default function PartnersPage() {
                                                     <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
                                                     <AddEntityDialog
                                                         title="تعديل الشريك"
-                                                        description="قم بتحديث تفاصيل الشريك هنا."
+                                                        description="قم بتحديث تفاصيل الشريك وفترة الشراكة."
                                                         triggerButton={
                                                             <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                                                             <Edit className="ml-2 h-4 w-4" />
