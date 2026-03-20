@@ -46,13 +46,13 @@ interface Warehouse {
 const ItemsDetailsDialog = ({ move, allItems, salesInvoices, posSales }: { move: any | null, allItems: any[], salesInvoices: any[], posSales: any[] }) => {
     if (!move) return null;
     
-    const isSale = move.type === 'out' && (move.reason === 'sales_invoice' || move.type === 'stock-out-pos');
+    const isSale = move.type === 'out' && (move.reason === 'sales_invoice' || move.reason === 'pos_sale' || move.type === 'stock-out-pos');
     const isAdjustment = move.type === 'adjustment';
-    const referenceNumber = move.saleInvoiceNumber || move.receiptNumber;
+    const referenceNumber = move.saleInvoiceNumber || move.invoiceNumber || move.receiptNumber;
 
     const itemsWithDetails = useMemo(() => {
         if (!move.items) return [];
-        const originalInvoice = isSale ? [...salesInvoices, ...posSales].find((s:any) => s.id === move.saleInvoiceId) : null;
+        const originalInvoice = isSale ? [...salesInvoices, ...posSales].find((s:any) => s.id === (move.saleInvoiceId || move.id)) : null;
         
         return move.items.map((item: any) => {
             const masterItem = allItems.find(i => (i as any).id === (item.itemId || item.id));
@@ -188,15 +188,10 @@ export default function InventoryMovementsPage() {
         if (move.type === 'transfer') return 'تحويل';
         if (move.type === 'adjustment') return 'تسوية جرد';
         if (move.type === 'out') {
-            if(move.reason === 'sales_invoice' || move.type === 'stock-out-pos') {
-                return 'صرف (فاتورة بيع)';
-            }
-             if (move.reason === 'purchase_return') {
-                return 'مرتجع شراء';
-            }
-            if(move.reason === 'rep_issue') {
-                return 'صرف لمندوب';
-            }
+            if (move.reason === 'sales_invoice') return 'صرف (فاتورة بيع)';
+            if (move.reason === 'pos_sale') return 'صرف (بيع كاشير)';
+            if (move.reason === 'purchase_return') return 'مرتجع شراء';
+            if (move.reason === 'rep_issue') return 'صرف لمندوب';
             return `صرف (${move.reason || 'يدوي'})`;
         }
         return 'غير معروف';
@@ -213,8 +208,18 @@ export default function InventoryMovementsPage() {
     posReturns.forEach((r: any) => allMovements.push({ ...r, type: 'in', warehouseId: r.warehouseId, reason: 'pos_return'}));
     stockReturnsFromReps.forEach((r: any) => allMovements.push({ ...r, type: 'in', warehouseId: r.warehouseId, reason: 'rep_return' }));
 
-    // OUT
+    // OUT - Add Sales explicitly to movements to be consistent with Item Ledger
     stockOutRecords.forEach((r: any) => allMovements.push({ ...r, type: 'out', warehouseId: r.sourceId }));
+    
+    // Filter sales that don't already have an explicit stock-out record (to avoid double counting manual/manufacturing stock-outs)
+    salesInvoices.filter((s:any) => s.status === 'approved' && !stockOutRecords.some(so => so.saleInvoiceId === s.id)).forEach((s: any) => {
+        allMovements.push({ ...s, type: 'out', reason: 'sales_invoice', warehouseId: s.warehouseId });
+    });
+    
+    posSales.filter((s:any) => !stockOutRecords.some(so => so.saleInvoiceId === s.id)).forEach((s: any) => {
+        allMovements.push({ ...s, type: 'out', reason: 'pos_sale', warehouseId: s.warehouseId });
+    });
+
     purchaseReturns.forEach((r: any) => allMovements.push({ ...r, type: 'out', warehouseId: r.warehouseId, reason: 'purchase_return' }));
     stockIssuesToReps.forEach((r: any) => allMovements.push({ ...r, type: 'out', warehouseId: r.warehouseId, reason: 'rep_issue'}));
 
@@ -251,7 +256,7 @@ export default function InventoryMovementsPage() {
   }, [
     stockInRecords, stockOutRecords, stockTransferRecords, stockAdjustmentRecords,
     salesReturns, posReturns, purchaseReturns, stockIssuesToReps, stockReturnsFromReps,
-    filters
+    salesInvoices, posSales, filters
   ]);
 
 
@@ -267,16 +272,18 @@ export default function InventoryMovementsPage() {
     );
   }
   
-  const getReceiptTooltip = (receiptNumber?: string): string => {
-    if (!receiptNumber) return "رقم مرجعي";
-    if (receiptNumber.startsWith('إذ-د-')) return "إذن دخول مخزني";
-    if (receiptNumber.startsWith('إذ-خ-')) return "إذن صرف مخزني";
-    if (receiptNumber.startsWith('إذ-ت-')) return "إذن تحويل مخزني";
-    if (receiptNumber.startsWith('ت-م-')) return "إيصال تسوية مخزنية";
-    if (receiptNumber.startsWith('م-ب-')) return "مرتجع بيع";
-    if (receiptNumber.startsWith('م-ش-')) return "مرتجع شراء";
-    if (receiptNumber.startsWith('ص-م-')) return "صرف بضاعة لمندوب";
-    if (receiptNumber.startsWith('م-ع-')) return "مرتجع من مندوب";
+  const getReceiptTooltip = (move: any): string => {
+    const num = move.saleInvoiceNumber || move.invoiceNumber || move.receiptNumber;
+    if (!num) return "رقم مرجعي";
+    if (num.startsWith('ف-ب-') || move.reason === 'pos_sale') return "فاتورة مبيعات";
+    if (num.startsWith('إذ-د-')) return "إذن دخول مخزني";
+    if (num.startsWith('إذ-خ-')) return "إذن صرف مخزني";
+    if (num.startsWith('إذ-ت-')) return "إذن تحويل مخزني";
+    if (num.startsWith('ت-م-')) return "إيصال تسوية مخزنية";
+    if (num.startsWith('م-ب-')) return "مرتجع بيع";
+    if (num.startsWith('م-ش-')) return "مرتجع شراء";
+    if (num.startsWith('ص-م-')) return "صرف بضاعة لمندوب";
+    if (num.startsWith('م-ع-')) return "مرتجع من مندوب";
     return "رقم مرجعي";
   }
 
@@ -350,7 +357,7 @@ export default function InventoryMovementsPage() {
           <CardHeader>
             <CardTitle>سجل حركات المخزون</CardTitle>
             <CardDescription>
-              عرض لجميع عمليات الاستلام والصرف والتحويل والتسويات التي تمت في المخازن.
+              عرض لجميع عمليات الاستلام والصرف والتحويل والتسويات والمبيعات التي تمت في المخازن.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -376,16 +383,16 @@ export default function InventoryMovementsPage() {
                                 <TableCell>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
-                                            <Link href={getLinkForReceipt(move.saleInvoiceNumber || move.receiptNumber, move.id) || '#'} className="hover:underline hover:text-primary font-mono">
-                                                <span>{move.saleInvoiceNumber || move.receiptNumber}</span>
+                                            <Link href={getLinkForReceipt(move.saleInvoiceNumber || move.invoiceNumber || move.receiptNumber, move.id) || '#'} className="hover:underline hover:text-primary font-mono">
+                                                <span>{move.saleInvoiceNumber || move.invoiceNumber || move.receiptNumber}</span>
                                             </Link>
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                            <p>{getReceiptTooltip(move.receiptNumber)}</p>
+                                            <p>{getReceiptTooltip(move)}</p>
                                         </TooltipContent>
                                     </Tooltip>
                                      <div className="text-xs text-muted-foreground font-semibold">{new Date(move.date).toLocaleString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                                     <div className="text-[10px] text-muted-foreground">بواسطة: {move.createdByName || 'غير معروف'}</div>
+                                     <div className="text-[10px] text-muted-foreground">بواسطة: {move.createdByName || move.cashierName || 'غير معروف'}</div>
                                 </TableCell>
                                 <TableCell className="text-center">
                                     <Badge variant={

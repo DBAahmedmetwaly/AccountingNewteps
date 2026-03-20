@@ -69,7 +69,7 @@ export default function NewStockOutPage() {
     const { toast } = useToast();
     const { user } = useAuth();
     const [items, setItems] = useState<StockItem[]>([]);
-    const [newItem, setNewItem] = useState<{id: string; name: string; qty: number; cost: number; unit: string; code: string; sourceStock: number; destinationStock: number;}>({ id: "", name: "", qty: 1, cost: 0, unit: "", code: "", sourceStock: 0, destinationStock: 0 });
+    const [newItem, setNewItem] = useState<{id: string; name: string; qty: number; cost: number; unit: string; code: string; sourceStock: number; destinationStock: number;}>({ id: "", name: "", qty: 1, unit: "", cost: 0, code: "", sourceStock: 0, destinationStock: 0 });
     const [selectedUnit, setSelectedUnit] = useState('base');
     const [availableUnits, setAvailableUnits] = useState<SecondaryUnitOption[]>([]);
     const [isSaving, setIsSaving] = useState(false);
@@ -509,7 +509,7 @@ export default function NewStockOutPage() {
                             </TableHeader>
                             <TableBody>
                             {items.map((item) => (
-                                <TableRow key={item.id}>
+                                <TableRow key={item.uniqueId}>
                                 <TableCell>{item.name}</TableCell>
                                 <TableCell className="font-mono text-xs">{item.code}</TableCell>
                                 <TableCell className="text-center">{item.unit}</TableCell>
