@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Trash2, Loader2, Download, Upload, Camera, Save } from "lucide-react";
+import { PlusCircle, Trash2, Loader2, Download, Upload, Camera, Save, Boxes, AlertCircle } from "lucide-react";
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
@@ -20,7 +20,8 @@ import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { calculateStockForItemInWarehouse } from "@/lib/inventory-utils";
-
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 interface AdjustmentItem {
   itemId: string;
@@ -42,6 +43,7 @@ interface Item {
 export default function NewStockAdjustmentPage() {
     const { toast } = useToast();
     const router = useRouter();
+    const isMobile = useIsMobile();
     const allDataContext = useData();
     const { 
         items: allItems, 
@@ -53,7 +55,7 @@ export default function NewStockAdjustmentPage() {
     } = allDataContext;
 
     const [items, setItems] = useState<AdjustmentItem[]>([]);
-    const [newItem, setNewItem] = useState({ itemId: "", actualQty: 0, systemQty: 0 });
+    const [newItem, setNewItem] = useState({ itemId: "", actualQty: 0 });
     const [branchFilter, setBranchFilter] = useState<string>("all");
     const [selectedWarehouse, setSelectedWarehouse] = useState<string>("");
     const [notes, setNotes] = useState<string>("");
@@ -113,15 +115,14 @@ export default function NewStockAdjustmentPage() {
             if (existingItem) {
                  toast({ title: "الصنف موجود بالفعل", description: `الصنف ${item.name} في القائمة بالفعل.` });
             } else {
-                 const systemQty = calculateSystemStock(item.id, selectedWarehouse);
-                 setNewItem({ itemId: item.id, actualQty: 1, systemQty });
+                 setNewItem({ itemId: item.id, actualQty: 1 });
                  toast({ title: "تم العثور على الصنف", description: `تم تحديد الصنف: ${item.name}` });
                  setTimeout(() => newItemQtyInputRef.current?.focus(), 100);
             }
         } else {
             toast({ variant: 'destructive', title: "صنف غير موجود", description: `لم يتم العثور على صنف بالباركود: ${scannedCode}` });
         }
-    }, [availableItems, items, selectedWarehouse, toast, calculateSystemStock]);
+    }, [availableItems, items, toast]);
 
     useEffect(() => {
         let stream: MediaStream | null = null;
@@ -254,6 +255,7 @@ export default function NewStockAdjustmentPage() {
         const selectedItemData = availableItems.find((i: Item) => i.id === newItem.itemId);
         if (!selectedItemData) return;
         
+        // Calculate system qty ONLY when adding
         const systemQty = calculateSystemStock(newItem.itemId, selectedWarehouse);
         const difference = newItem.actualQty - systemQty;
 
@@ -268,7 +270,7 @@ export default function NewStockAdjustmentPage() {
                 uniqueId: `${selectedItemData.id}-${Date.now()}`
             },
         ]);
-        setNewItem({ itemId: "", actualQty: 0, systemQty: 0 });
+        setNewItem({ itemId: "", actualQty: 0 });
     };
 
     const handleUpdateDuplicate = () => {
@@ -281,7 +283,7 @@ export default function NewStockAdjustmentPage() {
             }
             return i;
         }));
-        setNewItem({ itemId: "", actualQty: 0, systemQty: 0 });
+        setNewItem({ itemId: "", actualQty: 0 });
         setDuplicateItemInfo(null);
     };
 
@@ -300,12 +302,17 @@ export default function NewStockAdjustmentPage() {
 
         try {
             const nextId = await getNextId('stockAdjustment');
+            
+            // Mix current time with selected date
             const now = new Date();
+            const dateObj = new Date(); // Using current date
+            dateObj.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+
             const receiptNumber = `ت-م-${nextId}`;
 
             const record = {
                 warehouseId: selectedWarehouse,
-                date: now.toISOString(),
+                date: dateObj.toISOString(),
                 items: itemsWithDifference.map(item => ({
                     itemId: item.itemId,
                     name: item.itemName,
@@ -360,18 +367,18 @@ export default function NewStockAdjustmentPage() {
       </Dialog>
 
       <PageHeader title="تسوية وجرد المخزون" />
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
+      <main className="flex flex-1 flex-col gap-4 p-2 md:p-6">
         <Card>
-          <CardHeader>
+          <CardHeader className="p-4 md:p-6">
             <CardTitle>إيصال تسوية مخزنية</CardTitle>
             <CardDescription>تصحيح كميات المخزون بناءً على الجرد الفعلي.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 p-4 md:p-6">
             {loading ? (
                  <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
             ) : (
                 <>
-                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-end">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                          <div className="space-y-2">
                             <Label htmlFor="adjustment-type">نوع التسوية</Label>
                             <Select value={adjustmentType} onValueChange={(v: any) => { setAdjustmentType(v); setItems([]); }}>
@@ -391,7 +398,7 @@ export default function NewStockAdjustmentPage() {
                             <Combobox options={warehouseOptions} value={selectedWarehouse} onValueChange={(v) => { setSelectedWarehouse(v); setItems([]); }} placeholder="اختر المخزن..." emptyMessage="لا يوجد مخازن لهذا الفرع." />
                         </div>
                         <div className="space-y-2">
-                             <Label>استيراد</Label>
+                             <Label className="hidden md:block">استيراد</Label>
                              <div className="flex gap-2">
                                 <Button onClick={handleDownloadTemplate} disabled={!selectedWarehouse} variant="outline" className="flex-1"><Download className="ml-2 h-4 w-4" /> القالب</Button>
                                 <Input id="file-upload" type="file" accept=".xlsx, .xls" onChange={handleFileUpload} className="hidden" />
@@ -400,84 +407,143 @@ export default function NewStockAdjustmentPage() {
                         </div>
                     </div>
                     
-                    <div>
-                      <Label>الأصناف</Label>
-                      <div className="w-full overflow-auto border rounded-lg">
-                        <Table>
-                            <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-[40%]">الصنف</TableHead>
-                                {adjustmentType === 'periodic_count' && <TableHead className="text-center">الكمية بالنظام</TableHead>}
-                                <TableHead className="text-center">الكمية الفعلية</TableHead>
-                                <TableHead className="text-center">الفرق</TableHead>
-                                <TableHead className="text-center w-[100px]">الإجراء</TableHead>
-                            </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                            {items.map((item) => (
-                                <TableRow key={item.uniqueId}>
-                                <TableCell>{item.itemName}</TableCell>
-                                {adjustmentType === 'periodic_count' && <TableCell className="text-center">{item.systemQty}</TableCell>}
-                                <TableCell className="text-center">{item.actualQty}</TableCell>
-                                <TableCell className={`text-center font-bold ${item.difference > 0 ? 'text-green-500' : item.difference < 0 ? 'text-destructive' : ''}`}>
-                                    {item.difference > 0 ? `+${item.difference}` : item.difference}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.uniqueId)}>
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                </TableCell>
-                                </TableRow>
-                            ))}
-                             <TableRow className="bg-muted/30">
-                                <TableCell className="p-2 flex items-center gap-2">
+                    <div className="space-y-4">
+                      <Label className="text-lg font-bold">الأصناف المضافة للجرد ({items.length})</Label>
+                      
+                      {/* Entry Row - Always visible and optimized for blind counting */}
+                      <Card className="bg-muted/30 border-dashed">
+                        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                            <div className="md:col-span-6 space-y-2">
+                                <Label>اختيار الصنف</Label>
+                                <div className="flex gap-2">
                                     <Combobox
                                         options={availableItemsForCombobox}
                                         value={newItem.itemId}
                                         onValueChange={(v) => {
                                             if(v) {
-                                                const sysStock = calculateSystemStock(v, selectedWarehouse);
-                                                setNewItem({ ...newItem, itemId: v, systemQty: sysStock, actualQty: sysStock });
+                                                setNewItem({ ...newItem, itemId: v });
                                                 setTimeout(() => newItemQtyInputRef.current?.focus(), 100);
                                             }
                                         }}
-                                        placeholder="ابحث عن صنف..."
+                                        placeholder="ابحث عن صنف بالاسم أو الكود..."
                                         className="flex-1"
                                     />
-                                     <Button variant="outline" size="icon" onClick={() => setIsScannerOpen(true)} disabled={!selectedWarehouse}><Camera className="h-4 w-4" /></Button>
-                                </TableCell>
-                                {adjustmentType === 'periodic_count' && <TableCell className="text-center font-semibold">{newItem.systemQty}</TableCell>}
-                                <TableCell className="p-2">
-                                    <Input 
-                                      ref={newItemQtyInputRef}
-                                      type="number" 
-                                      placeholder="الكمية الفعلية" 
-                                      value={newItem.actualQty} 
-                                      onChange={e => setNewItem({...newItem, actualQty: parseFloat(e.target.value) || 0})}
-                                      onFocus={e => e.target.select()}
-                                      onKeyDown={(e) => e.key === 'Enter' && handleAddItem()}
-                                    />
-                                </TableCell>
-                                <TableCell className="text-center font-bold">{newItem.actualQty - newItem.systemQty}</TableCell>
-                                <TableCell className="text-center">
-                                    <Button onClick={handleAddItem} size="sm" disabled={!selectedWarehouse || !newItem.itemId}><PlusCircle className="ml-2 h-4 w-4" /> إضافة</Button>
-                                </TableCell>
-                            </TableRow>
-                            </TableBody>
-                        </Table>
-                      </div>
+                                    <Button variant="outline" size="icon" onClick={() => setIsScannerOpen(true)} disabled={!selectedWarehouse}><Camera className="h-4 w-4" /></Button>
+                                </div>
+                            </div>
+                            <div className="md:col-span-4 space-y-2">
+                                <Label>الكمية الفعلية المكتشفة</Label>
+                                <Input 
+                                    ref={newItemQtyInputRef}
+                                    type="number" 
+                                    placeholder="أدخل الكمية هنا..." 
+                                    value={newItem.actualQty || ''} 
+                                    onChange={e => setNewItem({...newItem, actualQty: parseFloat(e.target.value) || 0})}
+                                    onFocus={e => e.target.select()}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleAddItem()}
+                                    className="text-lg h-10 font-bold"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <Button onClick={handleAddItem} className="w-full h-10" disabled={!selectedWarehouse || !newItem.itemId}>
+                                    <PlusCircle className="ml-2 h-4 w-4" /> إضافة للجرد
+                                </Button>
+                            </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Items List - Table for Desktop, Cards for Mobile */}
+                      {isMobile ? (
+                          <div className="space-y-3">
+                              {items.map((item) => (
+                                  <Card key={item.uniqueId} className="relative overflow-hidden">
+                                      <div className={cn("absolute left-0 top-0 bottom-0 w-1", item.difference > 0 ? "bg-green-500" : item.difference < 0 ? "bg-destructive" : "bg-muted")} />
+                                      <CardContent className="p-4">
+                                          <div className="flex justify-between items-start gap-2 mb-2">
+                                              <div className="font-bold">{item.itemName}</div>
+                                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveItem(item.uniqueId)}>
+                                                  <Trash2 className="h-4 w-4" />
+                                              </Button>
+                                          </div>
+                                          <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                                              <div className="bg-muted p-2 rounded">
+                                                  <p className="text-muted-foreground mb-1">النظام</p>
+                                                  <p className="font-bold">{item.systemQty}</p>
+                                              </div>
+                                              <div className="bg-primary/5 p-2 rounded">
+                                                  <p className="text-muted-foreground mb-1">الفعلي</p>
+                                                  <p className="font-bold text-primary">{item.actualQty}</p>
+                                              </div>
+                                              <div className={cn("p-2 rounded", item.difference > 0 ? "bg-green-50" : "bg-red-50")}>
+                                                  <p className="text-muted-foreground mb-1">الفرق</p>
+                                                  <p className={cn("font-bold", item.difference > 0 ? "text-green-600" : "text-destructive")}>
+                                                      {item.difference > 0 ? `+${item.difference}` : item.difference}
+                                                  </p>
+                                              </div>
+                                          </div>
+                                      </CardContent>
+                                  </Card>
+                              ))}
+                          </div>
+                      ) : (
+                        <div className="w-full overflow-auto border rounded-lg">
+                            <Table>
+                                <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-[40%]">الصنف</TableHead>
+                                    {adjustmentType === 'periodic_count' && <TableHead className="text-center">الكمية بالنظام</TableHead>}
+                                    <TableHead className="text-center">الكمية الفعلية</TableHead>
+                                    <TableHead className="text-center">الفرق</TableHead>
+                                    <TableHead className="text-center w-[100px]">إجراء</TableHead>
+                                </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                {items.map((item) => (
+                                    <TableRow key={item.uniqueId}>
+                                    <TableCell className="font-medium">{item.itemName}</TableCell>
+                                    {adjustmentType === 'periodic_count' && <TableCell className="text-center font-mono">{item.systemQty}</TableCell>}
+                                    <TableCell className="text-center font-bold text-primary">{item.actualQty}</TableCell>
+                                    <TableCell className={`text-center font-bold ${item.difference > 0 ? 'text-green-500' : item.difference < 0 ? 'text-destructive' : ''}`}>
+                                        <div className="flex items-center justify-center gap-1">
+                                            {item.difference > 0 ? `+${item.difference}` : item.difference}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.uniqueId)}>
+                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </TableCell>
+                                    </TableRow>
+                                ))}
+                                {items.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="text-center py-10 text-muted-foreground italic">
+                                            <Boxes className="h-10 w-10 mx-auto mb-2 opacity-20" />
+                                            لم يتم إضافة أي أصناف للجرد بعد.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                      )}
                     </div>
+
                     <div className="space-y-2">
                         <Label htmlFor="notes">ملاحظات عامة</Label>
-                        <Textarea id="notes" placeholder="أضف أي ملاحظات هنا..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+                        <Textarea id="notes" placeholder="أضف أي ملاحظات هنا تظهر في التقرير..." value={notes} onChange={(e) => setNotes(e.target.value)} />
                     </div>
                 </>
             )}
           </CardContent>
-          <CardFooter className="flex justify-end">
-            <Button size="lg" disabled={loading || isSaving || items.length === 0} onClick={handleConfirm}>
+          <CardFooter className="flex flex-col md:flex-row justify-between gap-4 p-4 md:p-6 bg-muted/10 border-t">
+            <div className="flex items-center gap-2 text-amber-600 text-sm">
+                <AlertCircle className="h-4 w-4" />
+                <span>سيتم تحديث أرصدة المخزن المختار فور الحفظ وتعديل التكاليف محاسبياً.</span>
+            </div>
+            <Button size="lg" className="w-full md:w-auto px-10" disabled={loading || isSaving || items.length === 0} onClick={handleConfirm}>
                  {isSaving ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Save className="ml-2 h-4 w-4" />}
-                 تأكيد وحفظ التسوية
+                 تأكيد وحفظ التسوية النهائية
             </Button>
           </CardFooter>
         </Card>
