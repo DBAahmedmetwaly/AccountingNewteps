@@ -6,8 +6,10 @@ import PageHeader from "@/components/page-header";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useData } from "@/contexts/data-provider";
-import { Loader2, DollarSign, Users, Building, Package, TrendingUp, TrendingDown, AlertTriangle, Clock, ShoppingCart } from "lucide-react";
+import { Loader2, DollarSign, Users, Building, Package, TrendingUp, TrendingDown, AlertTriangle, Clock, ShoppingCart, Calculator, Info } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Combobox } from "@/components/ui/combobox";
@@ -28,6 +30,7 @@ import { BarChart, CartesianGrid, XAxis, YAxis, Legend, Bar, ResponsiveContainer
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/auth-context";
 import { calculateStockForItemInWarehouse } from "@/lib/inventory-utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 
 // Data Interfaces
 interface Item { id: string; name: string; cost?: number; reorderPoint?: number; }
@@ -71,6 +74,7 @@ export default function DashboardPage() {
     });
     const [recomputedInventoryValue, setRecomputedInventoryValue] = useState<number | null>(null);
     const [invLoading, setInvLoading] = useState(false);
+    const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
     
     useEffect(() => {
         if (user?.warehouseIds?.length === 1 && user.warehouseIds[0] !== 'all') {
@@ -224,7 +228,6 @@ export default function DashboardPage() {
 
         posReturns.filter((r:any) => isWarehouseAllowed(r.warehouseId)).forEach((r: any) => {
             if ((r.paidAmount || 0) > 0) {
-                // Determine target account: usually the warehouse cash account
                 const targetId = filteredCashAccounts.find(acc => acc.warehouseId === r.warehouseId)?.id;
                 if (targetId && filteredCashAccountIds.has(targetId)) {
                     totalCash -= r.paidAmount;
@@ -283,7 +286,7 @@ export default function DashboardPage() {
         const totalExtraIncome = filteredData.filteredIncome.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0);
         
         let totalCOGS = 0;
-        let salesGrossProfit = 0;
+        let totalRevenue = 0;
         filteredData.sales.forEach((sale: any) => {
             const saleCost = sale.items.reduce((acc: number, item: any) => {
                 const master = items.find((i:any) => i.id === item.id);
@@ -291,22 +294,25 @@ export default function DashboardPage() {
                 return acc + (Number(item.qty || 0) * unitCost);
             }, 0);
             totalCOGS += saleCost;
-            // Gross profit here is already net of invoice discounts if using sale.total
-            salesGrossProfit += (Number(sale.total) - saleCost);
+            totalRevenue += Number(sale.total);
         });
 
-        // Net Profit = (Sales Gross Profit - Sales Returns - Expenses + Extra Income)
-        const netProfitValue = salesGrossProfit - totalSalesReturns - totalExpenses + totalExtraIncome;
+        const grossProfit = totalRevenue - totalCOGS;
+        const netProfitValue = grossProfit - totalSalesReturns - totalExpenses + totalExtraIncome;
 
         return { 
             totalCash, 
             accountsReceivable: ar, 
             accountsPayable: ap, 
             inventoryValue,
+            totalRevenue,
             totalExpenses,
             totalReturns,
+            totalSalesReturns,
             totalPurchases,
             totalCOGS,
+            totalExtraIncome,
+            grossProfit,
             netProfit: netProfitValue,
             customersCount: customers.length,
             suppliersCount: suppliers.length,
@@ -519,14 +525,76 @@ export default function DashboardPage() {
         </div>
         
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي المبيعات</CardTitle><ShoppingCart className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.totalRevenue.toLocaleString()} ج.م</div></CardContent></Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي المصروفات</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold text-destructive">{kpiData.totalExpenses.toLocaleString()} ج.م</div></CardContent></Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي المرتجعات</CardTitle><TrendingDown className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{kpiData.totalReturns.toLocaleString()} ج.م</div></CardContent></Card>
-            <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي المشتريات</CardTitle><ShoppingCart className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.totalPurchases.toLocaleString()} ج.م</div></CardContent></Card>
-            <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium"> تكلفة البضاعة المباعة</CardTitle><Package className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.totalCOGS.toLocaleString()} ج.م</div></CardContent></Card>
-            <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium"> صافي الربح</CardTitle><TrendingUp className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className={`text-2xl font-bold ${kpiData.netProfit >= 0 ? 'text-green-600' : 'text-destructive'}`}>{kpiData.netProfit.toLocaleString()} ج.م</div></CardContent></Card>
+            
+            <Dialog open={isBreakdownOpen} onOpenChange={setIsBreakdownOpen}>
+                <DialogTrigger asChild>
+                    <Card className="cursor-pointer hover:bg-muted/50 transition-colors border-primary/50 shadow-md">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                صافي الربح
+                                <Info className="h-3 w-3 text-muted-foreground"/>
+                            </CardTitle>
+                            <TrendingUp className="h-4 w-4 text-green-500"/>
+                        </CardHeader>
+                        <CardContent>
+                            <div className={`text-2xl font-bold ${kpiData.netProfit >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                                {kpiData.netProfit.toLocaleString()} ج.م
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-1">انقر لعرض تفاصيل الاحتساب</p>
+                        </CardContent>
+                    </Card>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Calculator className="h-5 w-5 text-primary"/>
+                            تفاصيل احتساب صافي الربح
+                        </DialogTitle>
+                        <DialogDescription>
+                            المعادلة المحاسبية المستخدمة للفترة المختارة
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div className="text-muted-foreground">إجمالي المبيعات (الصافي):</div>
+                            <div className="text-left font-semibold">{kpiData.totalRevenue.toLocaleString()} ج.م</div>
+                            
+                            <div className="text-muted-foreground">(-) تكلفة البضاعة المباعة:</div>
+                            <div className="text-left font-semibold text-destructive">-{kpiData.totalCOGS.toLocaleString()} ج.م</div>
+                            
+                            <div className="col-span-2 border-t pt-2 flex justify-between font-bold text-md">
+                                <span>(=) مجمل الربح:</span>
+                                <span>{kpiData.grossProfit.toLocaleString()} ج.م</span>
+                            </div>
+
+                            <div className="text-muted-foreground">(-) مرتجعات المبيعات:</div>
+                            <div className="text-left font-semibold text-destructive">-{kpiData.totalSalesReturns.toLocaleString()} ج.م</div>
+
+                            <div className="text-muted-foreground">(-) إجمالي المصروفات:</div>
+                            <div className="text-left font-semibold text-destructive">-{kpiData.totalExpenses.toLocaleString()} ج.م</div>
+
+                            <div className="text-muted-foreground">(+) دخل إضافي/استثنائي:</div>
+                            <div className="text-left font-semibold text-green-600">+{kpiData.totalExtraIncome.toLocaleString()} ج.م</div>
+                        </div>
+                        <div className="p-4 bg-muted rounded-lg flex justify-between items-center border-2 border-primary/20">
+                            <span className="font-bold text-lg">صافي الربح النهائي:</span>
+                            <span className={cn("font-black text-2xl", kpiData.netProfit >= 0 ? "text-green-600" : "text-destructive")}>
+                                {kpiData.netProfit.toLocaleString()} ج.م
+                            </span>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </div>
+        
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">عدد العملاء</CardTitle><Users className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.customersCount.toLocaleString()}</div></CardContent></Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي الموردين</CardTitle><Building className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.suppliersCount.toLocaleString()}</div></CardContent></Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium"> عدد المنتجات</CardTitle><Package className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.productsCount.toLocaleString()}</div></CardContent></Card>
+            <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium"> تكلفة البضاعة المباعة</CardTitle><Package className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.totalCOGS.toLocaleString()} ج.م</div></CardContent></Card>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
