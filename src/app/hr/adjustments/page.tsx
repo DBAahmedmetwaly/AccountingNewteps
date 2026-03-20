@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState } from 'react';
@@ -122,8 +121,22 @@ export default function EmployeeAdjustmentsPage() {
         try {
             if (!can('add', 'hr_adjustments')) return toast({ variant: "destructive", title: "غير مصرح به" });
             const receiptNumber = `ت-م-${await getNextId('employeeAdjustment')}`;
+            
+            // Fix: Include current time
+            const now = new Date();
+            const selectedDate = new Date(data.date);
+            const finalDate = new Date(
+                selectedDate.getFullYear(),
+                selectedDate.getMonth(),
+                selectedDate.getDate(),
+                now.getHours(),
+                now.getMinutes(),
+                now.getSeconds()
+            );
+
             const newAdjustment: EmployeeAdjustment = {
                 ...data,
+                date: finalDate.toISOString(),
                 receiptNumber,
                 createdById: user?.id,
                 createdByName: user?.name,

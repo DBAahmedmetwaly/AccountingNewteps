@@ -1,5 +1,4 @@
 
-
 "use client";
 
 // استيراد المكونات والأدوات اللازمة
@@ -202,8 +201,22 @@ export default function EmployeeAdvancesPage() {
         try {
             if (!can('add', 'hr_advances')) return toast({ variant: "destructive", title: "غير مصرح به" });
             const receiptNumber = `س-م-${await getNextId('employeeAdvance')}`;
+            
+            // Fix: Include current time
+            const now = new Date();
+            const selectedDate = new Date(data.date);
+            const finalDate = new Date(
+                selectedDate.getFullYear(),
+                selectedDate.getMonth(),
+                selectedDate.getDate(),
+                now.getHours(),
+                now.getMinutes(),
+                now.getSeconds()
+            );
+
             const newAdvance: EmployeeAdvance = {
                 ...data,
+                date: finalDate.toISOString(),
                 receiptNumber,
                 createdById: user?.id,
                 createdByName: user?.name,

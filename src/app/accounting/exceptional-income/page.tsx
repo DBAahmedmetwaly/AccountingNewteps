@@ -1,5 +1,4 @@
 
-
 "use client";
 
 // استيراد المكونات والأدوات اللازمة
@@ -135,8 +134,22 @@ export default function ExceptionalIncomePage() {
     const handleSave = async (data: Omit<ExceptionalIncome, 'id' | 'receiptNumber'>) => {
         try {
             const receiptNumber = `إ-س-${await getNextId('exceptionalIncome')}`;
+            
+            // Fix: Include current time
+            const now = new Date();
+            const selectedDate = new Date(data.date);
+            const finalDate = new Date(
+                selectedDate.getFullYear(),
+                selectedDate.getMonth(),
+                selectedDate.getDate(),
+                now.getHours(),
+                now.getMinutes(),
+                now.getSeconds()
+            );
+
             const newIncome: ExceptionalIncome = {
                 ...data,
+                date: finalDate.toISOString(),
                 receiptNumber,
                 createdById: user?.id,
                 createdByName: user?.name,

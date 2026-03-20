@@ -334,8 +334,22 @@ export default function ExpensesPage() {
 
         try {
             const receiptNumber = `م-${await getNextId('expense')}`;
+            
+            // Fix: Include current time
+            const now = new Date();
+            const selectedDate = new Date(data.date);
+            const finalDate = new Date(
+                selectedDate.getFullYear(),
+                selectedDate.getMonth(),
+                selectedDate.getDate(),
+                now.getHours(),
+                now.getMinutes(),
+                now.getSeconds()
+            );
+
             const newExpense: Expense = {
                 ...data,
+                date: finalDate.toISOString(),
                 receiptNumber,
                 createdById: user?.id,
                 createdByName: user?.name,

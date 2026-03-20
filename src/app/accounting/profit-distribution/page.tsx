@@ -1,5 +1,4 @@
 
-
 "use client";
 
 // استيراد المكونات والأدوات اللازمة
@@ -172,8 +171,22 @@ export default function ProfitDistributionPage() {
     const handleSave = async (data: Omit<ProfitDistribution, 'id' | 'receiptNumber'>) => {
         try {
             const receiptNumber = `ت-أ-${await getNextId('profitDistribution')}`;
+            
+            // Fix: Include current time
+            const now = new Date();
+            const selectedDate = new Date(data.date);
+            const finalDate = new Date(
+                selectedDate.getFullYear(),
+                selectedDate.getMonth(),
+                selectedDate.getDate(),
+                now.getHours(),
+                now.getMinutes(),
+                now.getSeconds()
+            );
+
             const newDistribution: ProfitDistribution = {
                 ...data,
+                date: finalDate.toISOString(),
                 receiptNumber,
                 createdById: user?.id,
                 createdByName: user?.name,

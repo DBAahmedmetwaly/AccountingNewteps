@@ -171,8 +171,22 @@ export default function TreasuryPage() {
     const handleSave = async (data: Omit<TreasuryTransaction, 'id' | 'receiptNumber'>) => {
         try {
             const receiptNumber = `ح-خ-${await getNextId('treasuryTransaction')}`;
+            
+            // Fix: Include current time
+            const now = new Date();
+            const selectedDate = new Date(data.date);
+            const finalDate = new Date(
+                selectedDate.getFullYear(),
+                selectedDate.getMonth(),
+                selectedDate.getDate(),
+                now.getHours(),
+                now.getMinutes(),
+                now.getSeconds()
+            );
+
             const newTransaction: TreasuryTransaction = {
                 ...data,
+                date: finalDate.toISOString(),
                 receiptNumber,
                 createdById: user?.id,
                 createdByName: user?.name,

@@ -331,8 +331,22 @@ export default function CustomerPaymentsPage() {
     const handleSave = async (data: Omit<CustomerPayment, 'id' | 'receiptNumber'>) => {
         try {
             const receiptNumber = `س-ع-${await getNextId('customerPayment')}`;
+            
+            // Fix: Include current time to ensure proper chronological order
+            const now = new Date();
+            const selectedDate = new Date(data.date);
+            const finalDate = new Date(
+                selectedDate.getFullYear(),
+                selectedDate.getMonth(),
+                selectedDate.getDate(),
+                now.getHours(),
+                now.getMinutes(),
+                now.getSeconds()
+            );
+
             const newPayment: CustomerPayment = {
                 ...data,
+                date: finalDate.toISOString(),
                 receiptNumber,
                 createdById: user?.id,
                 createdByName: user?.name,

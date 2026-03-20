@@ -257,8 +257,21 @@ export default function NewSalesReturnPage() {
     setIsSaving(true);
     try {
         const receiptNumber = `م-ب-${await getNextId('salesReturn')}`;
+        
+        // Fix: Include current time
+        const now = new Date();
+        const selectedDate = new Date(returnDate);
+        const finalDate = new Date(
+            selectedDate.getFullYear(),
+            selectedDate.getMonth(),
+            selectedDate.getDate(),
+            now.getHours(),
+            now.getMinutes(),
+            now.getSeconds()
+        );
+
         const returnData = {
-            date: new Date(returnDate).toISOString(),
+            date: finalDate.toISOString(),
             customerId,
             warehouseId,
             items: items.map(item => ({

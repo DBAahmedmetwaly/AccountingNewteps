@@ -55,7 +55,7 @@ const QuickCollectDialog = ({ invoice, onSave }: { invoice: SaleInvoice, onSave:
             return;
         }
         if (amount <= 0) {
-             toast({ variant: 'destructive', title: 'خطأ', description: 'الرجاء إدخال مبلغ صحيح.' });
+             toast({ variant: 'destructive', title: 'خطأ', description: 'الرجاء إدخل مبلغ صحيح.' });
             return;
         }
 
