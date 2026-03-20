@@ -20,7 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useData } from "@/contexts/data-provider";
-import { Loader2, DollarSign, Users, Building, Package, TrendingUp, TrendingDown, AlertTriangle, Clock, ShoppingCart, Calculator, Info } from "lucide-react";
+import { Loader2, DollarSign, Users, Building, Package, TrendingUp, TrendingDown, AlertTriangle, Clock, ShoppingCart, Calculator, Info, Banknote } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Combobox } from "@/components/ui/combobox";
@@ -287,6 +287,7 @@ export default function DashboardPage() {
         
         let totalCOGS = 0;
         let totalRevenue = 0;
+        let totalCashFromSales = 0;
         filteredData.sales.forEach((sale: any) => {
             const saleCost = sale.items.reduce((acc: number, item: any) => {
                 const master = items.find((i:any) => i.id === item.id);
@@ -295,6 +296,7 @@ export default function DashboardPage() {
             }, 0);
             totalCOGS += saleCost;
             totalRevenue += Number(sale.total);
+            totalCashFromSales += Number(sale.paidAmount || 0);
         });
 
         const grossProfit = totalRevenue - totalCOGS;
@@ -306,6 +308,7 @@ export default function DashboardPage() {
             accountsPayable: ap, 
             inventoryValue,
             totalRevenue,
+            totalCashFromSales,
             totalExpenses,
             totalReturns,
             totalSalesReturns,
@@ -525,10 +528,31 @@ export default function DashboardPage() {
         </div>
         
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي المبيعات</CardTitle><ShoppingCart className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.totalRevenue.toLocaleString()} ج.م</div></CardContent></Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">إجمالي المبيعات (الفترة)</CardTitle>
+                    <ShoppingCart className="h-4 w-4 text-primary"/>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{kpiData.totalRevenue.toLocaleString()} ج.م</div>
+                    <p className="text-[10px] text-muted-foreground mt-1">إجمالي الفواتير الصادرة في الفترة</p>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">المحصل نقداً من المبيعات</CardTitle>
+                    <Banknote className="h-4 w-4 text-green-500"/>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold text-green-600">{kpiData.totalCashFromSales.toLocaleString()} ج.م</div>
+                    <p className="text-[10px] text-muted-foreground mt-1">ما تم تحصيله فعلياً من مبيعات الفترة</p>
+                </CardContent>
+            </Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي المصروفات</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold text-destructive">{kpiData.totalExpenses.toLocaleString()} ج.م</div></CardContent></Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي المرتجعات</CardTitle><TrendingDown className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{kpiData.totalReturns.toLocaleString()} ج.م</div></CardContent></Card>
-            
+        </div>
+        
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Dialog open={isBreakdownOpen} onOpenChange={setIsBreakdownOpen}>
                 <DialogTrigger asChild>
                     <Card className="cursor-pointer hover:bg-muted/50 transition-colors border-primary/50 shadow-md">
@@ -588,13 +612,9 @@ export default function DashboardPage() {
                     </div>
                 </DialogContent>
             </Dialog>
-        </div>
-        
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">عدد العملاء</CardTitle><Users className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.customersCount.toLocaleString()}</div></CardContent></Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي الموردين</CardTitle><Building className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.suppliersCount.toLocaleString()}</div></CardContent></Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium"> عدد المنتجات</CardTitle><Package className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.productsCount.toLocaleString()}</div></CardContent></Card>
-            <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium"> تكلفة البضاعة المباعة</CardTitle><Package className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.totalCOGS.toLocaleString()} ج.م</div></CardContent></Card>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
