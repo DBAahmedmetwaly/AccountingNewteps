@@ -10,7 +10,6 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  TableFooter,
 } from "@/components/ui/card";
 import {
   Table,
@@ -19,6 +18,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from "@/components/ui/table";
 import { PlusCircle, Loader2, MoreHorizontal, FileText, Search, Eye, Printer, MessageCircle, Image as ImageIcon } from "lucide-react";
 import { useRouter } from 'next/navigation';
@@ -40,6 +40,24 @@ import { toPng } from 'html-to-image';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/auth-context';
+
+interface SaleInvoice {
+  id: string;
+  invoiceNumber: string;
+  date: string;
+  customerId: string;
+  customerName: string;
+  warehouseId: string;
+  total: number;
+  paidAmount?: number;
+  items: any[];
+  isDelivery?: boolean;
+  deliveryPersonName?: string;
+  subtotal: number;
+  discount: number;
+  tax?: number;
+  isLocked?: boolean;
+}
 
 export default function SalesReturnsListPage() {
   const { salesReturns: returns, posReturns, customers, warehouses, salesInvoices, posSales, customerPayments, settings, loading } = useData();
@@ -262,7 +280,7 @@ export default function SalesReturnsListPage() {
                           <TableCell className="text-center no-print">
                              <DropdownMenu modal={false}>
                                 <DropdownMenuTrigger asChild>
-                                    <Button aria-haspopup="true" size="icon" variant="ghost">
+                                    <Button aria-haspopup="true" size="icon" variant="ghost" className="h-8 w-8">
                                         <MoreHorizontal className="h-4 w-4" />
                                     </Button>
                                 </DropdownMenuTrigger>
