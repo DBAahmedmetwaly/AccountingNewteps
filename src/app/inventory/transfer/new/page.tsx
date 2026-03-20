@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -95,8 +94,6 @@ export default function NewStockTransferPage() {
         stockTransferRecords,
         stockAdjustmentRecords,
         salesReturns,
-        purchaseReturns,
-        stockIssuesToReps,
         stockReturnsFromReps,
         posSales,
         inventoryClosings,
@@ -333,10 +330,21 @@ export default function NewStockTransferPage() {
             }
         });
 
+        const now = new Date();
+        const selectedDate = new Date(date);
+        const finalDate = new Date(
+            selectedDate.getFullYear(),
+            selectedDate.getMonth(),
+            selectedDate.getDate(),
+            now.getHours(),
+            now.getMinutes(),
+            now.getSeconds()
+        );
+
         const record = {
             fromSourceId: fromSource,
             toSourceId: destination,
-            date: new Date().toISOString(),
+            date: finalDate.toISOString(),
             items: itemsToTransfer,
             notes,
             receiptNumber: `إذ-ت-${nextId}`,
@@ -352,7 +360,7 @@ export default function NewStockTransferPage() {
                 // If transferring to a branch (non-main), create a pending stock-in record
                 await dbAction('stockInRecords', 'add', {
                     warehouseId: toSource,
-                    date: new Date().toISOString(),
+                    date: finalDate.toISOString(),
                     items: itemsToTransfer,
                     reason: 'transfer',
                     notes: `وارد من إذن تحويل رقم ${record.receiptNumber} من ${[...warehouses, ...inventoryZones].find((w:any) => w.id === fromSource)?.name}`,

@@ -362,11 +362,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const inventoryZones = useMemo(() => allInventoryZones, [allInventoryZones]);
 
 
-    // Inventory
-    const stockInRecords = useMemo(() => {
+    // Inventory (Flatten date-grouped structures)
+    const flattenGroupedData = (dataNode: any) => {
         const records: any[] = [];
-        if (allData?.stockInRecords) {
-            Object.entries(allData.stockInRecords).forEach(([key, value]: [string, any]) => {
+        if (dataNode) {
+            Object.entries(dataNode).forEach(([key, value]: [string, any]) => {
                 if (value && typeof value === 'object') {
                     if (value.date) { // Old structure (direct child)
                         records.push({ id: key, ...value });
@@ -379,79 +379,31 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
         }
         return records;
-    }, [allData?.stockInRecords]);
-    const stockOutRecords = useMemo(() => allData?.stockOutRecords ? Object.keys(allData.stockOutRecords).map(key => ({ id: key, ...allData.stockOutRecords[key] })) : [], [allData?.stockOutRecords]);
-    const stockTransferRecords = useMemo(() => allData?.stockTransferRecords ? Object.keys(allData.stockTransferRecords).map(key => ({ id: key, ...allData.stockTransferRecords[key] })) : [], [allData?.stockTransferRecords]);
-    const stockAdjustmentRecords = useMemo(() => allData?.stockAdjustmentRecords ? Object.keys(allData.stockAdjustmentRecords).map(key => ({ id: key, ...allData.stockAdjustmentRecords[key] })) : [], [allData?.stockAdjustmentRecords]);
-    const stockIssuesToReps = useMemo(() => allData?.stockIssuesToReps ? Object.keys(allData.stockIssuesToReps).map(key => ({ id: key, ...allData.stockIssuesToReps[key] })) : [], [allData?.stockIssuesToReps]);
-    const stockReturnsFromReps = useMemo(() => allData?.stockReturnsFromReps ? Object.keys(allData.stockReturnsFromReps).map(key => ({ id: key, ...allData.stockReturnsFromReps[key] })) : [], [allData?.stockReturnsFromReps]);
+    }
+
+    const stockInRecords = useMemo(() => flattenGroupedData(allData?.stockInRecords), [allData?.stockInRecords]);
+    const stockOutRecords = useMemo(() => flattenGroupedData(allData?.stockOutRecords), [allData?.stockOutRecords]);
+    const stockTransferRecords = useMemo(() => flattenGroupedData(allData?.stockTransferRecords), [allData?.stockTransferRecords]);
+    const stockAdjustmentRecords = useMemo(() => flattenGroupedData(allData?.stockAdjustmentRecords), [allData?.stockAdjustmentRecords]);
+    const stockIssuesToReps = useMemo(() => flattenGroupedData(allData?.stockIssuesToReps), [allData?.stockIssuesToReps]);
+    const stockReturnsFromReps = useMemo(() => flattenGroupedData(allData?.stockReturnsFromReps), [allData?.stockReturnsFromReps]);
     const inventoryClosings = useMemo(() => allData?.inventoryClosings ? Object.keys(allData.inventoryClosings).map(key => ({ id: key, ...allData.inventoryClosings[key] })) : [], [allData?.inventoryClosings]);
     const requisitions = useMemo(() => allData?.requisitions ? Object.keys(allData.requisitions).map(key => ({ id: key, ...allData.requisitions[key] })) : [], [allData?.requisitions]);
     
     // Sales & Purchases
-    const salesInvoices = useMemo(() => {
-        const invoices: any[] = [];
-        if (allData?.salesInvoices) {
-            Object.entries(allData.salesInvoices).forEach(([key, value]: [string, any]) => {
-                if (value && typeof value === 'object') {
-                    if (value.date) { // Old structure (direct child)
-                        invoices.push({ id: key, ...value });
-                    } else { // New date-grouped structure
-                        Object.entries(value).forEach(([subKey, subValue]: [string, any]) => {
-                            invoices.push({ id: subKey, ...subValue });
-                        });
-                    }
-                }
-            });
-        }
-        return invoices;
-    }, [allData?.salesInvoices]);
+    const salesInvoices = useMemo(() => flattenGroupedData(allData?.salesInvoices), [allData?.salesInvoices]);
     const salesReturns = useMemo(() => allData?.salesReturns ? Object.keys(allData.salesReturns).map(key => ({ id: key, ...allData.salesReturns[key] })) : [], [allData?.salesReturns]);
-    const purchaseInvoices = useMemo(() => {
-        const invoices: any[] = [];
-        if (allData?.purchaseInvoices) {
-            Object.entries(allData.purchaseInvoices).forEach(([key, value]: [string, any]) => {
-                 if (value && typeof value === 'object') {
-                    if (value.date) { // Old structure (direct child)
-                        invoices.push({ id: key, ...value });
-                    } else { // New date-grouped structure
-                        Object.entries(value).forEach(([subKey, subValue]: [string, any]) => {
-                            invoices.push({ id: subKey, ...subValue });
-                        });
-                    }
-                }
-            });
-        }
-        return invoices;
-    }, [allData?.purchaseInvoices]);
+    const purchaseInvoices = useMemo(() => flattenGroupedData(allData?.purchaseInvoices), [allData?.purchaseInvoices]);
     const purchaseReturns = useMemo(() => allData?.purchaseReturns ? Object.keys(allData.purchaseReturns).map(key => ({ id: key, ...allData.purchaseReturns[key] })) : [], [allData?.purchaseReturns]);
     const purchaseOrders = useMemo(() => allData?.purchaseOrders ? Object.keys(allData.purchaseOrders).map(key => ({ id: key, ...allData.purchaseOrders[key] })) : [], [allData?.purchaseOrders]);
-    const posSales = useMemo(() => {
-        const sales: any[] = [];
-        if (allData?.posSales) {
-            Object.entries(allData.posSales).forEach(([key, value]: [string, any]) => {
-                if (value && typeof value === 'object') {
-                    if (value.date) { // Old structure
-                        sales.push({ id: key, ...value });
-                    } else { // New date-grouped structure
-                        Object.entries(value).forEach(([subKey, subValue]: [string, any]) => {
-                            sales.push({ id: subKey, ...subValue });
-                        });
-                    }
-                }
-            });
-        }
-        return sales;
-    }, [allData?.posSales]);
+    const posSales = useMemo(() => flattenGroupedData(allData?.posSales), [allData?.posSales]);
     const posReturns = useMemo(() => {
         if (!allData?.posReturns) return [];
         const returns: any[] = [];
         Object.entries(allData.posReturns).forEach(([key, value]: [string, any]) => {
             if (value && typeof value === 'object' && value.date) {
-                // Old structure: direct child of posReturns
                 returns.push({ id: key, ...value });
             } else if (value && typeof value === 'object') {
-                // New structure: grouped by date
                 Object.entries(value).forEach(([subKey, subValue]: [string, any]) => {
                      if (subValue && typeof subValue === 'object') {
                         returns.push({ id: subKey, ...subValue });
@@ -493,7 +445,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             Object.keys(allData.inventory[warehouseId]).forEach(sectionId => {
                 const sectionData = allData.inventory[warehouseId][sectionId];
                 if (sectionData && typeof sectionData === 'object') {
-                    // This is a section with items inside
                     result.push({
                         id: `${warehouseId}-${sectionId}`,
                         warehouseId: warehouseId,
@@ -520,7 +471,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
              const lastLocalValue = await localforage.getItem<number>(localCounterKey);
              const newValue = (lastLocalValue || (allData?.counters?.[counterName] || startFrom - 1)) + 1;
              await localforage.setItem(localCounterKey, newValue);
-             queue.push({ path, action: 'transaction', timestamp: new Date().toISOString() }); // Add timestamp
+             queue.push({ path, action: 'transaction', timestamp: new Date().toISOString() });
              await localforage.setItem(SYNC_QUEUE_KEY, queue);
              await updateQueueCount();
              return newValue;
@@ -574,11 +525,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                  queue.push({ path, action, payload, timestamp, priority });
             }
             await localforage.setItem(SYNC_QUEUE_KEY, queue);
-            await updateQueueCount(); // Update UI immediately
+            await updateQueueCount();
             
             // Optimistic UI update
             setAllData((prev: any) => {
-                const newData = JSON.parse(JSON.stringify(prev)); // Deep copy
+                const newData = JSON.parse(JSON.stringify(prev));
                 if (action === 'add' && newId) {
                     if (!newData[path]) newData[path] = {};
                     newData[path][newId] = payload;
@@ -594,7 +545,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     }
                 }
 
-                // Persist to local cache
                 if (newData[path]) {
                      localforage.setItem(path, newData[path]).catch(console.error);
                 } else {
@@ -608,17 +558,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } else {
             const result = await performAction(database);
 
-            // Immediate local update for online mode to prevent race conditions with Firebase listener
             setAllData((prev: any) => {
-                // Targeted immutable update
                 const newData = { ...prev };
-                
-                // Ensure path exists if we are adding
                 if ((action === 'add' || action === 'update') && !newData[path]) {
                     newData[path] = {};
                 }
-                
-                // Clone the specific collection to avoid mutation
                 if (newData[path]) {
                     newData[path] = { ...newData[path] };
                 }
@@ -644,14 +588,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             return result;
         }
-    }, [isOnline, updateQueueCount]);
+    }, [isOnline, updateQueueCount, database]);
 
     const value = {
         allItems, items, customers, suppliers, warehouses, cashAccounts, partners, users, deliveryStaff, itemGroups, itemSections, itemCategories, itemSubCategories1, itemSubCategories2, inventoryZones, inventorySections, itemColors, itemSizes, barcodeDesigns, posTerminals, promotions, roles, settings, inventory, restaurantTables, paymentMethods, sellers, targets, licenses, snoozedRecommendations, syncHistory, customerVisits, loginHistory,
         stockInRecords, stockOutRecords, stockTransferRecords, stockAdjustmentRecords, stockIssuesToReps, stockReturnsFromReps, inventoryClosings, requisitions,
         salesInvoices, salesReturns, purchaseInvoices, purchaseReturns, posSales, posReturns, posSessions, posAuditLogs, heldInvoices, posCounters,
         expenses, exceptionalIncomes, customerPayments, supplierPayments, treasuryTransactions, profitDistributions, priceChangeLogs,
-        purchaseOrders, // Added this line
+        purchaseOrders,
          employees, employeeAdvances, employeeAdjustments, repRemittances, payrollRecords, fixedAssets, depreciationRecords,
          dbAction, getNextId,
         loading: isLoading,

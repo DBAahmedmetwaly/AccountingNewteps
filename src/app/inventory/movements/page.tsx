@@ -5,7 +5,7 @@ import PageHeader from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useData } from "@/contexts/data-provider";
-import { Loader2, FileText, Eye, SlidersHorizontal, ArrowLeft, ArrowRight, ArrowDown } from "lucide-react";
+import { Loader2, FileText, Eye, SlidersHorizontal, ArrowLeft, ArrowRight, ArrowDown, Filter, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -60,7 +60,8 @@ const ItemsDetailsDialog = ({ move, allItems, salesInvoices, posSales }: { move:
 
             const cost = item.cost || (masterItem as any)?.cost || 0;
             const price = item.price || invoiceItem?.price || (masterItem as any)?.price || 0;
-            const profit = (price - cost) * (item.qty || item.difference || 0);
+            const totalQty = item.qty !== undefined ? item.qty : Math.abs(item.difference || 0);
+            const profit = (price - cost) * totalQty;
             
             return {
                 ...item,
@@ -68,7 +69,8 @@ const ItemsDetailsDialog = ({ move, allItems, salesInvoices, posSales }: { move:
                 code: item.code || (masterItem as any)?.code || 'N/A',
                 cost,
                 price,
-                profit
+                profit,
+                totalQty
             }
         });
     }, [move, allItems, salesInvoices, posSales, isSale]);
@@ -120,13 +122,13 @@ const ItemsDetailsDialog = ({ move, allItems, salesInvoices, posSales }: { move:
                                     </>
                                 ) : (
                                      <>
-                                        <TableCell className="text-center">{item.qty}</TableCell>
+                                        <TableCell className="text-center">{item.totalQty}</TableCell>
                                         <TableCell className="text-center">{item.cost?.toLocaleString() || '-'}</TableCell>
                                         {isSale && <TableCell className="text-center">{item.price?.toLocaleString() || '-'}</TableCell>}
-                                        {isSale && <TableCell className={`text-center font-semibold ${item.profit >= 0 ? 'text-green-500' : 'text-destructive'}`}>
+                                        {isSale && <TableCell className={`text-center font-semibold ${item.profit >= 0 ? 'text-green-600' : 'text-destructive'}`}>
                                             {item.profit?.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                         </TableCell>}
-                                    </>
+                                     </>
                                 )}
                             </TableRow>
                         ))}
@@ -161,18 +163,14 @@ export default function InventoryMovementsPage() {
   const allWarehouses = useMemo(() => {
     const combined = [...warehouses, ...inventoryZones].filter((w: any) => !w.isRepWarehouse);
     
-    // Filter by User Authorized Branches first
     let filtered = combined;
     if (!user?.warehouseIds?.includes('all')) {
         filtered = combined.filter((w: any) => user?.warehouseIds?.includes(w.id));
     }
 
-    // Then filter by Branch Filter if selected
     if (filters.branchId !== 'all') {
         filtered = filtered.filter((w: any) => {
-            // A "Branch" itself is in warehouses. If it's selected, it should be in the list.
             if (w.id === filters.branchId) return true;
-            // A "Main Warehouse" (Zone) belongs to a branch if branchId matches.
             return (w as any).branchId === filters.branchId;
         });
     }
@@ -221,7 +219,9 @@ export default function InventoryMovementsPage() {
     stockIssuesToReps.forEach((r: any) => allMovements.push({ ...r, type: 'out', warehouseId: r.warehouseId, reason: 'rep_issue'}));
 
     // OTHERS
-    stockTransferRecords.forEach((r: any) => allMovements.push({ ...r, type: 'transfer' }));
+    stockTransferRecords.forEach((r: any) => {
+        allMovements.push({ ...r, type: 'transfer', warehouseId: r.fromSourceId });
+    });
     stockAdjustmentRecords.forEach((r: any) => allMovements.push({ ...r, type: 'adjustment', warehouseId: r.warehouseId }));
 
 
@@ -239,13 +239,10 @@ export default function InventoryMovementsPage() {
       
       if (filters.warehouseId !== 'all') {
         const whId = filters.warehouseId;
-        if (move.type === 'in' || move.type === 'out' || move.type === 'adjustment') {
-             return move.warehouseId === whId;
-        }
         if (move.type === 'transfer') {
              return move.fromSourceId === whId || move.toSourceId === whId;
         }
-        return false;
+        return move.warehouseId === whId;
       }
       
       return true;
@@ -299,7 +296,7 @@ export default function InventoryMovementsPage() {
                         <Label>الفرع</Label>
                         <Select value={filters.branchId} onValueChange={(v) => {
                              handleFilterChange("branchId", v);
-                             handleFilterChange("warehouseId", "all"); // Reset warehouse on branch change
+                             handleFilterChange("warehouseId", "all");
                         }}>
                             <SelectTrigger>
                                 <SelectValue placeholder="اختر الفرع" />
@@ -387,8 +384,8 @@ export default function InventoryMovementsPage() {
                                             <p>{getReceiptTooltip(move.receiptNumber)}</p>
                                         </TooltipContent>
                                     </Tooltip>
-                                     <div className="text-xs text-muted-foreground">{new Date(move.date).toLocaleString('ar-EG')}</div>
-                                     <div className="text-xs text-muted-foreground">بواسطة: {move.createdByName || 'غير معروف'}</div>
+                                     <div className="text-xs text-muted-foreground font-semibold">{new Date(move.date).toLocaleString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                                     <div className="text-[10px] text-muted-foreground">بواسطة: {move.createdByName || 'غير معروف'}</div>
                                 </TableCell>
                                 <TableCell className="text-center">
                                     <Badge variant={
@@ -413,7 +410,7 @@ export default function InventoryMovementsPage() {
                                     <DialogTrigger asChild>
                                         <Button variant="ghost" size="sm" onClick={() => setSelectedMove(move)}>
                                             <Eye className="ml-2 h-4 w-4"/>
-                                            {move.items.length}
+                                            {move.items?.length || 0}
                                         </Button>
                                     </DialogTrigger>
                                 </TableCell>

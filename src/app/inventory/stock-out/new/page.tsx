@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -310,7 +309,7 @@ export default function NewStockOutPage() {
         }
     }
     
-    const handleUnitChange = (unitName: string) => {
+     const handleUnitChange = (unitName: string) => {
         setSelectedUnit(unitName);
         const unit = availableUnits.find(u => u.value === unitName);
         const item = allItems.find((i: Item) => i.id === newItem.id);
@@ -350,9 +349,20 @@ export default function NewStockOutPage() {
             sectionId: allItems.find((i:any) => i.id === item.itemId)?.defaultBinId || null,
         }));
 
+        const now = new Date();
+        const selectedDate = new Date(date);
+        const finalDate = new Date(
+            selectedDate.getFullYear(),
+            selectedDate.getMonth(),
+            selectedDate.getDate(),
+            now.getHours(),
+            now.getMinutes(),
+            now.getSeconds()
+        );
+
         const record:any = {
             sourceId: source,
-            date: new Date(date).toISOString(),
+            date: finalDate.toISOString(),
             items: itemsToSave,
             reason: reason === 'requisition' ? 'صرف لفرع آخر' : reason,
             requisitionId: reason === 'requisition' ? selectedRequisitionId : null,
@@ -413,7 +423,7 @@ export default function NewStockOutPage() {
         <Card>
           <CardHeader>
             <CardTitle>إيصال صرف مخزني</CardTitle>
-             <CardDescription>تستخدم هذه الشاشة للصرف لأسباب إدارية مثل التوالف والعينات، أو لتلبية طلبات الفروع الأخرى.</CardDescription>
+             <CardDescription>تستخدم هذه شاشة للصرف لأسباب إدارية مثل التوالف والعينات، أو لتلبية طلبات الفروع الأخرى.</CardDescription>
             <div className="grid md:grid-cols-3 gap-4 text-sm text-muted-foreground pt-2">
                 <div>رقم الإيصال: (سيتم إنشاؤه عند الحفظ)</div>
             </div>
