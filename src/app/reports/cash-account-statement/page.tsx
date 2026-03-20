@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -33,6 +32,9 @@ interface Supplier { id: string, name: string }
 interface Employee { id: string, name: string }
 interface Partner { id: string, name: string }
 interface User { id: string, name: string }
+interface SalesReturn { id: string; receiptNumber?: string; date: string; paidFromAccountId?: string; paidAmount?: number; customerName?: string; warehouseId?: string; }
+interface PurchaseReturn { id: string; receiptNumber?: string; date: string; paidToAccountId?: string; paidAmount?: number; supplierName?: string; warehouseId?: string; }
+interface PosReturn { id: string; receiptNumber?: string; date: string; warehouseId: string; paidAmount?: number; total: number; }
 
 export default function CashAccountStatementPage() {
     const searchParams = useSearchParams();
@@ -43,7 +45,7 @@ export default function CashAccountStatementPage() {
     const { 
         cashAccounts, salesInvoices, posSales, customerPayments, exceptionalIncomes, expenses, 
         supplierPayments, employeeAdvances, profitDistributions, treasuryTransactions,
-        repRemittances,
+        repRemittances, salesReturns, purchaseReturns, posReturns,
         users,
         customers, suppliers, employees, partners,
         paymentMethods,
@@ -71,25 +73,38 @@ export default function CashAccountStatementPage() {
             let balance = 0;
             const filter = (t: { date: string }) => new Date(t.date) < endDate;
             
-            // Deposits
-            salesInvoices.filter((t:any) => t.paidToAccountId === filters.accountId && t.paidAmount > 0 && filter(t)).forEach((t:any) => balance += t.paidAmount);
+            // Deposits (Inflow)
+            salesInvoices.filter((t:any) => t.paidToAccountId === filters.accountId && t.paidAmount > 0 && filter(t)).forEach((t:any) => {
+                const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === t.id).reduce((sum, p) => sum + p.amount, 0);
+                const initialCash = (t.paidAmount || 0) - linkedPaymentsTotal;
+                if (initialCash > 0) balance += initialCash;
+            });
             posSales.filter((t: any) => filter(t)).forEach((t: any) => {
-                if (account.warehouseId && t.warehouseId === account.warehouseId) {
-                    const totalPaidOnSale = t.paidAmount ?? t.payments?.reduce((sum: number, p: any) => sum + p.amount, 0) ?? t.total;
-                    balance += totalPaidOnSale;
+                const targetId = t.paidToAccountId || (account.warehouseId && t.warehouseId === account.warehouseId ? account.id : null);
+                if (targetId === account.id) {
+                    const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === t.id).reduce((sum, p) => sum + p.amount, 0);
+                    const initialCash = (t.paidAmount || 0) - linkedPaymentsTotal;
+                    if (initialCash > 0) balance += initialCash;
                 }
             });
             customerPayments.filter(t => t.paidToAccountId === filters.accountId && filter(t)).forEach(t => balance += t.amount);
             exceptionalIncomes.filter(t => t.paidToAccountId === filters.accountId && filter(t)).forEach(t => balance += t.amount);
-            treasuryTransactions.filter(t => t.accountId === filters.accountId && t.type === 'deposit' && filter(t)).forEach(t => balance += t.amount);
+            treasuryTransactions.filter(t => t.accountId === filters.accountId && t.type === 'deposit' && !t.linkedTransaction && filter(t)).forEach(t => balance += t.amount);
             repRemittances.filter(t => t.toAccountId === filters.accountId && filter(t)).forEach(t => balance += t.amount);
+            purchaseReturns.filter(t => t.paidToAccountId === filters.accountId && filter(t)).forEach(t => balance += (t.paidAmount || 0));
             
-            // Withdrawals
+            // Withdrawals (Outflow)
             expenses.filter(t => t.paidFromAccountId === filters.accountId && filter(t)).forEach(t => balance -= t.amount);
             supplierPayments.filter(t => t.paidFromAccountId === filters.accountId && filter(t)).forEach(t => balance -= t.amount);
             employeeAdvances.filter(t => t.paidFromAccountId === filters.accountId && filter(t)).forEach(t => balance -= t.amount);
             profitDistributions.filter(t => t.paidFromAccountId === filters.accountId && filter(t)).forEach(t => balance -= t.amount);
-            treasuryTransactions.filter(t => t.accountId === filters.accountId && t.type === 'withdrawal' && filter(t)).forEach(t => balance -= t.amount);
+            treasuryTransactions.filter(t => t.accountId === filters.accountId && t.type === 'withdrawal' && !t.linkedTransaction && filter(t)).forEach(t => balance -= t.amount);
+            salesReturns.filter(t => t.paidFromAccountId === filters.accountId && filter(t)).forEach(t => balance -= (t.paidAmount || 0));
+            posReturns.filter((t: any) => filter(t)).forEach((t: any) => {
+                if (account.warehouseId && t.warehouseId === account.warehouseId) {
+                    balance -= (t.paidAmount || 0);
+                }
+            });
 
             return balance;
         };
@@ -99,7 +114,6 @@ export default function CashAccountStatementPage() {
         }
         setOpeningBalance(ob);
 
-        // Collect transactions for the selected period
         const filterPeriod = (t: { date: string }) => {
             const itemDate = new Date(t.date);
             const from = filters.fromDate ? new Date(filters.fromDate) : null;
@@ -111,14 +125,22 @@ export default function CashAccountStatementPage() {
             return true;
         };
 
-        // Collect transactions for the selected period
-        salesInvoices.filter((t: any) => t.paidToAccountId === filters.accountId && t.paidAmount > 0 && filterPeriod(t)).forEach(t => allTransactions.push({ date: t.date, ref: t.invoiceNumber, type: `دفعة من فاتورة بيع للعميل ${t.customerName}`, user: t.createdByName, incoming: t.paidAmount, outgoing: 0 }));
+        // INCOMING
+        salesInvoices.filter((t: any) => t.paidToAccountId === filters.accountId && filterPeriod(t)).forEach(t => {
+            const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === t.id).reduce((sum, p) => sum + p.amount, 0);
+            const initialCash = (t.paidAmount || 0) - linkedPaymentsTotal;
+            if (initialCash > 0) {
+                allTransactions.push({ date: t.date, ref: t.invoiceNumber, type: `دفعة نقدية (فاتورة بيع ${t.invoiceNumber})`, user: t.createdByName, incoming: initialCash, outgoing: 0 });
+            }
+        });
         
         posSales.filter((t: any) => filterPeriod(t)).forEach((t: any) => {
-             if (account.warehouseId && t.warehouseId === account.warehouseId) {
-                const totalPaidOnSale = t.paidAmount ?? t.payments?.reduce((sum: number, p: any) => sum + p.amount, 0) ?? t.total;
-                if(totalPaidOnSale > 0) {
-                    allTransactions.push({ date: t.date, ref: t.invoiceNumber, type: `مبيعات نقاط البيع - ${t.customerName || 'عميل نقدي'}`, user: t.cashierName, incoming: totalPaidOnSale, outgoing: 0 });
+             const targetId = t.paidToAccountId || (account.warehouseId && t.warehouseId === account.warehouseId ? account.id : null);
+             if (targetId === account.id) {
+                const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === t.id).reduce((sum, p) => sum + p.amount, 0);
+                const initialCash = (t.paidAmount || 0) - linkedPaymentsTotal;
+                if(initialCash > 0) {
+                    allTransactions.push({ date: t.date, ref: t.invoiceNumber, type: `مبيعات كاشير نقدية (${t.invoiceNumber})`, user: t.cashierName, incoming: initialCash, outgoing: 0 });
                 }
             }
         });
@@ -127,27 +149,49 @@ export default function CashAccountStatementPage() {
             const customerName = customers.find((c:Customer) => c.id === t.customerId)?.name || '';
             allTransactions.push({ date: t.date, ref: t.receiptNumber, type: `سند قبض من ${customerName}`, user: t.createdByName, incoming: t.amount, outgoing: 0 });
         });
+        
         exceptionalIncomes.filter(t => t.paidToAccountId === filters.accountId && filterPeriod(t)).forEach(t => allTransactions.push({ date: t.date, ref: t.receiptNumber, type: `دخل استثنائي: ${t.description}`, user: t.createdByName, incoming: t.amount, outgoing: 0 }));
-        treasuryTransactions.filter(t => t.accountId === filters.accountId && t.type === 'deposit' && filterPeriod(t)).forEach(t => allTransactions.push({ date: t.date, ref: t.receiptNumber, type: `إيداع: ${t.description}`, user: t.createdByName, incoming: t.amount, outgoing: 0 }));
+        
+        treasuryTransactions.filter(t => t.accountId === filters.accountId && t.type === 'deposit' && !t.linkedTransaction && filterPeriod(t)).forEach(t => allTransactions.push({ date: t.date, ref: t.receiptNumber, type: `إيداع: ${t.description}`, user: t.createdByName, incoming: t.amount, outgoing: 0 }));
+        
         repRemittances.filter(t => t.toAccountId === filters.accountId && filterPeriod(t)).forEach(t => {
             const repName = users.find((u:User) => u.id === t.userId)?.name || '';
             allTransactions.push({ date: t.date, ref: t.receiptNumber, type: `توريد من المندوب ${repName}`, user: t.createdByName, incoming: t.amount, outgoing: 0 });
         });
 
+        purchaseReturns.filter(t => t.paidToAccountId === filters.accountId && filterPeriod(t)).forEach(t => {
+            allTransactions.push({ date: t.date, ref: t.receiptNumber, type: `استلام نقدي (مرتجع شراء ${t.receiptNumber})`, user: t.createdByName, incoming: t.paidAmount || 0, outgoing: 0 });
+        });
+
+        // OUTGOING
         expenses.filter(t => t.paidFromAccountId === filters.accountId && filterPeriod(t)).forEach(t => allTransactions.push({ date: t.date, ref: t.receiptNumber, type: `مصروف: ${t.expenseType} (${t.description})`, user: t.createdByName, incoming: 0, outgoing: t.amount }));
+        
         supplierPayments.filter(t => t.paidFromAccountId === filters.accountId && filterPeriod(t)).forEach(t => {
             const supplierName = suppliers.find((s:Supplier) => s.id === t.supplierId)?.name || '';
             allTransactions.push({ date: t.date, ref: t.receiptNumber, type: `سند صرف للمورد ${supplierName}`, user: t.createdByName, incoming: 0, outgoing: t.amount });
         });
+        
         employeeAdvances.filter(t => t.paidFromAccountId === filters.accountId && filterPeriod(t)).forEach(t => {
             const employeeName = employees.find((e:Employee) => e.id === t.employeeId)?.name || '';
             allTransactions.push({ date: t.date, ref: t.receiptNumber, type: `سلفة للموظف ${employeeName}`, user: t.createdByName, incoming: 0, outgoing: t.amount });
         });
+        
         profitDistributions.filter(t => t.paidFromAccountId === filters.accountId && filterPeriod(t)).forEach(t => {
             const partnerName = partners.find((p:Partner) => p.id === t.partnerId)?.name || '';
             allTransactions.push({ date: t.date, ref: t.receiptNumber, type: `توزيع أرباح للشريك ${partnerName}`, user: t.createdByName, incoming: 0, outgoing: t.amount });
         });
-        treasuryTransactions.filter(t => t.accountId === filters.accountId && t.type === 'withdrawal' && filterPeriod(t)).forEach(t => allTransactions.push({ date: t.date, ref: t.receiptNumber, type: `سحب: ${t.description}`, user: t.createdByName, incoming: 0, outgoing: t.amount }));
+        
+        treasuryTransactions.filter(t => t.accountId === filters.accountId && t.type === 'withdrawal' && !t.linkedTransaction && filterPeriod(t)).forEach(t => allTransactions.push({ date: t.date, ref: t.receiptNumber, type: `سحب: ${t.description}`, user: t.createdByName, incoming: 0, outgoing: t.amount }));
+
+        salesReturns.filter(t => t.paidFromAccountId === filters.accountId && filterPeriod(t)).forEach(t => {
+            allTransactions.push({ date: t.date, ref: t.receiptNumber, type: `رد نقدي (مرتجع مبيعات ${t.receiptNumber})`, user: t.createdByName, incoming: 0, outgoing: t.paidAmount || 0 });
+        });
+
+        posReturns.filter((t: any) => filterPeriod(t)).forEach((t: any) => {
+            if (account.warehouseId && t.warehouseId === account.warehouseId && (t.paidAmount || 0) > 0) {
+                allTransactions.push({ date: t.date, ref: t.receiptNumber, type: `رد نقدي (مرتجع كاشير ${t.receiptNumber})`, user: t.cashierName || t.createdByName, incoming: 0, outgoing: t.paidAmount || 0 });
+            }
+        });
         
         allTransactions.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         
@@ -157,8 +201,8 @@ export default function CashAccountStatementPage() {
             return { ...tx, balance: runningBalance };
         });
 
-        setReportData(finalReport);
-    }, [filters, cashAccounts, salesInvoices, posSales, customerPayments, exceptionalIncomes, expenses, supplierPayments, employeeAdvances, profitDistributions, treasuryTransactions, repRemittances, customers, suppliers, employees, partners, users, paymentMethods]);
+        setReportData(finalReport.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    }, [filters, cashAccounts, salesInvoices, posSales, customerPayments, exceptionalIncomes, expenses, supplierPayments, employeeAdvances, profitDistributions, treasuryTransactions, repRemittances, salesReturns, purchaseReturns, posReturns, customers, suppliers, employees, partners, users, paymentMethods]);
     
     useEffect(() => {
         if (filters.accountId) {
@@ -220,27 +264,27 @@ export default function CashAccountStatementPage() {
                                     <TableBody>
                                         <TableRow className="bg-muted/50 font-medium">
                                             <TableCell colSpan={5}>رصيد أول الفترة</TableCell>
-                                            <TableCell className="text-center">{openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                                            <TableCell className="text-center font-bold text-primary">{openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                                         </TableRow>
                                         {reportData.map((tx, index) => (
                                             <TableRow key={index}>
                                                 <TableCell>{new Date(tx.date).toLocaleString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</TableCell>
                                                 <TableCell>
-                                                    <Link href={getLinkForReceipt(tx.ref) || '#'} className="hover:underline hover:text-primary">
+                                                    <Link href={getLinkForReceipt(tx.ref, tx.id) || '#'} className="hover:underline hover:text-primary">
                                                         {tx.type}
                                                     </Link>
                                                 </TableCell>
                                                 <TableCell>{tx.user || 'النظام'}</TableCell>
-                                                <TableCell className="text-center text-green-600">{tx.incoming > 0 ? tx.incoming.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}</TableCell>
-                                                <TableCell className="text-center text-destructive">{tx.outgoing > 0 ? tx.outgoing.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}</TableCell>
-                                                <TableCell className="text-center font-semibold">{tx.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                                                <TableCell className="text-center text-green-600 font-semibold">{tx.incoming > 0 ? tx.incoming.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}</TableCell>
+                                                <TableCell className="text-center text-destructive font-semibold">{tx.outgoing > 0 ? tx.outgoing.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}</TableCell>
+                                                <TableCell className="text-center font-bold">{tx.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
                                     <TableFooter>
                                         <TableRow className="bg-muted font-bold text-base">
                                             <TableCell colSpan={5}>الرصيد النهائي</TableCell>
-                                            <TableCell className="text-center">{reportData.at(-1)?.balance.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                                            <TableCell className="text-center text-primary text-lg">{reportData[0]?.balance.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                                         </TableRow>
                                     </TableFooter>
                                 </Table>
