@@ -1,9 +1,8 @@
-
 "use client";
 
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter as CardFooterUI } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -17,7 +16,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useData } from "@/contexts/data-provider";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useRouter } from 'next/navigation';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { calculateStockForItemInWarehouse } from "@/lib/inventory-utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -582,7 +581,7 @@ export default function NewStockAdjustmentPage() {
                 </>
             )}
           </CardContent>
-          <CardFooter className="flex flex-col md:flex-row justify-between gap-4 p-4 md:p-6 bg-muted/10 border-t">
+          <CardFooterUI className="flex flex-col md:flex-row justify-between gap-4 p-4 md:p-6 bg-muted/10 border-t">
             <div className="flex items-center gap-2 text-amber-600 text-sm">
                 <AlertCircle className="h-4 w-4" />
                 <span>سيتم تحديث أرصدة المخزن المختار فور الحفظ وتعديل التكاليف محاسبياً.</span>
@@ -591,7 +590,7 @@ export default function NewStockAdjustmentPage() {
                  {isSaving ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Save className="ml-2 h-4 w-4" />}
                  تأكيد وحفظ التسوية النهائية
             </Button>
-          </CardFooter>
+          </CardFooterUI>
         </Card>
       </main>
     </>
