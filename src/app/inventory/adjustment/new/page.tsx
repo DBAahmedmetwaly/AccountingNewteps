@@ -22,6 +22,7 @@ import { calculateStockForItemInWarehouse } from "@/lib/inventory-utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 interface AdjustmentItem {
   itemId: string;
@@ -66,6 +67,7 @@ export default function NewStockAdjustmentPage() {
     const [duplicateItemInfo, setDuplicateItemInfo] = useState<{ item: AdjustmentItem, newQty: number } | null>(null);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [autoOpenScanner, setAutoOpenScanner] = useState(false);
+    const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
     
     const videoRef = useRef<HTMLVideoElement>(null);
     const newItemQtyInputRef = useRef<HTMLInputElement>(null);
@@ -119,7 +121,7 @@ export default function NewStockAdjustmentPage() {
             } else {
                  setNewItem({ itemId: item.id, actualQty: 1 });
                  toast({ title: "تم العثور على الصنف", description: `تم تحديد الصنف: ${item.name}` });
-                 setIsScannerOpen(false); // Close scanner to allow qty entry
+                 setIsScannerOpen(false); 
                  setTimeout(() => newItemQtyInputRef.current?.focus(), 200);
             }
         } else {
@@ -139,8 +141,11 @@ export default function NewStockAdjustmentPage() {
                 stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } 
                 });
-                videoRef.current.srcObject = stream;
-                await videoRef.current.play();
+                setHasCameraPermission(true);
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    await videoRef.current.play();
+                }
 
                 if (!("BarcodeDetector" in window)) {
                     toast({ variant: 'destructive', title: 'تنبيه', description: 'متصفحك لا يدعم خاصية التعرف على الباركود مباشرة. يرجى تحديث المتصفح أو استخدام متصفح كروم.' });
@@ -176,7 +181,13 @@ export default function NewStockAdjustmentPage() {
                 };
                 detect();
             } catch (err) {
-                toast({ variant: 'destructive', title: 'خطأ في الكاميرا', description: 'لم يتمكن من الوصول إلى الكاميرا. تأكد من منح الصلاحيات.' });
+                console.error('Error accessing camera:', err);
+                setHasCameraPermission(false);
+                toast({ 
+                    variant: 'destructive', 
+                    title: 'فشل الوصول للكاميرا', 
+                    description: 'يرجى التأكد من منح صلاحية الكاميرا للمتصفح في الإعدادات.' 
+                });
                 setIsScannerOpen(false);
             }
         };
@@ -284,7 +295,6 @@ export default function NewStockAdjustmentPage() {
         ]);
         setNewItem({ itemId: "", actualQty: 0 });
 
-        // Auto re-open scanner if enabled
         if (autoOpenScanner) {
             setTimeout(() => setIsScannerOpen(true), 300);
         }
@@ -387,6 +397,16 @@ export default function NewStockAdjustmentPage() {
                           <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-red-500/60 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
                       </div>
                   </div>
+                  {hasCameraPermission === false && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/80 p-4">
+                        <Alert variant="destructive">
+                            <AlertTitle>صلاحية الكاميرا مطلوبة</AlertTitle>
+                            <AlertDescription>
+                                يرجى السماح بالوصول للكاميرا من إعدادات المتصفح لتتمكن من مسح الباركود.
+                            </AlertDescription>
+                        </Alert>
+                    </div>
+                  )}
               </div>
               <DialogFooter className="flex justify-between items-center sm:justify-between">
                   <div className="flex items-center gap-2">
