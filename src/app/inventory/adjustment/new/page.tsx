@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { calculateStockForItemInWarehouse } from "@/lib/inventory-utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
 
 interface AdjustmentItem {
   itemId: string;
@@ -65,6 +66,8 @@ export default function NewStockAdjustmentPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [duplicateItemInfo, setDuplicateItemInfo] = useState<{ item: AdjustmentItem, newQty: number } | null>(null);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
+    const [autoOpenScanner, setAutoOpenScanner] = useState(false);
+    
     const videoRef = useRef<HTMLVideoElement>(null);
     const newItemQtyInputRef = useRef<HTMLInputElement>(null);
 
@@ -117,7 +120,8 @@ export default function NewStockAdjustmentPage() {
             } else {
                  setNewItem({ itemId: item.id, actualQty: 1 });
                  toast({ title: "تم العثور على الصنف", description: `تم تحديد الصنف: ${item.name}` });
-                 setTimeout(() => newItemQtyInputRef.current?.focus(), 100);
+                 setIsScannerOpen(false); // Close scanner to allow qty entry
+                 setTimeout(() => newItemQtyInputRef.current?.focus(), 200);
             }
         } else {
             toast({ variant: 'destructive', title: "صنف غير موجود", description: `لم يتم العثور على صنف بالباركود: ${scannedCode}` });
@@ -130,14 +134,24 @@ export default function NewStockAdjustmentPage() {
         let isProcessing = false;
 
         const startScan = async () => {
-            if (!isScannerOpen || !videoRef.current || !("BarcodeDetector" in window)) {
-                return;
-            }
+            if (!isScannerOpen || !videoRef.current) return;
+            
             try {
-                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } 
+                });
                 videoRef.current.srcObject = stream;
                 await videoRef.current.play();
-                const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'code_128', 'qr_code'] });
+
+                if (!("BarcodeDetector" in window)) {
+                    toast({ variant: 'destructive', title: 'تنبيه', description: 'متصفحك لا يدعم خاصية التعرف على الباركود مباشرة. يرجى تحديث المتصفح أو استخدام متصفح كروم.' });
+                    return;
+                }
+
+                const barcodeDetector = new (window as any).BarcodeDetector({ 
+                    formats: ['ean_13', 'code_128', 'qr_code', 'upc_a', 'upc_e'] 
+                });
+
                 const detect = async () => {
                     if (isProcessing) {
                         animationFrameId = requestAnimationFrame(detect);
@@ -149,7 +163,7 @@ export default function NewStockAdjustmentPage() {
                             const barcodes = await barcodeDetector.detect(videoRef.current);
                             if (barcodes.length > 0) {
                                 handleScanSuccess(barcodes[0].rawValue);
-                                await new Promise(resolve => setTimeout(resolve, 2000));
+                                await new Promise(resolve => setTimeout(resolve, 1500));
                             }
                         } catch (detectError) {
                             console.error("Detection error:", detectError);
@@ -163,7 +177,7 @@ export default function NewStockAdjustmentPage() {
                 };
                 detect();
             } catch (err) {
-                toast({ variant: 'destructive', title: 'خطأ في الكاميرا', description: 'لم يتمكن من الوصول إلى الكاميرا.' });
+                toast({ variant: 'destructive', title: 'خطأ في الكاميرا', description: 'لم يتمكن من الوصول إلى الكاميرا. تأكد من منح الصلاحيات.' });
                 setIsScannerOpen(false);
             }
         };
@@ -255,7 +269,6 @@ export default function NewStockAdjustmentPage() {
         const selectedItemData = availableItems.find((i: Item) => i.id === newItem.itemId);
         if (!selectedItemData) return;
         
-        // Calculate system qty ONLY when adding
         const systemQty = calculateSystemStock(newItem.itemId, selectedWarehouse);
         const difference = newItem.actualQty - systemQty;
 
@@ -271,6 +284,11 @@ export default function NewStockAdjustmentPage() {
             },
         ]);
         setNewItem({ itemId: "", actualQty: 0 });
+
+        // Auto re-open scanner if enabled
+        if (autoOpenScanner) {
+            setTimeout(() => setIsScannerOpen(true), 300);
+        }
     };
 
     const handleUpdateDuplicate = () => {
@@ -285,6 +303,10 @@ export default function NewStockAdjustmentPage() {
         }));
         setNewItem({ itemId: "", actualQty: 0 });
         setDuplicateItemInfo(null);
+        
+        if (autoOpenScanner) {
+            setTimeout(() => setIsScannerOpen(true), 300);
+        }
     };
 
     const handleRemoveItem = (uniqueId: string) => {
@@ -293,7 +315,7 @@ export default function NewStockAdjustmentPage() {
 
     const handleConfirm = async () => {
         if (!selectedWarehouse || items.length === 0) {
-            toast({ variant: "destructive", title: "بيانات غير مكتملة", description: "يرجى اختيار مخزن وإضافة صنف." });
+            toast({ variant: "destructive", title: "بيانات غير مكتملة", description: "يرجى اختيار مخزن وإضافة صنف واحد على الأقل." });
             return;
         }
         
@@ -302,10 +324,8 @@ export default function NewStockAdjustmentPage() {
 
         try {
             const nextId = await getNextId('stockAdjustment');
-            
-            // Mix current time with selected date
             const now = new Date();
-            const dateObj = new Date(); // Using current date
+            const dateObj = new Date();
             dateObj.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
 
             const receiptNumber = `ت-م-${nextId}`;
@@ -358,11 +378,24 @@ export default function NewStockAdjustmentPage() {
       <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
           <DialogContent className="max-w-md">
               <DialogHeader>
-                  <DialogTitle>مسح باركود</DialogTitle>
+                  <DialogTitle>ماسح الباركود و QR Code</DialogTitle>
+                  <DialogDescription>وجه الكاميرا نحو الكود للتعرف عليه تلقائياً.</DialogDescription>
               </DialogHeader>
-              <div className="relative w-full aspect-video bg-black rounded-md overflow-hidden">
+              <div className="relative w-full aspect-square bg-black rounded-lg overflow-hidden border-2 border-primary/20 shadow-inner">
                   <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted />
+                  <div className="absolute inset-0 border-[40px] border-black/40 pointer-events-none">
+                      <div className="w-full h-full border-2 border-primary/60 rounded-sm relative">
+                          <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-red-500/60 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
+                      </div>
+                  </div>
               </div>
+              <DialogFooter className="flex justify-between items-center sm:justify-between">
+                  <div className="flex items-center gap-2">
+                      <Switch checked={autoOpenScanner} onCheckedChange={setAutoOpenScanner} id="scanner-auto-mode" />
+                      <Label htmlFor="scanner-auto-mode" className="text-xs">مسح متتالي</Label>
+                  </div>
+                  <Button variant="outline" onClick={() => setIsScannerOpen(false)}>إغلاق الكاميرا</Button>
+              </DialogFooter>
           </DialogContent>
       </Dialog>
 
@@ -408,9 +441,16 @@ export default function NewStockAdjustmentPage() {
                     </div>
                     
                     <div className="space-y-4">
-                      <Label className="text-lg font-bold">الأصناف المضافة للجرد ({items.length})</Label>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-lg font-bold">الأصناف المضافة للجرد ({items.length})</Label>
+                        <div className="flex items-center gap-4 bg-muted/50 p-2 rounded-lg border">
+                            <div className="flex items-center gap-2">
+                                <Switch checked={autoOpenScanner} onCheckedChange={setAutoOpenScanner} id="auto-scan-toggle" />
+                                <Label htmlFor="auto-scan-toggle" className="text-xs cursor-pointer">مسح تلقائي مستمر</Label>
+                            </div>
+                        </div>
+                      </div>
                       
-                      {/* Entry Row - Always visible and optimized for blind counting */}
                       <Card className="bg-muted/30 border-dashed">
                         <CardContent className="p-4 grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                             <div className="md:col-span-6 space-y-2">
@@ -428,7 +468,9 @@ export default function NewStockAdjustmentPage() {
                                         placeholder="ابحث عن صنف بالاسم أو الكود..."
                                         className="flex-1"
                                     />
-                                    <Button variant="outline" size="icon" onClick={() => setIsScannerOpen(true)} disabled={!selectedWarehouse}><Camera className="h-4 w-4" /></Button>
+                                    <Button variant={isScannerOpen ? "default" : "outline"} size="icon" onClick={() => setIsScannerOpen(true)} disabled={!selectedWarehouse}>
+                                        <Camera className={cn("h-4 w-4", isScannerOpen && "animate-pulse")} />
+                                    </Button>
                                 </div>
                             </div>
                             <div className="md:col-span-4 space-y-2">
@@ -440,7 +482,12 @@ export default function NewStockAdjustmentPage() {
                                     value={newItem.actualQty || ''} 
                                     onChange={e => setNewItem({...newItem, actualQty: parseFloat(e.target.value) || 0})}
                                     onFocus={e => e.target.select()}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleAddItem()}
+                                    onKeyDown={(e) => {
+                                        if(e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleAddItem();
+                                        }
+                                    }}
                                     className="text-lg h-10 font-bold"
                                 />
                             </div>
@@ -452,16 +499,15 @@ export default function NewStockAdjustmentPage() {
                         </CardContent>
                       </Card>
 
-                      {/* Items List - Table for Desktop, Cards for Mobile */}
                       {isMobile ? (
                           <div className="space-y-3">
                               {items.map((item) => (
-                                  <Card key={item.uniqueId} className="relative overflow-hidden">
-                                      <div className={cn("absolute left-0 top-0 bottom-0 w-1", item.difference > 0 ? "bg-green-500" : item.difference < 0 ? "bg-destructive" : "bg-muted")} />
+                                  <Card key={item.uniqueId} className="relative overflow-hidden shadow-sm">
+                                      <div className={cn("absolute left-0 top-0 bottom-0 w-1.5", item.difference > 0 ? "bg-green-500" : item.difference < 0 ? "bg-destructive" : "bg-muted")} />
                                       <CardContent className="p-4">
                                           <div className="flex justify-between items-start gap-2 mb-2">
                                               <div className="font-bold">{item.itemName}</div>
-                                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveItem(item.uniqueId)}>
+                                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleRemoveItem(item.uniqueId)}>
                                                   <Trash2 className="h-4 w-4" />
                                               </Button>
                                           </div>
@@ -486,7 +532,7 @@ export default function NewStockAdjustmentPage() {
                               ))}
                           </div>
                       ) : (
-                        <div className="w-full overflow-auto border rounded-lg">
+                        <div className="w-full overflow-auto border rounded-lg shadow-sm">
                             <Table>
                                 <TableHeader>
                                 <TableRow>
@@ -501,7 +547,7 @@ export default function NewStockAdjustmentPage() {
                                 {items.map((item) => (
                                     <TableRow key={item.uniqueId}>
                                     <TableCell className="font-medium">{item.itemName}</TableCell>
-                                    {adjustmentType === 'periodic_count' && <TableCell className="text-center font-mono">{item.systemQty}</TableCell>}
+                                    {adjustmentType === 'periodic_count' && <TableCell className="text-center font-mono text-muted-foreground">{item.systemQty}</TableCell>}
                                     <TableCell className="text-center font-bold text-primary">{item.actualQty}</TableCell>
                                     <TableCell className={`text-center font-bold ${item.difference > 0 ? 'text-green-500' : item.difference < 0 ? 'text-destructive' : ''}`}>
                                         <div className="flex items-center justify-center gap-1">
