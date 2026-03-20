@@ -40,7 +40,7 @@ interface Customer { openingBalance: number; }
 interface Supplier { openingBalance: number; }
 interface CustomerPayment { amount: number; paidToAccountId: string; invoiceId?: string; }
 interface SupplierPayment { amount: number; paidFromAccountId: string; invoiceId?: string; }
-interface SalesReturn { total: number; paidAmount?: number; paidFromAccountId?: string; warehouseId: string; }
+interface SalesReturn { total: number; paidAmount?: number; paidFromAccountId?: string; warehouseId: string; items: any[]; date: string; }
 interface PurchaseReturn { total: number; paidAmount?: number; paidToAccountId?: string; warehouseId: string; }
 interface CashAccount { id: string; openingBalance: number; warehouseId?: string; }
 interface Expense { amount: number; paidFromAccountId: string; date: string; warehouseId?: string; }
@@ -127,14 +127,19 @@ export default function DashboardPage() {
         const sales = [...salesInvoices.filter((s:any) => s.status === 'approved'), ...posSales]
             .filter((s: any) => filterByDate(s.date) && filterByWarehouse(s.warehouseId));
         const purchases = purchaseInvoices.filter((p: any) => filterByDate(p.date) && filterByWarehouse(p.warehouseId));
-        const salesReturnsFiltered = salesReturns.filter((r: any) => filterByDate(r.date) && filterByWarehouse(r.warehouseId));
+        
+        const salesReturnsFiltered = [
+            ...salesReturns,
+            ...posReturns
+        ].filter((r: any) => filterByDate(r.date) && filterByWarehouse(r.warehouseId));
+
         const purchaseReturnsFiltered = purchaseReturns.filter((r: any) => filterByDate(r.date) && filterByWarehouse(r.warehouseId));
         const filteredExpenses = expenses.filter((e: any) => filterByDate(e.date) && (filters.warehouseId === 'all' || e.warehouseId === filters.warehouseId || !e.warehouseId));
         const filteredIncome = exceptionalIncomes.filter((i: any) => filterByDate(i.date));
             
         return { sales, purchases, salesReturnsFiltered, purchaseReturnsFiltered, filteredExpenses, filteredIncome };
 
-    }, [filters, salesInvoices, posSales, purchaseInvoices, salesReturns, purchaseReturns, expenses, exceptionalIncomes, user]);
+    }, [filters, salesInvoices, posSales, salesReturns, purchaseReturns, expenses, exceptionalIncomes, user, posReturns]);
 
     const kpiData = useMemo(() => {
         const userWarehouseIds = user?.warehouseIds || [];
@@ -204,15 +209,15 @@ export default function DashboardPage() {
             }
         });
         
-        employeeAdvances.forEach((ea: EmployeeAdvance) => {
+        employeeAdvances.forEach((ea: any) => {
             if (filteredCashAccountIds.has(ea.paidFromAccountId)) totalCash -= ea.amount;
         });
         
-        profitDistributions.forEach((pd: ProfitDistribution) => {
+        profitDistributions.forEach((pd: any) => {
             if (filteredCashAccountIds.has(pd.paidFromAccountId)) totalCash -= pd.amount;
         });
         
-        treasuryTransactions.filter((tx: TreasuryTransaction) => tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: TreasuryTransaction) => {
+        treasuryTransactions.filter((tx: any) => tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: any) => {
             if (filteredCashAccountIds.has(tx.accountId)) totalCash -= tx.amount;
         });
 
@@ -281,8 +286,19 @@ export default function DashboardPage() {
         const totalExpenses = filteredData.filteredExpenses.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
         const totalPurchases = filteredData.purchases.reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
         const totalSalesReturns = filteredData.salesReturnsFiltered.reduce((sum: number, r: any) => sum + Number(r.total || 0), 0);
-        const totalPurchaseReturns = filteredData.purchaseReturnsFiltered.reduce((sum: number, r: any) => sum + Number(r.total || 0), 0);
-        const totalReturns = totalSalesReturns + totalPurchaseReturns;
+        
+        let costOfReturnedGoods = 0;
+        filteredData.salesReturnsFiltered.forEach((ret: any) => {
+            const retCost = (ret.items || []).reduce((acc: number, item: any) => {
+                const master = items.find((i: any) => i.id === (item.id || item.itemId));
+                const unitCost = Number(item.cost ?? master?.cost ?? 0);
+                return acc + (Number(item.qty || 0) * unitCost);
+            }, 0);
+            costOfReturnedGoods += retCost;
+        });
+
+        const unrealizedProfit = totalSalesReturns - costOfReturnedGoods;
+
         const totalExtraIncome = filteredData.filteredIncome.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0);
         
         let totalCOGS = 0;
@@ -300,7 +316,7 @@ export default function DashboardPage() {
         });
 
         const grossProfit = totalRevenue - totalCOGS;
-        const netProfitValue = grossProfit - totalSalesReturns - totalExpenses + totalExtraIncome;
+        const netProfitValue = grossProfit - unrealizedProfit - totalExpenses + totalExtraIncome;
 
         return { 
             totalCash, 
@@ -310,8 +326,9 @@ export default function DashboardPage() {
             totalRevenue,
             totalCashFromSales,
             totalExpenses,
-            totalReturns,
             totalSalesReturns,
+            costOfReturnedGoods,
+            unrealizedProfit,
             totalPurchases,
             totalCOGS,
             totalExtraIncome,
@@ -559,7 +576,7 @@ export default function DashboardPage() {
                 </CardContent>
             </Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي المصروفات</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold text-destructive">{kpiData.totalExpenses.toLocaleString()} ج.م</div></CardContent></Card>
-            <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي المرتجعات</CardTitle><TrendingDown className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{kpiData.totalReturns.toLocaleString()} ج.م</div></CardContent></Card>
+            <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي المرتجعات</CardTitle><TrendingDown className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{kpiData.totalSalesReturns.toLocaleString()} ج.م</div></CardContent></Card>
         </div>
         
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -604,8 +621,19 @@ export default function DashboardPage() {
                                 <span>{kpiData.grossProfit.toLocaleString()} ج.م</span>
                             </div>
 
-                            <div className="text-muted-foreground">(-) مرتجعات المبيعات:</div>
-                            <div className="text-left font-semibold text-destructive">-{kpiData.totalSalesReturns.toLocaleString()} ج.م</div>
+                            <div className="col-span-2 border-b pb-2 space-y-1">
+                                <div className="flex justify-between text-xs text-muted-foreground">
+                                    <span>مرتجعات المبيعات (قيمة):</span>
+                                    <span className="text-destructive">-{kpiData.totalSalesReturns.toLocaleString()} ج.م</span>
+                                </div>
+                                <div className="flex justify-between text-xs text-muted-foreground">
+                                    <span>(+) تكلفة البضاعة المرتجعة:</span>
+                                    <span className="text-green-600">+{kpiData.costOfReturnedGoods.toLocaleString()} ج.م</span>
+                                </div>
+                            </div>
+
+                            <div className="text-muted-foreground">(-) أرباح مبيعات ملغاة (مرتجعة):</div>
+                            <div className="text-left font-semibold text-destructive">-{kpiData.unrealizedProfit.toLocaleString()} ج.م</div>
 
                             <div className="text-muted-foreground">(-) إجمالي المصروفات:</div>
                             <div className="text-left font-semibold text-destructive">-{kpiData.totalExpenses.toLocaleString()} ج.م</div>
