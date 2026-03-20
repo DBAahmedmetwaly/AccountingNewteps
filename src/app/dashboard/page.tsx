@@ -40,8 +40,8 @@ interface SupplierPayment { amount: number; paidFromAccountId: string; invoiceId
 interface SalesReturn { total: number; paidAmount?: number; paidFromAccountId?: string; warehouseId: string; }
 interface PurchaseReturn { total: number; paidAmount?: number; paidToAccountId?: string; warehouseId: string; }
 interface CashAccount { id: string; openingBalance: number; warehouseId?: string; }
-interface Expense { amount: number; paidFromAccountId: string; }
-interface ExceptionalIncome { amount: number; paidToAccountId: string; }
+interface Expense { amount: number; paidFromAccountId: string; date: string; warehouseId?: string; }
+interface ExceptionalIncome { amount: number; paidToAccountId: string; date: string; }
 interface TreasuryTransaction { type: 'deposit' | 'withdrawal'; amount: number; accountId: string; linkedTransaction?: boolean; }
 interface EmployeeAdvance { amount: number; paidFromAccountId: string; }
 interface ProfitDistribution { amount: number; paidFromAccountId: string; }
@@ -125,10 +125,12 @@ export default function DashboardPage() {
         const purchases = purchaseInvoices.filter((p: any) => filterByDate(p.date) && filterByWarehouse(p.warehouseId));
         const salesReturnsFiltered = salesReturns.filter((r: any) => filterByDate(r.date) && filterByWarehouse(r.warehouseId));
         const purchaseReturnsFiltered = purchaseReturns.filter((r: any) => filterByDate(r.date) && filterByWarehouse(r.warehouseId));
+        const filteredExpenses = expenses.filter((e: any) => filterByDate(e.date) && (filters.warehouseId === 'all' || e.warehouseId === filters.warehouseId || !e.warehouseId));
+        const filteredIncome = exceptionalIncomes.filter((i: any) => filterByDate(i.date));
             
-        return { sales, purchases, salesReturnsFiltered, purchaseReturnsFiltered };
+        return { sales, purchases, salesReturnsFiltered, purchaseReturnsFiltered, filteredExpenses, filteredIncome };
 
-    }, [filters, salesInvoices, posSales, purchaseInvoices, salesReturns, purchaseReturns, user]);
+    }, [filters, salesInvoices, posSales, purchaseInvoices, salesReturns, purchaseReturns, expenses, exceptionalIncomes, user]);
 
     const kpiData = useMemo(() => {
         const userWarehouseIds = user?.warehouseIds || [];
@@ -273,14 +275,15 @@ export default function DashboardPage() {
             ap += balance;
         });
 
-        const totalExpenses = expenses.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+        const totalExpenses = filteredData.filteredExpenses.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
         const totalPurchases = filteredData.purchases.reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
         const totalSalesReturns = filteredData.salesReturnsFiltered.reduce((sum: number, r: any) => sum + Number(r.total || 0), 0);
         const totalPurchaseReturns = filteredData.purchaseReturnsFiltered.reduce((sum: number, r: any) => sum + Number(r.total || 0), 0);
         const totalReturns = totalSalesReturns + totalPurchaseReturns;
+        const totalExtraIncome = filteredData.filteredIncome.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0);
         
         let totalCOGS = 0;
-        let netProfit = 0;
+        let salesGrossProfit = 0;
         filteredData.sales.forEach((sale: any) => {
             const saleCost = sale.items.reduce((acc: number, item: any) => {
                 const master = items.find((i:any) => i.id === item.id);
@@ -288,8 +291,12 @@ export default function DashboardPage() {
                 return acc + (Number(item.qty || 0) * unitCost);
             }, 0);
             totalCOGS += saleCost;
-            netProfit += (Number(sale.subtotal || sale.total || 0) - saleCost - Number(sale.discount || 0));
+            // Gross profit here is already net of invoice discounts if using sale.total
+            salesGrossProfit += (Number(sale.total) - saleCost);
         });
+
+        // Net Profit = (Sales Gross Profit - Sales Returns - Expenses + Extra Income)
+        const netProfitValue = salesGrossProfit - totalSalesReturns - totalExpenses + totalExtraIncome;
 
         return { 
             totalCash, 
@@ -300,7 +307,7 @@ export default function DashboardPage() {
             totalReturns,
             totalPurchases,
             totalCOGS,
-            netProfit,
+            netProfit: netProfitValue,
             customersCount: customers.length,
             suppliersCount: suppliers.length,
             productsCount: items.length,
@@ -359,16 +366,17 @@ export default function DashboardPage() {
             if (!dailyData[date]) dailyData[date] = { sales: 0, profit: 0 };
             
             const saleCost = sale.items.reduce((acc: number, item: any) => {
-                return acc + (item.qty * (item.cost || 0));
+                const master = items.find((i:any) => i.id === item.id);
+                return acc + (item.qty * (item.cost || master?.cost || 0));
             }, 0);
             
             dailyData[date].sales += sale.total;
-            dailyData[date].profit += ((sale.subtotal || sale.total) - saleCost - (sale.discount || 0));
+            dailyData[date].profit += (sale.total - saleCost);
         });
         
         return Object.entries(dailyData).map(([date, data]) => ({ date: new Date(date).toLocaleDateString('ar-EG', {month: 'short', day: 'numeric'}), ...data }))
           .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [filteredData.sales]);
+    }, [filteredData.sales, items]);
     
     const topBranchesChartData = useMemo(() => {
         const branchSales: {[id: string]: number} = {};
@@ -515,7 +523,7 @@ export default function DashboardPage() {
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي المرتجعات</CardTitle><TrendingDown className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{kpiData.totalReturns.toLocaleString()} ج.م</div></CardContent></Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي المشتريات</CardTitle><ShoppingCart className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.totalPurchases.toLocaleString()} ج.م</div></CardContent></Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium"> تكلفة البضاعة المباعة</CardTitle><Package className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.totalCOGS.toLocaleString()} ج.م</div></CardContent></Card>
-            <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium"> صافي الربح</CardTitle><TrendingUp className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold text-green-600">{kpiData.netProfit.toLocaleString()} ج.م</div></CardContent></Card>
+            <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium"> صافي الربح</CardTitle><TrendingUp className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className={`text-2xl font-bold ${kpiData.netProfit >= 0 ? 'text-green-600' : 'text-destructive'}`}>{kpiData.netProfit.toLocaleString()} ج.م</div></CardContent></Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">عدد العملاء</CardTitle><Users className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.customersCount.toLocaleString()}</div></CardContent></Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي الموردين</CardTitle><Building className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.suppliersCount.toLocaleString()}</div></CardContent></Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium"> عدد المنتجات</CardTitle><Package className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold">{kpiData.productsCount.toLocaleString()}</div></CardContent></Card>
