@@ -71,6 +71,7 @@ export default function NewStockAdjustmentPage() {
     
     const videoRef = useRef<HTMLVideoElement>(null);
     const newItemQtyInputRef = useRef<HTMLInputElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
 
     const authorizedBranches = useMemo(() => {
         const b = warehouses.filter((w: any) => !w.isMain && !w.isRepWarehouse && !w.repId);
@@ -130,104 +131,90 @@ export default function NewStockAdjustmentPage() {
     }, [availableItems, items, toast]);
 
     useEffect(() => {
-        let stream: MediaStream | null = null;
         let animationFrameId: number;
         let isProcessing = false;
 
-        const startScan = async () => {
+        const startCamera = async () => {
             if (!isScannerOpen || !videoRef.current) return;
             
             try {
-                // Request camera explicitly with simplified constraints for maximum compatibility
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment" } 
+                // Request back camera specifically
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: { exact: "environment" },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                }).catch(async () => {
+                    // Fallback if environment exact fails
+                    return await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
                 });
                 
+                streamRef.current = stream;
                 setHasCameraPermission(true);
                 
                 if (videoRef.current) {
                     videoRef.current.srcObject = stream;
-                    // Play returns a promise, it's good to await it to ensure it's running
-                    try {
-                        await videoRef.current.play();
-                    } catch (playError) {
-                        console.error("Playback failed:", playError);
-                    }
+                    await videoRef.current.play();
                 }
 
                 if (!("BarcodeDetector" in window)) {
                     toast({ 
                         variant: 'destructive', 
                         title: 'تنبيه', 
-                        description: 'متصفحك لا يدعم خاصية التعرف على الباركود مباشرة. يرجى استخدام متصفح كروم أو إيدج على الموبايل.' 
+                        description: 'متصفحك لا يدعم خاصية التعرف على الباركود المدمجة. يرجى استخدام متصفح حديث.' 
                     });
                     return;
                 }
 
                 const barcodeDetector = new (window as any).BarcodeDetector({ 
-                    formats: ['ean_13', 'code_128', 'qr_code', 'upc_a', 'upc_e'] 
+                    formats: ['ean_13', 'code_128', 'qr_code', 'upc_a', 'upc_e', 'code_39'] 
                 });
 
                 const detect = async () => {
-                    if (!isScannerOpen || isProcessing) {
-                        if (isScannerOpen) animationFrameId = requestAnimationFrame(detect);
+                    if (!isScannerOpen || isProcessing || !videoRef.current) {
                         return;
                     }
 
-                    if (videoRef.current && videoRef.current.readyState >= 2) { // HAVE_CURRENT_DATA
+                    if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
                         isProcessing = true;
                         try {
                             const barcodes = await barcodeDetector.detect(videoRef.current);
                             if (barcodes.length > 0) {
                                 handleScanSuccess(barcodes[0].rawValue);
-                                // Wait a bit before allowing another scan if modal stays open
-                                await new Promise(resolve => setTimeout(resolve, 2000));
+                                // Successful scan, loop will exit because isScannerOpen will be set to false by handleScanSuccess
+                                return; 
                             }
-                        } catch (detectError) {
-                            // Silent ignore detection errors if the stream is changing
+                        } catch (err) {
+                            console.error("Detection error:", err);
                         } finally {
                             isProcessing = false;
                         }
                     }
-                    
-                    if (isScannerOpen) {
-                        animationFrameId = requestAnimationFrame(detect);
-                    }
+                    animationFrameId = requestAnimationFrame(detect);
                 };
                 
                 animationFrameId = requestAnimationFrame(detect);
             } catch (err: any) {
-                console.error('Error accessing camera:', err);
+                console.error('Camera access failed:', err);
                 setHasCameraPermission(false);
-                
-                let errorMsg = 'يرجى التأكد من منح صلاحية الكاميرا للمتصفح في الإعدادات.';
-                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                    errorMsg = 'تم رفض الوصول للكاميرا. يرجى تفعيلها من إعدادات الموقع في المتصفح.';
-                } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-                    errorMsg = 'لم يتم العثور على كاميرا في هذا الجهاز.';
-                } else if (!window.isSecureContext) {
-                    errorMsg = 'لا يمكن تشغيل الكاميرا إلا عبر اتصال آمن (HTTPS).';
-                }
-
                 toast({ 
                     variant: 'destructive', 
-                    title: 'فشل تشغيل الكاميرا', 
-                    description: errorMsg
+                    title: 'خطأ في الكاميرا', 
+                    description: 'تعذر تشغيل الكاميرا الخلفية. تأكد من منح الأذونات المطلوبة.'
                 });
                 setIsScannerOpen(false);
             }
         };
 
         if (isScannerOpen) {
-            startScan();
+            startCamera();
         }
 
         return () => {
-            if (stream) {
-                stream.getTracks().forEach(track => {
-                    track.stop();
-                    console.log("Stopped track:", track.label);
-                });
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+                streamRef.current = null;
             }
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
         };
@@ -375,7 +362,7 @@ export default function NewStockAdjustmentPage() {
                 date: dateObj.toISOString(),
                 items: itemsWithDifference.map(item => ({
                     itemId: item.itemId,
-                    name: item.itemName,
+                    name: item.name,
                     difference: item.difference,
                     actualQty: item.actualQty,
                     systemQty: item.systemQty,
@@ -419,7 +406,7 @@ export default function NewStockAdjustmentPage() {
           <DialogContent className="max-w-md">
               <DialogHeader>
                   <DialogTitle>ماسح الباركود و QR Code</DialogTitle>
-                  <DialogDescription>وجه الكاميرا نحو الكود للتعرف عليه تلقائياً.</DialogDescription>
+                  <DialogDescription>وجه الكاميرا الخلفية نحو الكود للتعرف عليه تلقائياً.</DialogDescription>
               </DialogHeader>
               <div className="relative w-full aspect-square bg-black rounded-lg overflow-hidden border-2 border-primary/20 shadow-inner">
                   <video 
@@ -437,20 +424,20 @@ export default function NewStockAdjustmentPage() {
                   {hasCameraPermission === false && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/80 p-4">
                         <Alert variant="destructive" className="bg-background">
-                            <AlertTitle>صلاحية الكاميرا مطلوبة</AlertTitle>
+                            <AlertTitle>فشل تشغيل الكاميرا</AlertTitle>
                             <AlertDescription>
-                                يرجى السماح بالوصول للكاميرا من إعدادات المتصفح. تأكد من استخدام اتصال آمن (HTTPS).
+                                تأكد من السماح بالوصول للكاميرا من إعدادات المتصفح، واستخدام اتصال آمن HTTPS.
                             </AlertDescription>
                         </Alert>
                     </div>
                   )}
               </div>
-              <DialogFooter className="flex justify-between items-center sm:justify-between gap-4">
+              <DialogFooter className="flex justify-between items-center sm:justify-between gap-4 p-4 border-t">
                   <div className="flex items-center gap-2">
                       <Switch checked={autoOpenScanner} onCheckedChange={setAutoOpenScanner} id="scanner-auto-mode" />
                       <Label htmlFor="scanner-auto-mode" className="text-xs">مسح متتالي</Label>
                   </div>
-                  <Button variant="outline" onClick={() => setIsScannerOpen(false)}>إغلاق الكاميرا</Button>
+                  <Button variant="outline" onClick={() => setIsScannerOpen(false)}>إلغاء</Button>
               </DialogFooter>
           </DialogContent>
       </Dialog>
