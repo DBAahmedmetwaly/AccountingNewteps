@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useMemo, useState, useEffect } from "react";
@@ -31,6 +30,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/auth-context";
 import { calculateStockForItemInWarehouse } from "@/lib/inventory-utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 // Data Interfaces
 interface Item { id: string; name: string; cost?: number; reorderPoint?: number; }
@@ -513,7 +513,7 @@ export default function DashboardPage() {
                     <Package className="h-4 w-4 text-muted-foreground"/>
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{(recomputedInventoryValue ?? kpiData.inventoryValue).toLocaleString()} ج.م</div>
+                    <div className="text-2xl font-bold">{ (recomputedInventoryValue ?? kpiData.inventoryValue).toLocaleString() } ج.م</div>
                     <div className="mt-3 flex items-center gap-2">
                         <Button variant="outline" size="sm" onClick={handleRecomputeInventoryValue}>
                             احتساب الآن
@@ -576,7 +576,7 @@ export default function DashboardPage() {
                             <div className="text-muted-foreground">(-) إجمالي المصروفات:</div>
                             <div className="text-left font-semibold text-destructive">-{kpiData.totalExpenses.toLocaleString()} ج.م</div>
 
-                            <div className="text-muted-foreground">(+) دخل إضافي/استثنائي:</div>
+                            <div className="text-muted-foreground">(+) الدخل الإضافي:</div>
                             <div className="text-left font-semibold text-green-600">+{kpiData.totalExtraIncome.toLocaleString()} ج.م</div>
                         </div>
                         <div className="p-4 bg-muted rounded-lg flex justify-between items-center border-2 border-primary/20">
