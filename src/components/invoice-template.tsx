@@ -7,10 +7,11 @@ interface InvoiceTemplateProps {
   company: any; 
   customer?: any; 
   isPurchase?: boolean; 
+  isReturn?: boolean; // New prop for sales returns
   customerBalance?: number; 
 }
 
-export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, company, customer, isPurchase = false, customerBalance }) => {
+export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, company, customer, isPurchase = false, isReturn = false, customerBalance }) => {
   const [imgError, setImgError] = useState(false);
   
   const logoUrl = company?.logoUrl && company.logoUrl !== "" && company.logoUrl !== "/logo.png"
@@ -69,7 +70,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     fontSize: '14px',
     color: '#000',
     border: '1px solid #000',
-    backgroundColor: 'transparent', // Transparent to see watermark
+    backgroundColor: 'transparent', 
     position: 'relative',
     zIndex: 1
   };
@@ -126,10 +127,10 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     width: '120mm',
     height: 'auto',
     pointerEvents: 'none',
-    filter: 'grayscale(1)' // Optional: make watermark grayscale
+    filter: 'grayscale(1)' 
   };
 
-  const invoiceType = isPurchase ? 'فاتورة شراء' : 'فاتورة مبيعات ضريبية';
+  const invoiceType = isReturn ? 'إشعار دائن (مرتجع مبيعات)' : isPurchase ? 'فاتورة شراء' : 'فاتورة مبيعات ضريبية';
   const partyLabel = isPurchase ? 'المورد' : 'العميل';
   
   const effectivePartyName = customer?.name || invoice?.customerName || invoice?.supplierName || "عميل نقدي";
@@ -140,7 +141,6 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
 
   return (
     <div style={receiptStyle} className="bg-white text-black printable-area">
-      {/* Watermark Rendering */}
       {showWatermark && !imgError && logoUrl && (
           <img 
             src={logoUrl} 
@@ -172,7 +172,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
         </div>
         <div style={{textAlign: 'left'}}>
             <h2 style={{...h1Style, fontSize: '24px', marginBottom: '10px'}}>{invoiceType}</h2>
-            <p style={pStyle}><strong>رقم الفاتورة:</strong> {invoice?.invoiceNumber}</p>
+            <p style={pStyle}><strong>رقم المستند:</strong> {invoice?.receiptNumber || invoice?.invoiceNumber}</p>
             <p style={pStyle}><strong>التاريخ:</strong> {invoice?.date ? new Date(invoice.date).toLocaleDateString('ar-EG') : '-'}</p>
         </div>
       </header>
@@ -210,37 +210,36 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
       </table>
 
       <div style={totalsContainerStyle}>
-        <div style={totalsRowStyle}><span>الإجمالي الفرعي</span> <span>{(invoice?.subtotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-        <div style={totalsRowStyle}><span>الخصم</span> <span>{(invoice?.discount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-        {invoice?.tax > 0 && <div style={totalsRowStyle}><span>الضريبة (14%)</span> <span>{invoice.tax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>}
+        <div style={totalsRowStyle}><span>الإجمالي الفرعي</span> <span>{(invoice?.subtotal || invoice?.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+        {(invoice?.discount > 0) && <div style={totalsRowStyle}><span>الخصم</span> <span>{(invoice?.discount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>}
+        
         <div style={{...totalsRowStyle, fontWeight: 'bold', fontSize: '18px', borderTop: '2px solid #000', paddingTop: '10px', marginTop: '5px' }}>
             <span>الإجمالي الكلي</span> 
             <span>{(invoice?.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م</span>
         </div>
-        <div style={totalsRowStyle}><span>المدفوع</span> <span>{(invoice?.paidAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
         
-        {((invoice?.total || 0) - (invoice?.paidAmount || 0)) > 0.01 && (
-            <div style={{...totalsRowStyle, fontWeight: 'bold', color: '#d00'}}>
-                <span>باقي المستحق على الفاتورة</span> 
-                <span>{((invoice?.total || 0) - (invoice?.paidAmount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+        {(invoice?.paidAmount > 0) && (
+            <div style={totalsRowStyle}>
+                <span>{isReturn ? 'المبلغ المردود نقداً' : 'المدفوع'}</span> 
+                <span>{(invoice?.paidAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
         )}
         
         {!isPurchase && customerBalance !== undefined && (
             <div style={{...totalsRowStyle, marginTop: '15px', borderTop: '2px double #000', paddingTop: '10px', color: '#000', fontWeight: 'bold', backgroundColor: 'rgba(249, 249, 249, 0.8)', padding: '10px' }}>
-                <span>إجمالي المديونية السابقة والحالية</span>
+                <span>إجمالي مديونية العميل المتبقية</span>
                 <span style={{color: '#d00'}}>{customerBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م</span>
             </div>
         )}
       </div>
 
        <footer style={footerStyle}>
-         {invoice?.invoiceNumber && (
+         {(invoice?.receiptNumber || invoice?.invoiceNumber) && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', marginBottom: '15px', minHeight: '50px', backgroundColor: 'transparent' }}>
-                {canGenerateBarcode(invoice.invoiceNumber) ? (
-                    <Barcode value={invoice.invoiceNumber} height={40} width={1.5} fontSize={14} displayValue={false} background="transparent" />
+                {canGenerateBarcode(invoice.receiptNumber || invoice.invoiceNumber) ? (
+                    <Barcode value={invoice.receiptNumber || invoice.invoiceNumber} height={40} width={1.5} fontSize={14} displayValue={false} background="transparent" />
                 ) : (
-                    <p style={{fontFamily: 'monospace', fontSize: '16px', border: '1px solid #000', padding: '5px 15px'}}>{invoice.invoiceNumber}</p>
+                    <p style={{fontFamily: 'monospace', fontSize: '16px', border: '1px solid #000', padding: '5px 15px'}}>{invoice.receiptNumber || invoice.invoiceNumber}</p>
                 )}
             </div>
          )}
