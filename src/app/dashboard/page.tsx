@@ -20,7 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useData } from "@/contexts/data-provider";
-import { Loader2, DollarSign, Users, Building, Package, TrendingUp, TrendingDown, AlertTriangle, Clock, ShoppingCart, Calculator, Info, Banknote } from "lucide-react";
+import { Loader2, DollarSign, Users, Building, Package, TrendingUp, TrendingDown, AlertTriangle, Clock, ShoppingCart, Calculator, Info, Banknote, Tag } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Combobox } from "@/components/ui/combobox";
@@ -527,25 +527,35 @@ export default function DashboardPage() {
             </Card>
         </div>
         
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">إجمالي المبيعات (الفترة)</CardTitle>
+                    <CardTitle className="text-sm font-medium">إجمالي المبيعات</CardTitle>
                     <ShoppingCart className="h-4 w-4 text-primary"/>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{kpiData.totalRevenue.toLocaleString()} ج.م</div>
-                    <p className="text-[10px] text-muted-foreground mt-1">إجمالي الفواتير الصادرة في الفترة</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">إجمالي الفواتير الصادرة</p>
                 </CardContent>
             </Card>
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">المحصل نقداً من المبيعات</CardTitle>
+                    <CardTitle className="text-sm font-medium">المحصل نقداً</CardTitle>
                     <Banknote className="h-4 w-4 text-green-500"/>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold text-green-600">{kpiData.totalCashFromSales.toLocaleString()} ج.م</div>
-                    <p className="text-[10px] text-muted-foreground mt-1">ما تم تحصيله فعلياً من مبيعات الفترة</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">المبالغ المستلمة فعلياً</p>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">تكلفة البضاعة المباعة</CardTitle>
+                    <Tag className="h-4 w-4 text-amber-600"/>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold text-amber-600">{kpiData.totalCOGS.toLocaleString()} ج.م</div>
+                    <p className="text-[10px] text-muted-foreground mt-1">COGS للفترة المحددة</p>
                 </CardContent>
             </Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي المصروفات</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold text-destructive">{kpiData.totalExpenses.toLocaleString()} ج.م</div></CardContent></Card>
