@@ -10,6 +10,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import {
   Table,
@@ -21,6 +22,7 @@ import {
   TableFooter,
 } from "@/components/ui/table";
 import { PlusCircle, Loader2, MoreHorizontal, FileText, Search, Eye, Printer, MessageCircle, Image as ImageIcon } from "lucide-react";
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   DropdownMenu,
@@ -30,15 +32,16 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { useData } from '@/contexts/data-provider';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Combobox } from '@/components/ui/combobox';
+import { Input } from '@/components/ui/input';
+import { useData } from '@/contexts/data-provider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { InvoiceTemplate } from '@/components/invoice-template';
 import { toPng } from 'html-to-image';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/auth-context';
 
 interface SaleInvoice {
