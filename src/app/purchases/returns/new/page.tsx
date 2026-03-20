@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Trash2, Save, Loader2, Info, Wallet } from "lucide-react";
+import { Trash2, Save, Loader2, Info, Wallet, AlertTriangle } from "lucide-react";
 import React, { useState, useEffect, useMemo } from "react";
 import { useData } from "@/contexts/data-provider";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +17,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { useAuth } from "@/contexts/auth-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface ReturnItem {
   id: string; // original item id
@@ -164,7 +165,7 @@ export default function NewPurchaseReturnPage() {
     cashAccounts.forEach((account: any) => {
         let balance = account.openingBalance || 0;
         customerPayments.forEach((p:any) => { if(p.paidToAccountId === account.id) balance += p.amount });
-        allSales.forEach((s: any) => { if (s.status === 'approved' && s.paidToAccountId === account.id) balance += (s.paidAmount || 0) });
+        salesInvoices.forEach((s: any) => { if (s.status === 'approved' && s.paidToAccountId === account.id) balance += (s.paidAmount || 0) });
         posSales.forEach((s: any) => { if (s.paidToAccountId === account.id) balance += (s.paidAmount || 0) });
         exceptionalIncomes.forEach((i:any) => { if (i.paidToAccountId === account.id) balance += i.amount });
         treasuryTransactions.forEach((tx: any) => { if (tx.accountId === account.id && tx.type === 'deposit') balance += tx.amount });
@@ -176,7 +177,7 @@ export default function NewPurchaseReturnPage() {
         balances.set(account.id, balance);
     });
     return balances;
-  }, [cashAccounts, customerPayments, allSales, posSales, exceptionalIncomes, treasuryTransactions, expenses, supplierPayments, employeeAdvances, profitDistributions]);
+  }, [cashAccounts, customerPayments, salesInvoices, posSales, exceptionalIncomes, treasuryTransactions, expenses, supplierPayments, employeeAdvances, profitDistributions]);
 
   const availableCashAccounts = useMemo(() => {
     if (warehouseId) {
@@ -217,7 +218,7 @@ export default function NewPurchaseReturnPage() {
 
     const previousReturns = (purchaseReturns || []).filter((r: any) => r.originalInvoiceId === selectedInvoiceId);
     const prevReturnedByItem = new Map<string, number>();
-    previousReturns.forEach((r: any) => r.items.forEach((it: any) => prevReturnedByItem.set(String(it.id), (prevReturnedByItem.get(String(it.id)) || 0) + item.qty)));
+    previousReturns.forEach((r: any) => r.items.forEach((it: any) => prevReturnedByItem.set(String(it.id), (prevReturnedByItem.get(String(it.id)) || 0) + it.qty)));
 
     const overReturned = items.some(retItem => {
         const purchased = purchasedQtyByItem.get(String(retItem.id)) || 0;
@@ -234,7 +235,6 @@ export default function NewPurchaseReturnPage() {
     try {
         const receiptNumber = `م-ش-${await getNextId('purchaseReturn')}`;
         
-        // Fix: Include current time
         const now = new Date();
         const selectedDate = new Date(returnDate);
         const finalDate = new Date(
@@ -287,7 +287,7 @@ export default function NewPurchaseReturnPage() {
   const warehouseOptions = useMemo(() => ([{value: 'all', label: 'كل المخازن'}, ...warehouses.map((w:any) => ({value: w.id, label: w.name}))]), [warehouses]);
 
 
-  const ReturnForm = () => (
+  const ReturnFormUI = () => (
     <>
         <div className="grid md:grid-cols-3 gap-6">
             <div className="space-y-2">
@@ -297,7 +297,7 @@ export default function NewPurchaseReturnPage() {
                     <div className="flex items-center gap-2 p-2 rounded bg-muted/50 border">
                         <Wallet className="h-4 w-4 text-primary" />
                         <span className="text-xs font-semibold">المستحقات الحالية:</span>
-                        <Badge variant={currentSupplierBalance > 0 ? "default" : "destructive"} className="text-xs">
+                        <Badge variant={currentSupplierBalance > 0 ? "default" : "destructive"} className="text-sm">
                             {Math.abs(currentSupplierBalance).toLocaleString()} ج.م 
                             {currentSupplierBalance > 0 ? " (له)" : currentSupplierBalance < 0 ? " (عليه)" : ""}
                         </Badge>
@@ -446,7 +446,7 @@ export default function NewPurchaseReturnPage() {
                     </div>
                 </div>
             ) : (
-              <ReturnForm />
+              <ReturnFormUI />
             )}
           </CardContent>
           {selectedInvoiceId && (
