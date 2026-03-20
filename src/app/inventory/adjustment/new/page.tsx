@@ -122,7 +122,7 @@ export default function NewStockAdjustmentPage() {
                  setNewItem({ itemId: item.id, actualQty: 1 });
                  toast({ title: "تم العثور على الصنف", description: `تم تحديد الصنف: ${item.name}` });
                  setIsScannerOpen(false); 
-                 setTimeout(() => newItemQtyInputRef.current?.focus(), 200);
+                 setTimeout(() => newItemQtyInputRef.current?.focus(), 300);
             }
         } else {
             toast({ variant: 'destructive', title: "صنف غير موجود", description: `لم يتم العثور على صنف بالباركود: ${scannedCode}` });
@@ -138,17 +138,29 @@ export default function NewStockAdjustmentPage() {
             if (!isScannerOpen || !videoRef.current) return;
             
             try {
+                // Request camera explicitly with simplified constraints for maximum compatibility
                 stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } 
+                    video: { facingMode: "environment" } 
                 });
+                
                 setHasCameraPermission(true);
+                
                 if (videoRef.current) {
                     videoRef.current.srcObject = stream;
-                    await videoRef.current.play();
+                    // Play returns a promise, it's good to await it to ensure it's running
+                    try {
+                        await videoRef.current.play();
+                    } catch (playError) {
+                        console.error("Playback failed:", playError);
+                    }
                 }
 
                 if (!("BarcodeDetector" in window)) {
-                    toast({ variant: 'destructive', title: 'تنبيه', description: 'متصفحك لا يدعم خاصية التعرف على الباركود مباشرة. يرجى تحديث المتصفح أو استخدام متصفح كروم.' });
+                    toast({ 
+                        variant: 'destructive', 
+                        title: 'تنبيه', 
+                        description: 'متصفحك لا يدعم خاصية التعرف على الباركود مباشرة. يرجى استخدام متصفح كروم أو إيدج على الموبايل.' 
+                    });
                     return;
                 }
 
@@ -157,36 +169,50 @@ export default function NewStockAdjustmentPage() {
                 });
 
                 const detect = async () => {
-                    if (isProcessing) {
-                        animationFrameId = requestAnimationFrame(detect);
+                    if (!isScannerOpen || isProcessing) {
+                        if (isScannerOpen) animationFrameId = requestAnimationFrame(detect);
                         return;
                     }
-                    if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+
+                    if (videoRef.current && videoRef.current.readyState >= 2) { // HAVE_CURRENT_DATA
                         isProcessing = true;
                         try {
                             const barcodes = await barcodeDetector.detect(videoRef.current);
                             if (barcodes.length > 0) {
                                 handleScanSuccess(barcodes[0].rawValue);
-                                await new Promise(resolve => setTimeout(resolve, 1500));
+                                // Wait a bit before allowing another scan if modal stays open
+                                await new Promise(resolve => setTimeout(resolve, 2000));
                             }
                         } catch (detectError) {
-                            console.error("Detection error:", detectError);
+                            // Silent ignore detection errors if the stream is changing
                         } finally {
                             isProcessing = false;
                         }
                     }
-                    if(isScannerOpen) {
+                    
+                    if (isScannerOpen) {
                         animationFrameId = requestAnimationFrame(detect);
                     }
                 };
-                detect();
-            } catch (err) {
+                
+                animationFrameId = requestAnimationFrame(detect);
+            } catch (err: any) {
                 console.error('Error accessing camera:', err);
                 setHasCameraPermission(false);
+                
+                let errorMsg = 'يرجى التأكد من منح صلاحية الكاميرا للمتصفح في الإعدادات.';
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    errorMsg = 'تم رفض الوصول للكاميرا. يرجى تفعيلها من إعدادات الموقع في المتصفح.';
+                } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                    errorMsg = 'لم يتم العثور على كاميرا في هذا الجهاز.';
+                } else if (!window.isSecureContext) {
+                    errorMsg = 'لا يمكن تشغيل الكاميرا إلا عبر اتصال آمن (HTTPS).';
+                }
+
                 toast({ 
                     variant: 'destructive', 
-                    title: 'فشل الوصول للكاميرا', 
-                    description: 'يرجى التأكد من منح صلاحية الكاميرا للمتصفح في الإعدادات.' 
+                    title: 'فشل تشغيل الكاميرا', 
+                    description: errorMsg
                 });
                 setIsScannerOpen(false);
             }
@@ -197,7 +223,12 @@ export default function NewStockAdjustmentPage() {
         }
 
         return () => {
-            if (stream) stream.getTracks().forEach(track => track.stop());
+            if (stream) {
+                stream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log("Stopped track:", track.label);
+                });
+            }
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
         };
     }, [isScannerOpen, handleScanSuccess, toast]);
@@ -296,7 +327,7 @@ export default function NewStockAdjustmentPage() {
         setNewItem({ itemId: "", actualQty: 0 });
 
         if (autoOpenScanner) {
-            setTimeout(() => setIsScannerOpen(true), 300);
+            setTimeout(() => setIsScannerOpen(true), 500);
         }
     };
 
@@ -314,7 +345,7 @@ export default function NewStockAdjustmentPage() {
         setDuplicateItemInfo(null);
         
         if (autoOpenScanner) {
-            setTimeout(() => setIsScannerOpen(true), 300);
+            setTimeout(() => setIsScannerOpen(true), 500);
         }
     };
 
@@ -391,7 +422,13 @@ export default function NewStockAdjustmentPage() {
                   <DialogDescription>وجه الكاميرا نحو الكود للتعرف عليه تلقائياً.</DialogDescription>
               </DialogHeader>
               <div className="relative w-full aspect-square bg-black rounded-lg overflow-hidden border-2 border-primary/20 shadow-inner">
-                  <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted />
+                  <video 
+                    ref={videoRef} 
+                    className="w-full h-full object-cover" 
+                    autoPlay 
+                    playsInline 
+                    muted 
+                  />
                   <div className="absolute inset-0 border-[40px] border-black/40 pointer-events-none">
                       <div className="w-full h-full border-2 border-primary/60 rounded-sm relative">
                           <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-red-500/60 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
@@ -399,16 +436,16 @@ export default function NewStockAdjustmentPage() {
                   </div>
                   {hasCameraPermission === false && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/80 p-4">
-                        <Alert variant="destructive">
+                        <Alert variant="destructive" className="bg-background">
                             <AlertTitle>صلاحية الكاميرا مطلوبة</AlertTitle>
                             <AlertDescription>
-                                يرجى السماح بالوصول للكاميرا من إعدادات المتصفح لتتمكن من مسح الباركود.
+                                يرجى السماح بالوصول للكاميرا من إعدادات المتصفح. تأكد من استخدام اتصال آمن (HTTPS).
                             </AlertDescription>
                         </Alert>
                     </div>
                   )}
               </div>
-              <DialogFooter className="flex justify-between items-center sm:justify-between">
+              <DialogFooter className="flex justify-between items-center sm:justify-between gap-4">
                   <div className="flex items-center gap-2">
                       <Switch checked={autoOpenScanner} onCheckedChange={setAutoOpenScanner} id="scanner-auto-mode" />
                       <Label htmlFor="scanner-auto-mode" className="text-xs">مسح متتالي</Label>
