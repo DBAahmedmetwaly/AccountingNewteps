@@ -96,7 +96,11 @@ export default function NewStockTransferPage() {
         salesReturns,
         stockReturnsFromReps,
         posSales,
+        posReturns,
+        purchaseReturns,
+        stockIssuesToReps,
         inventoryClosings,
+        requisitions,
      } = useData();
 
     const authorizedBranches = useMemo(() => {
@@ -163,12 +167,14 @@ export default function NewStockTransferPage() {
     }, [selectedRepId, reps]);
 
     const calculateStock = useCallback((itemId: string, warehouseId: string): number => {
+        if (!warehouseId) return 0;
+        
         const closingsForWarehouse = (inventoryClosings || []).filter((c: any) => c.warehouseId === warehouseId)
             .sort((a: any,b: any) => new Date(b.closingDate).getTime() - new Date(a.date).getTime());
         
         const lastClosing = closingsForWarehouse[0] ?? null;
         const lastClosingDate = lastClosing ? new Date(lastClosing.closingDate) : new Date(0);
-        let stock = lastClosing?.balances.find((b: any) => b.itemId === itemId)?.balance || 0;
+        let stock = lastClosing?.balances?.find((b: any) => b.itemId === itemId)?.balance || 0;
 
         const filterTransactions = (t: any) => new Date(t.date) > lastClosingDate;
 
@@ -176,6 +182,7 @@ export default function NewStockTransferPage() {
         (stockTransferRecords || []).filter((t:any) => t.toSourceId === warehouseId && filterTransactions(t)).forEach((t: any) => t.items.forEach((i: any) => { if (i.id === itemId) stock += i.qty; }));
         (stockAdjustmentRecords || []).filter((adj:any) => adj.warehouseId === warehouseId && filterTransactions(adj)).forEach((adj: any) => adj.items.forEach((i: any) => { if (i.itemId === itemId && i.difference > 0) stock += i.difference; }));
         (salesReturns || []).filter((sr:any) => sr.warehouseId === warehouseId && filterTransactions(sr)).forEach((sr: any) => sr.items.forEach((i: any) => { if (i.id === itemId) stock += i.qty; }));
+        (posReturns || []).filter((pr:any) => pr.warehouseId === warehouseId && filterTransactions(pr)).forEach((pr: any) => pr.items.forEach((i: any) => { if (i.id === itemId) stock += i.qty; }));
         (stockReturnsFromReps || []).filter((rfr:any) => rfr.warehouseId === warehouseId && filterTransactions(rfr)).forEach((rfr: any) => rfr.items.forEach((i: any) => { if (i.id === itemId) stock += i.qty; }));
 
         (salesInvoices || []).filter((s:any) => s.warehouseId === warehouseId && s.status === 'approved' && filterTransactions(s)).forEach((s: any) => s.items.forEach((i: any) => { if (i.id === itemId) stock -= i.qty; }));
@@ -184,10 +191,10 @@ export default function NewStockTransferPage() {
         (stockTransferRecords || []).filter((t:any) => t.fromSourceId === warehouseId && filterTransactions(t)).forEach((t: any) => t.items.forEach((i: any) => { if (i.id === itemId) stock -= i.qty; }));
         (stockAdjustmentRecords || []).filter((adj:any) => adj.warehouseId === warehouseId && filterTransactions(adj)).forEach((adj: any) => adj.items.forEach((i: any) => { if (i.itemId === itemId && i.difference < 0) stock += i.difference; }));
         (purchaseReturns || []).filter((pr:any) => pr.warehouseId === warehouseId && filterTransactions(pr)).forEach((pr: any) => pr.items.forEach((i: any) => { if (i.id === itemId) stock -= i.qty; }));
-        (stockIssuesToReps || []).filter((itr:any) => itr.warehouseId === warehouseId && filterTransactions(itr)).forEach((itr: any) => itr.items.filter((i: any) => { if (i.id === itemId) stock -= i.qty; }));
+        (stockIssuesToReps || []).filter((itr:any) => itr.warehouseId === warehouseId && filterTransactions(itr)).forEach((itr: any) => itr.items.forEach((i: any) => { if (i.id === itemId) stock -= i.qty; }));
         
         return stock;
-    }, [inventoryClosings, stockInRecords, stockTransferRecords, stockAdjustmentRecords, salesReturns, stockReturnsFromReps, salesInvoices, posSales, stockOutRecords, purchaseReturns, stockIssuesToReps]);
+    }, [inventoryClosings, stockInRecords, stockTransferRecords, stockAdjustmentRecords, salesReturns, posReturns, stockReturnsFromReps, salesInvoices, posSales, stockOutRecords, purchaseReturns, stockIssuesToReps]);
 
     const availableItemsWithStock = useMemo(() => {
         if (!fromSource || !allItems.length) return [];
@@ -272,9 +279,9 @@ export default function NewStockTransferPage() {
                 id: itemId,
                 name: selectedItem.name,
                 qty: 1,
-                unit: selectedItem.baseUnit,
                 cost: selectedItem.cost || 0,
                 code: selectedItem.code || '',
+                unit: selectedItem.baseUnit,
             });
         }
     }
