@@ -21,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useData } from "@/contexts/data-provider";
-import { Loader2, DollarSign, Users, Building, Package, TrendingUp, TrendingDown, AlertTriangle, Clock, ShoppingCart, Calculator, Info, Banknote, Tag, Wallet, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { Loader2, DollarSign, Users, Building, Package, TrendingUp, TrendingDown, AlertTriangle, Clock, ShoppingCart, Calculator, Info, Banknote, Tag, Wallet, ArrowUpCircle, ArrowDownCircle, Minus, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Combobox } from "@/components/ui/combobox";
@@ -36,15 +36,15 @@ import { Separator } from "@/components/ui/separator";
 
 // Data Interfaces
 interface Item { id: string; name: string; cost?: number; reorderPoint?: number; }
-interface Sale { id: string; date: string; warehouseId?: string; total: number; items: { id: string; qty: number; cost?: number; }[]; discount: number; subtotal: number; paidAmount?: number; }
+interface Sale { id: string; date: string; warehouseId?: string; total: number; items: { id: string; qty: number; cost?: number; }[]; discount: number; subtotal: number; paidAmount?: number; paidToAccountId?: string; }
 interface Purchase { id: string; date: string; warehouseId: string; total: number; paidAmount?: number; }
-interface Customer { openingBalance: number; }
-interface Supplier { openingBalance: number; }
-interface CustomerPayment { amount: number; paidToAccountId: string; invoiceId?: string; }
-interface SupplierPayment { amount: number; paidFromAccountId: string; invoiceId?: string; }
+interface Customer { id: string; name: string; openingBalance: number; }
+interface Supplier { id: string; name: string; openingBalance: number; }
+interface CustomerPayment { amount: number; paidToAccountId: string; invoiceId?: string; customerId: string; }
+interface SupplierPayment { amount: number; paidFromAccountId: string; invoiceId?: string; supplierId: string; }
 interface SalesReturn { total: number; paidAmount?: number; paidFromAccountId?: string; warehouseId: string; items: any[]; date: string; }
 interface PurchaseReturn { total: number; paidAmount?: number; paidToAccountId?: string; warehouseId: string; }
-interface CashAccount { id: string; openingBalance: number; warehouseId?: string; }
+interface CashAccount { id: string; name: string; openingBalance: number; warehouseId?: string; salesRepId?: string; userId?: string; }
 interface Expense { amount: number; paidFromAccountId: string; date: string; warehouseId?: string; }
 interface ExceptionalIncome { amount: number; paidToAccountId: string; date: string; }
 interface TreasuryTransaction { type: 'deposit' | 'withdrawal'; amount: number; accountId: string; linkedTransaction?: boolean; }
@@ -65,7 +65,7 @@ export default function DashboardPage() {
         cashAccounts, expenses, exceptionalIncomes, treasuryTransactions,
         employeeAdvances, profitDistributions, inventory, warehouses, loading, stockOutRecords,
         inventoryClosings, stockInRecords, stockTransferRecords, stockAdjustmentRecords,
-        posReturns, stockIssuesToReps, stockReturnsFromReps, payrollRecords
+        posReturns, stockIssuesToReps, stockReturnsFromReps, payrollRecords, settings
     } = useData();
     const { user } = useAuth();
     const isMobile = useIsMobile();
@@ -122,12 +122,12 @@ export default function DashboardPage() {
             return true;
         };
 
-        const filterByWarehouse = (warehouseId?: string) => {
+        const filterByWarehouse = (wId?: string) => {
             if (filters.warehouseId === 'all') {
                 if (user?.warehouseIds?.includes('all')) return true;
-                return user?.warehouseIds?.includes(warehouseId || '');
+                return user?.warehouseIds?.includes(wId || '');
             }
-            return warehouseId === filters.warehouseId;
+            return wId === filters.warehouseId;
         };
         
         const sales = [...salesInvoices.filter((s:any) => s.status === 'approved'), ...posSales]
@@ -152,58 +152,56 @@ export default function DashboardPage() {
         const isSuperAdmin = userWarehouseIds.includes('all');
         const activeWarehouseId = filters.warehouseId;
         
-        const isWarehouseAllowed = (wId?: string) => {
-            if (activeWarehouseId !== 'all') return wId === activeWarehouseId;
+        // Revised logic: Include General accounts (no warehouseId) when filtering for "all"
+        const isAccountAllowed = (acc: CashAccount) => {
+            if (activeWarehouseId !== 'all') return acc.warehouseId === activeWarehouseId;
             if (isSuperAdmin) return true;
-            return userWarehouseIds.includes(wId || '');
+            // For managers, show their branches plus general accounts
+            return !acc.warehouseId || userWarehouseIds.includes(acc.warehouseId);
         };
 
-        const filteredCashAccounts = cashAccounts.filter((acc: any) => isWarehouseAllowed(acc.warehouseId));
-        const filteredCashAccountIds = new Set(filteredCashAccounts.map((acc: any) => acc.id));
+        const filteredCashAccounts = cashAccounts.filter(isAccountAllowed);
+        const filteredCashAccountIds = new Set(filteredCashAccounts.map(acc => acc.id));
 
-        let openingCash = filteredCashAccounts.reduce((sum: number, acc: CashAccount) => sum + (acc.openingBalance || 0), 0);
+        let openingCash = filteredCashAccounts.reduce((sum, acc) => sum + (Number(acc.openingBalance) || 0), 0);
         let customerPaymentsTotal = 0;
         let extraIncomeTotal = 0;
         let treasuryDeposits = 0;
         let purchaseReturnsCash = 0;
         let salesInitialCash = 0;
 
-        // Deposits
+        // Inflows
         customerPayments.forEach((p: CustomerPayment) => {
-            if (filteredCashAccountIds.has(p.paidToAccountId)) customerPaymentsTotal += p.amount;
+            if (filteredCashAccountIds.has(p.paidToAccountId)) customerPaymentsTotal += Number(p.amount) || 0;
         });
         
         exceptionalIncomes.forEach((i: ExceptionalIncome) => {
-            if (filteredCashAccountIds.has(i.paidToAccountId)) extraIncomeTotal += i.amount;
+            if (filteredCashAccountIds.has(i.paidToAccountId)) extraIncomeTotal += Number(i.amount) || 0;
         });
         
         treasuryTransactions.filter((tx: TreasuryTransaction) => tx.type === 'deposit' && !tx.linkedTransaction).forEach((tx: TreasuryTransaction) => {
-            if (filteredCashAccountIds.has(tx.accountId)) treasuryDeposits += tx.amount;
+            if (filteredCashAccountIds.has(tx.accountId)) treasuryDeposits += Number(tx.amount) || 0;
         });
 
         purchaseReturns.forEach((r: any) => {
-            if (filteredCashAccountIds.has(r.paidToAccountId)) purchaseReturnsCash += (r.paidAmount || 0);
+            if (filteredCashAccountIds.has(r.paidToAccountId)) purchaseReturnsCash += Number(r.paidAmount) || 0;
         });
         
-        const approvedSales = salesInvoices.filter((s:any) => s.status === 'approved' && isWarehouseAllowed(s.warehouseId));
-        approvedSales.forEach((s: any) => {
-            if (filteredCashAccountIds.has(s.paidToAccountId)) {
-                const linkedPaymentsTotal = customerPayments.filter((p: CustomerPayment) => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
-                const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
-                if (initialCash > 0) salesInitialCash += initialCash;
-            }
-        });
-        
-        posSales.filter((s: any) => isWarehouseAllowed(s.warehouseId)).forEach((s: any) => {
+        // Sum cash from sales, excluding what was accounted for in customerPayments (linked to invoice)
+        const allSales = [...salesInvoices.filter((s:any) => s.status === 'approved'), ...posSales];
+        allSales.forEach((s: any) => {
             const targetId = s.paidToAccountId || (filteredCashAccounts.find(acc => acc.warehouseId === s.warehouseId)?.id);
             if (targetId && filteredCashAccountIds.has(targetId)) {
-                const linkedPaymentsTotal = customerPayments.filter((p: CustomerPayment) => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
-                const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
+                const linkedPaymentsTotal = customerPayments
+                    .filter((p: CustomerPayment) => p.invoiceId === s.id)
+                    .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+                
+                const initialCash = (Number(s.paidAmount) || 0) - linkedPaymentsTotal;
                 if (initialCash > 0) salesInitialCash += initialCash;
             }
         });
         
-        // Outflows calculation for breakdown
+        // Outflows
         let expensesOut = 0;
         let supplierPaymentsOut = 0;
         let purchasesCashOut = 0;
@@ -214,54 +212,61 @@ export default function DashboardPage() {
         let returnsOut = 0;
 
         expenses.forEach((e: Expense) => {
-            if (filteredCashAccountIds.has(e.paidFromAccountId)) expensesOut += e.amount;
+            if (filteredCashAccountIds.has(e.paidFromAccountId)) expensesOut += Number(e.amount) || 0;
         });
         
         supplierPayments.forEach((p: SupplierPayment) => {
-            if (filteredCashAccountIds.has(p.paidFromAccountId)) supplierPaymentsOut += p.amount;
+            if (filteredCashAccountIds.has(p.paidFromAccountId)) supplierPaymentsOut += Number(p.amount) || 0;
         });
         
-        purchaseInvoices.filter((p: any) => isWarehouseAllowed(p.warehouseId)).forEach((p: any) => {
+        purchaseInvoices.forEach((p: any) => {
             if (filteredCashAccountIds.has(p.paidFromAccountId)) {
-                const linkedPaymentsTotal = supplierPayments.filter((sp: SupplierPayment) => sp.invoiceId === p.id).reduce((sum, sp) => sum + sp.amount, 0);
-                const initialPaid = (p.paidAmount || 0) - linkedPaymentsTotal;
+                const linkedPaymentsTotal = supplierPayments
+                    .filter((sp: SupplierPayment) => sp.invoiceId === p.id)
+                    .reduce((sum, sp) => sum + (Number(sp.amount) || 0), 0);
+                const initialPaid = (Number(p.paidAmount) || 0) - linkedPaymentsTotal;
                 if (initialPaid > 0) purchasesCashOut += initialPaid;
             }
         });
         
         employeeAdvances.forEach((ea: any) => {
-            if (filteredCashAccountIds.has(ea.paidFromAccountId)) hrAdvancesOut += ea.amount;
+            if (filteredCashAccountIds.has(ea.paidFromAccountId)) hrAdvancesOut += Number(ea.amount) || 0;
         });
         
         profitDistributions.forEach((pd: any) => {
-            if (filteredCashAccountIds.has(pd.paidFromAccountId)) profitDistributionsOut += pd.amount;
+            if (filteredCashAccountIds.has(pd.paidFromAccountId)) profitDistributionsOut += Number(pd.amount) || 0;
         });
         
         treasuryTransactions.filter((tx: any) => tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: any) => {
-            if (filteredCashAccountIds.has(tx.accountId)) treasuryWithdrawalsOut += tx.amount;
+            if (filteredCashAccountIds.has(tx.accountId)) treasuryWithdrawalsOut += Number(tx.amount) || 0;
         });
 
         payrollRecords?.forEach((pr: any) => {
             if (filteredCashAccountIds.has(pr.paidFromAccountId)) {
-                payrollOut += pr.payrollData.reduce((sum: number, p: any) => sum + p.netSalary, 0);
+                payrollOut += pr.payrollData.reduce((sum: number, p: any) => sum + (Number(p.netSalary) || 0), 0);
             }
         });
 
         salesReturns.forEach((r: any) => {
-            if (filteredCashAccountIds.has(r.paidFromAccountId)) returnsOut += (r.paidAmount || 0);
+            if (filteredCashAccountIds.has(r.paidFromAccountId)) returnsOut += (Number(r.paidAmount) || 0);
         });
 
-        posReturns.filter((r:any) => isWarehouseAllowed(r.warehouseId)).forEach((r: any) => {
-            if ((r.paidAmount || 0) > 0) {
+        posReturns.forEach((r: any) => {
+            if ((Number(r.paidAmount) || 0) > 0) {
                 const targetId = filteredCashAccounts.find(acc => acc.warehouseId === r.warehouseId)?.id;
                 if (targetId && filteredCashAccountIds.has(targetId)) {
-                    returnsOut += r.paidAmount;
+                    returnsOut += Number(r.paidAmount);
                 }
             }
         });
 
         const totalCash = openingCash + customerPaymentsTotal + extraIncomeTotal + treasuryDeposits + purchaseReturnsCash + salesInitialCash - (expensesOut + supplierPaymentsOut + purchasesCashOut + hrAdvancesOut + profitDistributionsOut + treasuryWithdrawalsOut + payrollOut + returnsOut);
 
+        const isWarehouseAllowed = (wId?: string) => {
+            if (activeWarehouseId !== 'all') return wId === activeWarehouseId;
+            if (isSuperAdmin) return true;
+            return userWarehouseIds.includes(wId || '');
+        };
         const warehousesToConsider = warehouses.filter((w: any) => isWarehouseAllowed(w.id));
 
         const inventoryValue = items.reduce((sum: number, item: any) => {
@@ -270,11 +275,11 @@ export default function DashboardPage() {
                 const warehouseInventory = inventory.filter((inv: any) => inv.warehouseId === warehouse.id);
                 warehouseInventory.forEach((sectionRecord: any) => {
                     if (sectionRecord.items && sectionRecord.items[item.id]) {
-                        itemTotalBalance += (sectionRecord.items[item.id].balance || 0);
+                        itemTotalBalance += (Number(sectionRecord.items[item.id].balance) || 0);
                     }
                 });
             });
-            return sum + (itemTotalBalance * (item.cost || 0));
+            return sum + (itemTotalBalance * (Number(item.cost) || 0));
         }, 0);
 
         let totalArOpening = 0;
@@ -393,7 +398,7 @@ export default function DashboardPage() {
             customersCount: customers.length,
             suppliersCount: suppliers.length,
             productsCount: items.length,
-            balanceExplanation: `إجمالي السيولة النقدية في ${filteredCashAccounts.length} حساب/خزينة تابعة للفروع المختارة.`
+            balanceExplanation: `إجمالي السيولة النقدية في ${filteredCashAccounts.length} حساب/خزينة متاحة للفلاتر المختارة.`
         };
     }, [
         cashAccounts, customerPayments, exceptionalIncomes, treasuryTransactions, expenses, 
@@ -415,7 +420,7 @@ export default function DashboardPage() {
             const warehousesToConsider = warehouses.filter((w: any) => isWarehouseAllowed(w.id));
             let total = 0;
             items.forEach((item: any) => {
-                const itemCost = item.cost || 0;
+                const itemCost = Number(item.cost) || 0;
                 let totalQty = 0;
                 warehousesToConsider.forEach((w: any) => {
                     const qty = calculateStockForItemInWarehouse(item.id, w.id, {
@@ -432,7 +437,7 @@ export default function DashboardPage() {
                         stockIssuesToReps,
                         stockReturnsFromReps,
                     });
-                    totalQty += qty || 0;
+                    totalQty += Number(qty) || 0;
                 });
                 total += totalQty * itemCost;
             });
@@ -449,11 +454,11 @@ export default function DashboardPage() {
             
             const saleCost = sale.items.reduce((acc: number, item: any) => {
                 const master = items.find((i:any) => i.id === item.id);
-                return acc + (item.qty * (item.cost || master?.cost || 0));
+                return acc + (Number(item.qty) * (Number(item.cost) || Number(master?.cost) || 0));
             }, 0);
             
-            dailyData[date].sales += sale.total;
-            dailyData[date].profit += (sale.total - saleCost);
+            dailyData[date].sales += Number(sale.total) || 0;
+            dailyData[date].profit += (Number(sale.total) - saleCost);
         });
         
         return Object.entries(dailyData).map(([date, data]) => ({ date: new Date(date).toLocaleDateString('ar-EG', {month: 'short', day: 'numeric'}), ...data }))
@@ -464,7 +469,7 @@ export default function DashboardPage() {
         const branchSales: {[id: string]: number} = {};
         filteredData.sales.forEach((s: any) => {
             if(s.warehouseId) {
-                branchSales[s.warehouseId] = (branchSales[s.warehouseId] || 0) + s.total;
+                branchSales[s.warehouseId] = (branchSales[s.warehouseId] || 0) + Number(s.total);
             }
         });
         return Object.entries(branchSales)
@@ -497,8 +502,8 @@ export default function DashboardPage() {
                 const itemMaster = items.find((i:any) => i.id === item.id);
                 if (!itemMaster) return;
                 const current = itemSales.get(item.id) || { name: itemMaster.name, qty: 0, value: 0 };
-                current.qty += item.qty;
-                current.value += item.qty * (item.price || itemMaster.price || 0);
+                current.qty += Number(item.qty) || 0;
+                current.value += (Number(item.qty) || 0) * (Number(item.price) || Number(itemMaster.price) || 0);
                 itemSales.set(item.id, current);
             });
         });
@@ -521,7 +526,7 @@ export default function DashboardPage() {
             .map((inv: any) => {
                 const itemId = inv.id.split('-')[1];
                 const itemMaster = items.find((i: Item) => i.id === itemId);
-                if (!itemMaster || !itemMaster.reorderPoint || inv.balance > itemMaster.reorderPoint) return null;
+                if (!itemMaster || !itemMaster.reorderPoint || Number(inv.balance) > Number(itemMaster.reorderPoint)) return null;
                 
                 return {
                     name: itemMaster.name,
@@ -595,45 +600,57 @@ export default function DashboardPage() {
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
                             <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">الإيرادات والمدخلات (+)</div>
-                            <div className="flex justify-between text-sm">
+                            <div className="flex justify-between text-sm items-center">
                                 <span>أرصدة افتتاحية (الخزائن):</span>
-                                <span className="font-semibold text-green-600">+{kpiData.cashBreakdown.opening.toLocaleString()}</span>
+                                <span className="font-semibold text-green-600 flex items-center gap-1"><Plus className="h-3 w-3"/>{kpiData.cashBreakdown.opening.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between text-sm">
+                            <div className="flex justify-between text-sm items-center">
                                 <span>مقبوضات من العملاء:</span>
-                                <span className="font-semibold text-green-600">+{kpiData.cashBreakdown.customerPayments.toLocaleString()}</span>
+                                <span className="font-semibold text-green-600 flex items-center gap-1"><Plus className="h-3 w-3"/>{kpiData.cashBreakdown.customerPayments.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between text-sm">
+                            <div className="flex justify-between text-sm items-center">
                                 <span>محصل نقدياً من الفواتير:</span>
-                                <span className="font-semibold text-green-600">+{kpiData.cashBreakdown.salesInitial.toLocaleString()}</span>
+                                <span className="font-semibold text-green-600 flex items-center gap-1"><Plus className="h-3 w-3"/>{kpiData.cashBreakdown.salesInitial.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between text-sm">
+                            <div className="flex justify-between text-sm items-center">
                                 <span>دخل متنوع (إضافي):</span>
-                                <span className="font-semibold text-green-600">+{kpiData.cashBreakdown.extraIncome.toLocaleString()}</span>
+                                <span className="font-semibold text-green-600 flex items-center gap-1"><Plus className="h-3 w-3"/>{kpiData.cashBreakdown.extraIncome.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between text-sm">
+                            <div className="flex justify-between text-sm items-center">
                                 <span>إيداعات رأس مال:</span>
-                                <span className="font-semibold text-green-600">+{kpiData.cashBreakdown.treasuryDeposits.toLocaleString()}</span>
+                                <span className="font-semibold text-green-600 flex items-center gap-1"><Plus className="h-3 w-3"/>{kpiData.cashBreakdown.treasuryDeposits.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm items-center">
+                                <span>مبالغ مستردة (مرتجع شراء):</span>
+                                <span className="font-semibold text-green-600 flex items-center gap-1"><Plus className="h-3 w-3"/>{kpiData.cashBreakdown.purchaseReturns.toLocaleString()}</span>
                             </div>
                         </div>
                         <Separator />
                         <div className="space-y-2">
                             <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">المدفوعات والمخرجات (-)</div>
-                            <div className="flex justify-between text-sm">
+                            <div className="flex justify-between text-sm items-center">
                                 <span>مصروفات تشغيلية:</span>
-                                <span className="font-semibold text-destructive">-{kpiData.cashBreakdown.outflows.expenses.toLocaleString()}</span>
+                                <span className="font-semibold text-destructive flex items-center gap-1"><Minus className="h-3 w-3"/>{kpiData.cashBreakdown.outflows.expenses.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between text-sm">
+                            <div className="flex justify-between text-sm items-center">
                                 <span>مدفوعات للموردين:</span>
-                                <span className="font-semibold text-destructive">-{kpiData.cashBreakdown.outflows.supplierPayments.toLocaleString()}</span>
+                                <span className="font-semibold text-destructive flex items-center gap-1"><Minus className="h-3 w-3"/>{kpiData.cashBreakdown.outflows.supplierPayments.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between text-sm">
+                            <div className="flex justify-between text-sm items-center">
+                                <span>مشتريات نقدية:</span>
+                                <span className="font-semibold text-destructive flex items-center gap-1"><Minus className="h-3 w-3"/>{kpiData.cashBreakdown.outflows.purchases.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm items-center">
                                 <span>رواتب (صافي):</span>
-                                <span className="font-semibold text-destructive">-{kpiData.cashBreakdown.outflows.payroll.toLocaleString()}</span>
+                                <span className="font-semibold text-destructive flex items-center gap-1"><Minus className="h-3 w-3"/>{kpiData.cashBreakdown.outflows.payroll.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between text-sm">
+                            <div className="flex justify-between text-sm items-center">
                                 <span>سحوبات وتوزيعات أرباح:</span>
-                                <span className="font-semibold text-destructive">-{kpiData.cashBreakdown.outflows.distributions.toLocaleString()}</span>
+                                <span className="font-semibold text-destructive flex items-center gap-1"><Minus className="h-3 w-3"/>{kpiData.cashBreakdown.outflows.distributions.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm items-center">
+                                <span>رد نقدية (مرتجع مبيعات):</span>
+                                <span className="font-semibold text-destructive flex items-center gap-1"><Minus className="h-3 w-3"/>{kpiData.cashBreakdown.outflows.returns.toLocaleString()}</span>
                             </div>
                         </div>
                         <div className="p-4 bg-muted rounded-lg flex justify-between items-center border-2 border-primary/20">
@@ -900,7 +917,7 @@ export default function DashboardPage() {
                 <CardHeader><CardTitle className="flex items-center gap-2"><AlertTriangle className="text-amber-500" />أصناف وصلت لحد الطلب</CardTitle></CardHeader>
                 <CardContent>
                     <Table>
-                        <TableHeader><TableRow><TableHead>الصنف</TableHead><TableHead>الفرع</TableHead><TableHead className="text-center">الرصيد</TableHead><TableHead className="text-center">حد الطلب</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>الصنف</TableHead>  <TableHead>الفرع</TableHead><TableHead className="text-center">الرصيد</TableHead><TableHead className="text-center">حد الطلب</TableHead></TableRow></TableHeader>
                         <TableBody>
                              {reorderItems.map(item => (
                                 <TableRow key={`${item.name}-${item.warehouseName}`} className="bg-amber-500/10">
