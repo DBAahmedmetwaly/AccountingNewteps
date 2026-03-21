@@ -138,32 +138,34 @@ export default function NewStockAdjustmentPage() {
             if (!isScannerOpen || !videoRef.current) return;
             
             try {
-                // Request back camera specifically
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: { exact: "environment" },
+                // Request camera permission explicitly first
+                const constraints = {
+                    video: {
+                        facingMode: "environment",
                         width: { ideal: 1280 },
                         height: { ideal: 720 }
-                    } 
-                }).catch(async () => {
-                    // Fallback if environment exact fails
-                    return await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                });
+                    }
+                };
+
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 
-                streamRef.current = stream;
-                setHasCameraPermission(true);
-                
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                    await videoRef.current.play();
+                if (!videoRef.current) {
+                    stream.getTracks().forEach(track => track.stop());
+                    return;
                 }
 
+                streamRef.current = stream;
+                videoRef.current.srcObject = stream;
+                setHasCameraPermission(true);
+
+                // Wait for the video to be ready before playing
+                videoRef.current.onloadedmetadata = () => {
+                    videoRef.current?.play().catch(e => console.error("Video play failed:", e));
+                };
+
+                // Check for BarcodeDetector support
                 if (!("BarcodeDetector" in window)) {
-                    toast({ 
-                        variant: 'destructive', 
-                        title: 'تنبيه', 
-                        description: 'متصفحك لا يدعم خاصية التعرف على الباركود المدمجة. يرجى استخدام متصفح حديث.' 
-                    });
+                    console.warn("BarcodeDetector not supported in this browser");
                     return;
                 }
 
@@ -172,9 +174,7 @@ export default function NewStockAdjustmentPage() {
                 });
 
                 const detect = async () => {
-                    if (!isScannerOpen || isProcessing || !videoRef.current) {
-                        return;
-                    }
+                    if (!isScannerOpen || isProcessing || !videoRef.current) return;
 
                     if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
                         isProcessing = true;
@@ -182,7 +182,6 @@ export default function NewStockAdjustmentPage() {
                             const barcodes = await barcodeDetector.detect(videoRef.current);
                             if (barcodes.length > 0) {
                                 handleScanSuccess(barcodes[0].rawValue);
-                                // Successful scan, loop will exit because isScannerOpen will be set to false by handleScanSuccess
                                 return; 
                             }
                         } catch (err) {
@@ -201,7 +200,7 @@ export default function NewStockAdjustmentPage() {
                 toast({ 
                     variant: 'destructive', 
                     title: 'خطأ في الكاميرا', 
-                    description: 'تعذر تشغيل الكاميرا الخلفية. تأكد من منح الأذونات المطلوبة.'
+                    description: err.name === 'NotAllowedError' ? 'تم رفض إذن الكاميرا. يرجى تفعيله من الإعدادات.' : 'تعذر تشغيل الكاميرا الخلفية.'
                 });
                 setIsScannerOpen(false);
             }
