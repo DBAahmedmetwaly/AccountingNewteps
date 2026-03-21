@@ -39,6 +39,7 @@ interface SaleInvoice {
   date: string;
   subtotal: number;
   warehouseId: string;
+  paidToAccountId?: string;
 }
 interface PurchaseInvoice {
   id: string;
@@ -47,6 +48,7 @@ interface PurchaseInvoice {
   paidAmount?: number;
   date: string;
   warehouseId: string;
+  paidFromAccountId?: string;
   items: { id: string; qty: number; cost?: number }[];
 }
 interface Expense {
@@ -55,6 +57,7 @@ interface Expense {
   expenseType: string;
   date: string;
   paidFromAccountId: string;
+  status?: 'paid' | 'pending';
 }
 interface ExceptionalIncome {
     id: string;
@@ -76,7 +79,8 @@ interface Partner {
 }
 interface Item {
     id: string;
-    openingStock: number;
+    name: string;
+    unit: string;
     price: number;
     cost?: number;
 }
@@ -100,6 +104,7 @@ interface SalesReturn {
     id: string;
     total: number;
     paidAmount?: number;
+    paidFromAccountId?: string;
     customerId: string;
     date: string;
     warehouseId: string;
@@ -109,15 +114,13 @@ interface PurchaseReturn {
     id: string;
     total: number;
     paidAmount?: number;
+    paidToAccountId?: string;
     supplierId: string;
     date: string;
     warehouseId: string;
     items: { id: string; qty: number; }[];
 }
 interface StockInRecord { id: string; warehouseId: string; items: { itemId: string; name: string; qty: number; cost?: number; }[]; date: string;}
-interface StockOutRecord { id: string; sourceId: string; items: { id: string; qty: number; }[]; date: string;}
-interface StockTransferRecord { id: string; fromSourceId: string; toSourceId: string; items: { id: string; qty: number; }[]; date: string; }
-interface StockAdjustmentRecord { id: string; warehouseId: string; items: { itemId: string; difference: number; }[]; date: string; }
 interface InventoryClosing { id: string; warehouseId: string; closingDate: string; balances: { itemId: string, balance: number }[] }
 interface TreasuryTransaction {
     id: string;
@@ -139,7 +142,8 @@ interface ProfitDistribution {
     paidFromAccountId: string;
     date: string;
 }
-interface PosSale { id: string; warehouseId: string; items: { id: string; qty: number; cost?: number; price: number; }[]; date: string; total: number; discount: number; subtotal: number; paidAmount?: number; }
+interface PosSale { id: string; warehouseId: string; items: { id: string; qty: number; cost?: number; price: number; }[]; date: string; total: number; discount: number; subtotal: number; paidAmount?: number; paidToAccountId?: string; }
+interface PosReturn { id: string; warehouseId: string; items: { id: string; qty: number; price: number; cost?: number; }[]; date: string; total: number; paidAmount?: number; }
 interface PayrollRecord {
     id: string;
     date: string;
@@ -169,7 +173,7 @@ interface DepreciationRecord {
 }
 
 const useIncomeStatementData = () => {
-  const { salesInvoices, expenses, exceptionalIncomes, items, salesReturns, posSales, payrollRecords, stockAdjustmentRecords, stockOutRecords, depreciationRecords } = useData();
+  const { salesInvoices, expenses, exceptionalIncomes, items, salesReturns, posSales, posReturns, payrollRecords, stockAdjustmentRecords, stockOutRecords, depreciationRecords } = useData();
 
   return useMemo(() => {
     const approvedSales = salesInvoices.filter((s: SaleInvoice) => s.status === 'approved');
@@ -177,23 +181,23 @@ const useIncomeStatementData = () => {
 
     const grossRevenue = allSales.reduce((acc, sale) => acc + (sale.subtotal || (sale.total + (sale.discount || 0))), 0);
     const totalSalesDiscount = allSales.reduce((acc, sale) => acc + (sale.discount || 0), 0);
-    const totalSalesReturns = salesReturns.reduce((acc, ret) => acc + ret.total, 0);
+    
+    // Combine standard and POS returns
+    const allReturns = [...salesReturns, ...posReturns];
+    const totalSalesReturns = allReturns.reduce((acc, ret) => acc + ret.total, 0);
     
     let costOfGoodsSold = allSales.reduce((acc, sale) => {
         return acc + (sale.items?.reduce((itemAcc: number, saleItem: any) => {
-            if (typeof saleItem.cost === 'number') {
-                return itemAcc + (saleItem.qty * saleItem.cost);
-            }
             const itemMaster = items.find((i:any) => i.id === saleItem.id);
-            const masterCost = itemMaster?.cost || 0;
+            const masterCost = saleItem.cost || itemMaster?.cost || 0;
             return itemAcc + (saleItem.qty * masterCost);
         }, 0) || 0);
     }, 0);
 
-    const costOfReturns = salesReturns.reduce((acc, ret) => {
+    const costOfReturns = allReturns.reduce((acc, ret) => {
         return acc + (ret.items?.reduce((itemAcc: number, item: any) => {
             const itemMaster = items.find((i:any) => i.id === item.id);
-            const masterCost = itemMaster?.cost || 0;
+            const masterCost = item.cost || itemMaster?.cost || 0;
             return itemAcc + (item.qty * masterCost);
         }, 0) || 0);
     }, 0);
@@ -261,7 +265,7 @@ const useIncomeStatementData = () => {
     const netIncome = netOperatingIncome + totalExceptionalIncome;
     
     return { grossRevenue, totalSalesReturns, totalSalesDiscount, costOfGoodsSold, totalExceptionalIncome, expensesByType, totalExpenses, netRevenue, grossProfit, netOperatingIncome, netIncome };
-  }, [salesInvoices, posSales, expenses, exceptionalIncomes, items, salesReturns, payrollRecords, stockAdjustmentRecords, stockOutRecords, depreciationRecords]);
+  }, [salesInvoices, posSales, posReturns, expenses, exceptionalIncomes, items, salesReturns, payrollRecords, stockAdjustmentRecords, stockOutRecords, depreciationRecords]);
 };
 
 function IncomeStatement() {
@@ -300,8 +304,8 @@ function BalanceSheet() {
     const { 
         customers, suppliers, partners, items: allItems, salesInvoices, purchaseInvoices, 
         customerPayments, supplierPayments, salesReturns, purchaseReturns, 
-        warehouses, stockInRecords, stockOutRecords, stockTransferRecords, stockAdjustmentRecords, 
-        stockIssuesToReps, stockReturnsFromReps, inventoryClosings,
+        warehouses, inventoryZones, stockInRecords, stockOutRecords, stockTransferRecords, stockAdjustmentRecords, 
+        stockIssuesToReps, stockReturnsFromReps, inventoryClosings, repRemittances,
         cashAccounts, treasuryTransactions, expenses, exceptionalIncomes, employeeAdvances, profitDistributions,
         posSales, posReturns, payrollRecords, fixedAssets, depreciationRecords,
         loading 
@@ -326,18 +330,42 @@ function BalanceSheet() {
         
         // --- Cash Calculation ---
         let cash = cashAccounts.reduce((acc: number, ca: any) => acc + (ca.openingBalance || 0), 0);
+        
+        // Inflows
         customerPayments.forEach((p:any) => cash += p.amount);
-        salesInvoices.filter((s:any) => s.status === 'approved').forEach((s:any) => cash += (s.paidAmount || 0) - (customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0)));
-        posSales.forEach((s:any) => cash += (s.paidAmount || 0) - (customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0)));
         exceptionalIncomes.forEach((i:any) => cash += i.amount);
         treasuryTransactions.filter((tx:any) => tx.type === 'deposit' && !tx.linkedTransaction).forEach((tx:any) => cash += tx.amount);
-        expenses.forEach((e:any) => cash -= e.amount);
+        repRemittances.forEach((rem: any) => cash += rem.amount);
+        purchaseReturns.filter(r => r.paidAmount > 0).forEach(r => cash += r.paidAmount);
+        
+        // Deduct initial cash already in sales invoices (avoiding double count with customerPayments)
+        salesInvoices.filter((s:any) => s.status === 'approved' && s.paidAmount > 0).forEach((s: any) => {
+            const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
+            const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
+            if (initialCash > 0) cash += initialCash;
+        });
+        posSales.filter(s => s.paidAmount > 0).forEach((s: any) => {
+            const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
+            const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
+            if (initialCash > 0) cash += initialCash;
+        });
+
+        // Outflows
+        expenses.filter(e => e.status !== 'pending').forEach((e:any) => cash -= e.amount);
         supplierPayments.forEach((p:any) => cash -= p.amount);
-        purchaseInvoices.forEach((p:any) => cash -= (p.paidAmount || 0) - (supplierPayments.filter(sp => sp.invoiceId === p.id).reduce((sum, sp) => sum + sp.amount, 0)));
         employeeAdvances.forEach((ea:any) => cash -= ea.amount);
         profitDistributions.forEach((pd:any) => cash -= pd.amount);
         treasuryTransactions.filter((tx:any) => tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx:any) => cash -= tx.amount);
+        salesReturns.filter(r => r.paidAmount > 0).forEach(r => cash -= r.paidAmount);
+        posReturns.filter(r => r.paidAmount > 0).forEach(r => cash -= r.paidAmount);
         payrollRecords?.forEach((pr: any) => { cash -= pr.payrollData.reduce((sum: number, p: any) => sum + p.netSalary, 0); });
+        
+        // Deduct initial paid already in purchase invoices (avoiding double count with supplierPayments)
+        purchaseInvoices.filter(p => p.paidAmount > 0).forEach((p: any) => {
+            const linkedPaymentsTotal = supplierPayments.filter(sp => sp.invoiceId === p.id).reduce((sum, sp) => sum + sp.amount, 0);
+            const initialPaid = (p.paidAmount || 0) - linkedPaymentsTotal;
+            if (initialPaid > 0) cash -= initialPaid;
+        });
 
         // --- Other Assets ---
         let totalAdvancesGiven = employeeAdvances.reduce((acc, ea) => acc + ea.amount, 0);
@@ -347,39 +375,58 @@ function BalanceSheet() {
         const fixedAssetsGross = fixedAssets?.reduce((acc: number, asset: any) => (asset.status === 'active' || asset.status === 'fully_depreciated' ? acc + (asset.cost || 0) : acc), 0) || 0;
         const accDepreciation = depreciationRecords?.reduce((acc: number, rec: any) => acc + rec.amount, 0) || 0;
 
-        return { accountsReceivable: ar, accountsPayable: ap, cashAndEquivalents: cash, employeeAdvancesBalance: empAdvances, fixedAssetsGross, accumulatedDepreciation: accDepreciation, fixedAssetsNet: fixedAssetsGross - accDepreciation };
-    }, [customers, suppliers, salesInvoices, purchaseInvoices, customerPayments, supplierPayments, salesReturns, purchaseReturns, cashAccounts, treasuryTransactions, expenses, exceptionalIncomes, employeeAdvances, profitDistributions, posSales, posReturns, payrollRecords, fixedAssets, depreciationRecords]);
+        // --- Capital Calculation ---
+        let totalCapital = partners.reduce((acc: number, p: any) => acc + (p.capital || 0), 0);
+        treasuryTransactions.filter((tx: any) => tx.type === 'deposit' && !tx.linkedTransaction).forEach((tx: any) => totalCapital += tx.amount);
+        treasuryTransactions.filter((tx: any) => tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: any) => totalCapital -= tx.amount);
+
+        return { accountsReceivable: ar, accountsPayable: ap, cashAndEquivalents: cash, employeeAdvancesBalance: empAdvances, fixedAssetsGross, accumulatedDepreciation: accDepreciation, fixedAssetsNet: fixedAssetsGross - accDepreciation, totalCapital };
+    }, [customers, suppliers, partners, salesInvoices, purchaseInvoices, customerPayments, supplierPayments, salesReturns, purchaseReturns, cashAccounts, treasuryTransactions, expenses, exceptionalIncomes, employeeAdvances, profitDistributions, posSales, posReturns, payrollRecords, fixedAssets, depreciationRecords, repRemittances]);
 
     const inventoryValue = useMemo(() => {
         let total = 0;
+        const combinedWh = [...warehouses, ...inventoryZones];
         allItems.forEach((item: any) => {
             let stock = 0;
-            warehouses.forEach((warehouse: any) => {
+            combinedWh.forEach((warehouse: any) => {
                 const closings = inventoryClosings.filter((c: any) => c.warehouseId === warehouse.id).sort((a: any, b: any) => new Date(b.closingDate).getTime() - new Date(a.date).getTime());
                 const lastClosing = closings[0] ?? null;
                 const lastClosingDate = lastClosing ? new Date(lastClosing.closingDate) : new Date(0);
                 let warehouseStock = lastClosing?.balances?.find((b:any) => b.itemId === item.id)?.balance || 0;
                 const filter = (t: any) => new Date(t.date) > lastClosingDate;
-                stockInRecords.filter(si => si.warehouseId === warehouse.id && filter(si)).forEach(si => si.items.forEach((i: any) => { if (i.itemId === item.id) warehouseStock += i.qty; }));
+                
+                stockInRecords.filter(si => si.warehouseId === warehouse.id && filter(si)).forEach(si => si.items.forEach((i: any) => { if ((i.itemId || i.id) === item.id) warehouseStock += i.qty; }));
+                stockTransferRecords.filter(t => t.toSourceId === warehouse.id && filter(t)).forEach(t => t.items.forEach((i: any) => { if (i.id === item.id) warehouseStock += i.qty; }));
+                stockAdjustmentRecords.filter(adj => adj.warehouseId === warehouse.id && filter(adj)).forEach(adj => adj.items.forEach((i: any) => { if (i.itemId === item.id) warehouseStock += i.difference; }));
+                salesReturns.filter(sr => sr.warehouseId === warehouse.id && filter(sr)).forEach(sr => sr.items.forEach((i: any) => { if (i.id === item.id) warehouseStock += i.qty; }));
+                posReturns.filter(pr => pr.warehouseId === warehouse.id && filter(pr)).forEach(pr => pr.items.forEach((i: any) => { if (i.id === item.id) warehouseStock += i.qty; }));
+                stockReturnsFromReps.filter(rfr => rfr.warehouseId === warehouse.id && filter(rfr)).forEach(rfr => rfr.items.forEach((i: any) => { if (i.id === item.id) warehouseStock += i.qty; }));
+
                 salesInvoices.filter(s => s.warehouseId === warehouse.id && s.status === 'approved' && filter(s)).forEach(s => s.items.filter((i: any) => i.id === item.id).forEach((i: any) => warehouseStock -= i.qty));
+                posSales.filter(s => s.warehouseId === warehouse.id && filter(s)).forEach(s => s.items.filter((i: any) => i.id === item.id).forEach((i: any) => warehouseStock -= i.qty));
+                stockOutRecords.filter(so => so.sourceId === warehouse.id && filter(so)).forEach(so => so.items.forEach((i:any) => { if (i.id === item.id) warehouseStock -= i.qty; }));
+                stockTransferRecords.filter(t => t.fromSourceId === warehouse.id && filter(t)).forEach(t => t.items.forEach((i: any) => { if (i.id === item.id) warehouseStock -= i.qty; }));
+                purchaseReturns.filter(pr => pr.warehouseId === warehouse.id && filter(pr)).forEach(pr => pr.items.forEach((i: any) => { if (i.id === item.id) warehouseStock -= i.qty; }));
+                stockIssuesToReps.filter(itr => itr.warehouseId === warehouse.id && filter(itr)).forEach(itr => itr.items.filter((i: any) => { if (i.id === item.id) warehouseStock -= i.qty; }));
+
                 stock += warehouseStock;
             });
-            if(stock > 0) total += stock * (item.cost || 0);
+            // Negative stock contributes to liabilities but for balance we sum it algebraically
+            total += stock * (item.cost || 0);
         });
         return total;
-    }, [allItems, warehouses, inventoryClosings, stockInRecords, salesInvoices]);
+    }, [allItems, warehouses, inventoryZones, inventoryClosings, stockInRecords, stockOutRecords, stockTransferRecords, stockAdjustmentRecords, salesReturns, posReturns, stockReturnsFromReps, salesInvoices, posSales, purchaseReturns, stockIssuesToReps]);
 
-    const totalCapital = partners.reduce((acc:number, p:any) => acc + (p.capital || 0), 0);
     const totalDistributions = profitDistributions.reduce((acc, d) => acc + d.amount, 0);
     const totalAssets = stats.cashAndEquivalents + stats.accountsReceivable + inventoryValue + stats.employeeAdvancesBalance + stats.fixedAssetsNet;
-    const totalEquity = totalCapital + netIncome - totalDistributions;
+    const totalEquity = stats.totalCapital + netIncome - totalDistributions;
 
     if (loading) return <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
     return (
         <div className="grid md:grid-cols-2 gap-8">
             <div>
-                <h3 className="text-lg font-semibold mb-2 border-b pb-2">الأصول</h3>
+                <h3 className="text-lg font-semibold mb-2 border-b pb-2">الأصول (Assets)</h3>
                 <Table>
                     <TableBody>
                         <TableRow><TableCell>النقدية وما في حكمها</TableCell><TableCell className="text-left">ج.م {stats.cashAndEquivalents.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell></TableRow>
@@ -392,21 +439,41 @@ function BalanceSheet() {
                 </Table>
             </div>
             <div>
-                <h3 className="text-lg font-semibold mb-2 border-b pb-2">الخصوم وحقوق الملكية</h3>
+                <h3 className="text-lg font-semibold mb-2 border-b pb-2">الخصوم وحقوق الملكية (Liabilities & Equity)</h3>
                  <Table>
-                    <TableBody><TableRow><TableCell>حسابات الموردين (الذمم الدائنة)</TableCell><TableCell className="text-left">ج.م {stats.accountsPayable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell></TableRow></TableBody>
-                    <TableFooter><TableRow className="bg-muted/50"><TableHead>إجمالي الخصوم</TableHead><TableHead className="text-left">ج.م {stats.accountsPayable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableHead></TableRow></TableFooter>
+                    <TableBody>
+                        <TableRow>
+                            <TableCell>حسابات الموردين (الذمم الدائنة)</TableCell>
+                            <TableCell className="text-left">ج.م {stats.accountsPayable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                        </TableRow>
+                    </TableBody>
+                    <TableFooter>
+                        <TableRow className="bg-muted/50">
+                            <TableHead>إجمالي الخصوم</TableHead>
+                            <TableHead className="text-left">ج.م {stats.accountsPayable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableHead>
+                        </TableRow>
+                    </TableFooter>
                 </Table>
                  <Table className="mt-4">
                     <TableBody>
-                         <TableRow><TableCell>رأس المال</TableCell><TableCell className="text-left">ج.م {totalCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell></TableRow>
+                         <TableRow><TableCell>رأس المال وإيداعات الشركاء</TableCell><TableCell className="text-left">ج.م {stats.totalCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell></TableRow>
                          <TableRow><TableCell>الأرباح المحتجزة (صافي الدخل)</TableCell><TableCell className="text-left">ج.م {netIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell></TableRow>
                         <TableRow><TableCell className="pl-8 text-muted-foreground">(-) توزيعات الأرباح</TableCell><TableCell className="text-left text-destructive">- ج.م {totalDistributions.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell></TableRow>
                     </TableBody>
-                     <TableFooter><TableRow className="bg-muted/50"><TableHead>إجمالي حقوق الملكية</TableHead><TableHead className="text-left">ج.م {totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableHead></TableRow></TableFooter>
+                     <TableFooter>
+                        <TableRow className="bg-muted/50">
+                            <TableHead>إجمالي حقوق الملكية</TableHead>
+                            <TableHead className="text-left">ج.م {totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableHead>
+                        </TableRow>
+                    </TableFooter>
                 </Table>
                  <Table className="mt-4">
-                    <TableFooter><TableRow className="bg-muted/50"><TableHead>إجمالي الخصوم وحقوق الملكية</TableHead><TableHead className="text-left">ج.م {(stats.accountsPayable + totalEquity).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableHead></TableRow></TableFooter>
+                    <TableFooter>
+                        <TableRow className="bg-muted/50 border-t-2 border-primary">
+                            <TableHead className="font-bold text-base">إجمالي الخصوم وحقوق الملكية</TableHead>
+                            <TableHead className="text-left text-base font-bold">ج.م {(stats.accountsPayable + totalEquity).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableHead>
+                        </TableRow>
+                    </TableFooter>
                 </Table>
             </div>
         </div>
@@ -418,7 +485,7 @@ export default function FinancialStatementsPage() {
     <>
       <PageHeader title="القوائم المالية" />
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
-        <Tabs defaultValue="income-statement">
+        <Tabs defaultValue="balance-sheet">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="income-statement">قائمة الدخل</TabsTrigger>
             <TabsTrigger value="balance-sheet">الميزانية العمومية</TabsTrigger>
