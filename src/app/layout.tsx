@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Metadata, Viewport } from "next";
@@ -132,7 +133,7 @@ export default function RootLayout({
 
           <link rel="apple-touch-icon" href="/icons/icon-192x192.svg" />
           <link rel="icon" type="image/svg+xml" href="/icons/icon-192x192.svg" />
-          <link rel="manifest" href="/manifest.webmanifest" />
+          <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
 
           <meta name="twitter:card" content="summary" />
           <meta name="twitter:title" content="MetoStore" />

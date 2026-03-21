@@ -882,7 +882,7 @@ export default function DashboardPage() {
                 <CardHeader><CardTitle className="flex items-center gap-2"><AlertTriangle className="text-amber-500" />أصناف وصلت لحد الطلب</CardTitle></CardHeader>
                 <CardContent>
                     <Table>
-                        <TableHeader><TableRow><TableHead>الصنف</TableHead>  <TableHead>الفرع</TableHead><TableHead className="text-center">الرصيد</TableHead><TableHead className="text-center">حد الطلب</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>الصنف</TableHead><TableHead>الفرع</TableHead><TableHead className="text-center">الرصيد</TableHead><TableHead className="text-center">حد الطلب</TableHead></TableRow></TableHeader>
                         <TableBody>
                              {reorderItems.map(item => (
                                 <TableRow key={`${item.name}-${item.warehouseName}`} className="bg-amber-500/10">
