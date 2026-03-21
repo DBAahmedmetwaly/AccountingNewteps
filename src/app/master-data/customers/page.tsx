@@ -4,7 +4,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, List, Wallet, AlertTriangle, Info, CheckCircle, Save } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, List, Wallet, AlertTriangle, Info, CheckCircle, Save, Search } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -145,16 +145,6 @@ const QuickPaymentDialog = ({ customer, onClose }: { customer: any, onClose: () 
                 )}
             </div>
 
-            {customer.currentBalance < 0 && (
-                <Alert className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800">
-                    <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                    <AlertTitle className="text-amber-800 dark:text-amber-300 font-bold">تنبيه محاسبي</AlertTitle>
-                    <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm">
-                        هذا المبلغ مستحق <b>للعميل</b> وليس على العميل. يرجى التأكد من رغبتك في تسجيل مقبوضات إضافية لحساب هذا العميل.
-                    </AlertDescription>
-                </Alert>
-            )}
-
             <div className="grid gap-4 border-t pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -279,6 +269,7 @@ export default function CustomersPage() {
   const router = useRouter();
   const { toast } = useToast();
   
+  const [searchTerm, setSearchTerm] = useState("");
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   
@@ -288,7 +279,6 @@ export default function CustomersPage() {
   const [userToDelete, setUserToDelete] = useState<Customer | null>(null);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
 
-  // Manual cleanup for pointer-events bug
   useEffect(() => {
     if (!isEditOpen && !isPaymentOpen && !isDeleteAlertOpen) {
         document.body.style.pointerEvents = 'auto';
@@ -337,6 +327,15 @@ export default function CustomersPage() {
         return { ...customer, currentBalance: balance, invoiceCount: approvedSales.length + customerPosSales.length };
     });
   }, [customers, salesInvoices, posSales, customerPayments, salesReturns, posReturns]);
+
+  const filteredCustomers = useMemo(() => {
+      if (!searchTerm) return customersWithBalance;
+      const lowerSearch = searchTerm.toLowerCase();
+      return customersWithBalance.filter(c => 
+        c.name.toLowerCase().includes(lowerSearch) || 
+        (c.phone && c.phone.includes(searchTerm))
+      );
+  }, [customersWithBalance, searchTerm]);
 
   const handleSave = (customer: Customer) => {
     if (customer.id) {
@@ -390,8 +389,21 @@ export default function CustomersPage() {
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
         <Card>
           <CardHeader>
-            <CardTitle>العملاء</CardTitle>
-            <CardDescription>إدارة العملاء مع حدود الائتمان والأرصدة الحالية.</CardDescription>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <CardTitle>العملاء</CardTitle>
+                    <CardDescription>إدارة العملاء مع حدود الائتمان والأرصدة الحالية.</CardDescription>
+                </div>
+                <div className="relative w-full max-w-sm">
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        placeholder="بحث بالاسم أو رقم الهاتف..." 
+                        value={searchTerm} 
+                        onChange={(e) => setSearchTerm(e.target.value)} 
+                        className="pr-9 h-10 border-primary/20"
+                    />
+                </div>
+            </div>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -411,7 +423,7 @@ export default function CustomersPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {customersWithBalance.map((customer: any) => (
+                            {filteredCustomers.map((customer: any) => (
                                 <TableRow key={customer.id}>
                                     <TableCell className="font-medium">{customer.name}</TableCell>
                                     <TableCell className="hidden md:table-cell">{customer.phone || '-'}</TableCell>
@@ -460,6 +472,11 @@ export default function CustomersPage() {
                                     </TableCell>
                                 </TableRow>
                             ))}
+                            {filteredCustomers.length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={5} className="text-center py-10 text-muted-foreground italic">لم يتم العثور على عملاء يطابقون البحث.</TableCell>
+                                </TableRow>
+                            )}
                         </TableBody>
                     </Table>
                 </div>

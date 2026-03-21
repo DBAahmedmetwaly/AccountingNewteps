@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useMemo, useState, useEffect } from "react";
@@ -20,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useData } from "@/contexts/data-provider";
-import { Loader2, DollarSign, Users, Building, Package, TrendingUp, TrendingDown, AlertTriangle, Clock, ShoppingCart, Calculator, Info, Banknote, Tag } from "lucide-react";
+import { Loader2, DollarSign, Users, Building, Package, TrendingUp, TrendingDown, AlertTriangle, Clock, ShoppingCart, Calculator, Info, Banknote, Tag, Wallet, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Combobox } from "@/components/ui/combobox";
@@ -31,6 +32,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { calculateStockForItemInWarehouse } from "@/lib/inventory-utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { Separator } from "@/components/ui/separator";
 
 // Data Interfaces
 interface Item { id: string; name: string; cost?: number; reorderPoint?: number; }
@@ -74,7 +76,11 @@ export default function DashboardPage() {
     });
     const [recomputedInventoryValue, setRecomputedInventoryValue] = useState<number | null>(null);
     const [invLoading, setInvLoading] = useState(false);
-    const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
+    
+    // UI Dialog States
+    const [isNetProfitBreakdownOpen, setIsNetProfitBreakdownOpen] = useState(false);
+    const [isCashBreakdownOpen, setIsCashBreakdownOpen] = useState(false);
+    const [isReceivablesBreakdownOpen, setIsReceivablesBreakdownOpen] = useState(false);
     
     useEffect(() => {
         if (user?.warehouseIds?.length === 1 && user.warehouseIds[0] !== 'all') {
@@ -155,23 +161,28 @@ export default function DashboardPage() {
         const filteredCashAccounts = cashAccounts.filter((acc: any) => isWarehouseAllowed(acc.warehouseId));
         const filteredCashAccountIds = new Set(filteredCashAccounts.map((acc: any) => acc.id));
 
-        let totalCash = filteredCashAccounts.reduce((sum: number, acc: CashAccount) => sum + (acc.openingBalance || 0), 0);
-        
+        let openingCash = filteredCashAccounts.reduce((sum: number, acc: CashAccount) => sum + (acc.openingBalance || 0), 0);
+        let customerPaymentsTotal = 0;
+        let extraIncomeTotal = 0;
+        let treasuryDeposits = 0;
+        let purchaseReturnsCash = 0;
+        let salesInitialCash = 0;
+
         // Deposits
         customerPayments.forEach((p: CustomerPayment) => {
-            if (filteredCashAccountIds.has(p.paidToAccountId)) totalCash += p.amount;
+            if (filteredCashAccountIds.has(p.paidToAccountId)) customerPaymentsTotal += p.amount;
         });
         
         exceptionalIncomes.forEach((i: ExceptionalIncome) => {
-            if (filteredCashAccountIds.has(i.paidToAccountId)) totalCash += i.amount;
+            if (filteredCashAccountIds.has(i.paidToAccountId)) extraIncomeTotal += i.amount;
         });
         
         treasuryTransactions.filter((tx: TreasuryTransaction) => tx.type === 'deposit' && !tx.linkedTransaction).forEach((tx: TreasuryTransaction) => {
-            if (filteredCashAccountIds.has(tx.accountId)) totalCash += tx.amount;
+            if (filteredCashAccountIds.has(tx.accountId)) treasuryDeposits += tx.amount;
         });
 
         purchaseReturns.forEach((r: any) => {
-            if (filteredCashAccountIds.has(r.paidToAccountId)) totalCash += (r.paidAmount || 0);
+            if (filteredCashAccountIds.has(r.paidToAccountId)) purchaseReturnsCash += (r.paidAmount || 0);
         });
         
         const approvedSales = salesInvoices.filter((s:any) => s.status === 'approved' && isWarehouseAllowed(s.warehouseId));
@@ -179,7 +190,7 @@ export default function DashboardPage() {
             if (filteredCashAccountIds.has(s.paidToAccountId)) {
                 const linkedPaymentsTotal = customerPayments.filter((p: CustomerPayment) => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
                 const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
-                if (initialCash > 0) totalCash += initialCash;
+                if (initialCash > 0) salesInitialCash += initialCash;
             }
         });
         
@@ -188,57 +199,68 @@ export default function DashboardPage() {
             if (targetId && filteredCashAccountIds.has(targetId)) {
                 const linkedPaymentsTotal = customerPayments.filter((p: CustomerPayment) => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
                 const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
-                if (initialCash > 0) totalCash += initialCash;
+                if (initialCash > 0) salesInitialCash += initialCash;
             }
         });
         
-        // Withdrawals
+        // Outflows calculation for breakdown
+        let expensesOut = 0;
+        let supplierPaymentsOut = 0;
+        let purchasesCashOut = 0;
+        let hrAdvancesOut = 0;
+        let profitDistributionsOut = 0;
+        let treasuryWithdrawalsOut = 0;
+        let payrollOut = 0;
+        let returnsOut = 0;
+
         expenses.forEach((e: Expense) => {
-            if (filteredCashAccountIds.has(e.paidFromAccountId)) totalCash -= e.amount;
+            if (filteredCashAccountIds.has(e.paidFromAccountId)) expensesOut += e.amount;
         });
         
         supplierPayments.forEach((p: SupplierPayment) => {
-            if (filteredCashAccountIds.has(p.paidFromAccountId)) totalCash -= p.amount;
+            if (filteredCashAccountIds.has(p.paidFromAccountId)) supplierPaymentsOut += p.amount;
         });
         
         purchaseInvoices.filter((p: any) => isWarehouseAllowed(p.warehouseId)).forEach((p: any) => {
             if (filteredCashAccountIds.has(p.paidFromAccountId)) {
                 const linkedPaymentsTotal = supplierPayments.filter((sp: SupplierPayment) => sp.invoiceId === p.id).reduce((sum, sp) => sum + sp.amount, 0);
                 const initialPaid = (p.paidAmount || 0) - linkedPaymentsTotal;
-                if (initialPaid > 0) totalCash -= initialPaid;
+                if (initialPaid > 0) purchasesCashOut += initialPaid;
             }
         });
         
         employeeAdvances.forEach((ea: any) => {
-            if (filteredCashAccountIds.has(ea.paidFromAccountId)) totalCash -= ea.amount;
+            if (filteredCashAccountIds.has(ea.paidFromAccountId)) hrAdvancesOut += ea.amount;
         });
         
         profitDistributions.forEach((pd: any) => {
-            if (filteredCashAccountIds.has(pd.paidFromAccountId)) totalCash -= pd.amount;
+            if (filteredCashAccountIds.has(pd.paidFromAccountId)) profitDistributionsOut += pd.amount;
         });
         
         treasuryTransactions.filter((tx: any) => tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: any) => {
-            if (filteredCashAccountIds.has(tx.accountId)) totalCash -= tx.amount;
+            if (filteredCashAccountIds.has(tx.accountId)) treasuryWithdrawalsOut += tx.amount;
         });
 
         payrollRecords?.forEach((pr: any) => {
             if (filteredCashAccountIds.has(pr.paidFromAccountId)) {
-                totalCash -= pr.payrollData.reduce((sum: number, p: any) => sum + p.netSalary, 0);
+                payrollOut += pr.payrollData.reduce((sum: number, p: any) => sum + p.netSalary, 0);
             }
         });
 
         salesReturns.forEach((r: any) => {
-            if (filteredCashAccountIds.has(r.paidFromAccountId)) totalCash -= (r.paidAmount || 0);
+            if (filteredCashAccountIds.has(r.paidFromAccountId)) returnsOut += (r.paidAmount || 0);
         });
 
         posReturns.filter((r:any) => isWarehouseAllowed(r.warehouseId)).forEach((r: any) => {
             if ((r.paidAmount || 0) > 0) {
                 const targetId = filteredCashAccounts.find(acc => acc.warehouseId === r.warehouseId)?.id;
                 if (targetId && filteredCashAccountIds.has(targetId)) {
-                    totalCash -= r.paidAmount;
+                    returnsOut += r.paidAmount;
                 }
             }
         });
+
+        const totalCash = openingCash + customerPaymentsTotal + extraIncomeTotal + treasuryDeposits + purchaseReturnsCash + salesInitialCash - (expensesOut + supplierPaymentsOut + purchasesCashOut + hrAdvancesOut + profitDistributionsOut + treasuryWithdrawalsOut + payrollOut + returnsOut);
 
         const warehousesToConsider = warehouses.filter((w: any) => isWarehouseAllowed(w.id));
 
@@ -255,21 +277,31 @@ export default function DashboardPage() {
             return sum + (itemTotalBalance * (item.cost || 0));
         }, 0);
 
-        let ar = 0;
+        let totalArOpening = 0;
+        let totalArSalesUnpaid = 0;
+        let totalArStandalonePayments = 0;
+        let totalArReturns = 0;
+
         customers.forEach((c: any) => {
-            let balance = Number(c.openingBalance) || 0;
+            totalArOpening += Number(c.openingBalance) || 0;
+            
             salesInvoices.filter((s:any) => s.status === 'approved' && s.customerId === c.id && isWarehouseAllowed(s.warehouseId))
-                .forEach((s: any) => balance += (Number(s.total) - Number(s.paidAmount || 0)));
+                .forEach((s: any) => totalArSalesUnpaid += (Number(s.total) - Number(s.paidAmount || 0)));
+            
             posSales.filter((s:any) => s.customerId === c.id && isWarehouseAllowed(s.warehouseId))
-                .forEach((s:any) => balance += (Number(s.total) - Number(s.paidAmount || 0)));
+                .forEach((s:any) => totalArSalesUnpaid += (Number(s.total) - Number(s.paidAmount || 0)));
+            
             customerPayments.filter((p: any) => p.customerId === c.id && !p.invoiceId)
-                .forEach((p: any) => balance -= Number(p.amount));
+                .forEach((p: any) => totalArStandalonePayments += Number(p.amount));
+            
             salesReturns.filter((r: any) => r.customerId === c.id && isWarehouseAllowed(r.warehouseId))
-                .forEach((r: any) => balance -= (Number(r.total) - Number(r.paidAmount || 0)));
+                .forEach((r: any) => totalArReturns += (Number(r.total) - Number(r.paidAmount || 0)));
+            
             posReturns.filter((r: any) => r.customerId === c.id && isWarehouseAllowed(r.warehouseId))
-                .forEach((r: any) => balance -= (Number(r.total) - Number(r.paidAmount || 0)));
-            ar += balance;
+                .forEach((r: any) => totalArReturns += (Number(r.total) - Number(r.paidAmount || 0)));
         });
+
+        const totalReceivables = totalArOpening + totalArSalesUnpaid - totalArStandalonePayments - totalArReturns;
 
         let ap = 0;
         suppliers.forEach((s: any) => {
@@ -320,7 +352,31 @@ export default function DashboardPage() {
 
         return { 
             totalCash, 
-            accountsReceivable: ar, 
+            cashBreakdown: {
+                opening: openingCash,
+                customerPayments: customerPaymentsTotal,
+                salesInitial: salesInitialCash,
+                extraIncome: extraIncomeTotal,
+                treasuryDeposits,
+                purchaseReturns: purchaseReturnsCash,
+                outflows: {
+                    expenses: expensesOut,
+                    supplierPayments: supplierPaymentsOut,
+                    purchases: purchasesCashOut,
+                    hrAdvances: hrAdvancesOut,
+                    distributions: profitDistributionsOut,
+                    treasuryWithdrawals: treasuryWithdrawalsOut,
+                    payroll: payrollOut,
+                    returns: returnsOut
+                }
+            },
+            accountsReceivable: totalReceivables, 
+            receivablesBreakdown: {
+                opening: totalArOpening,
+                salesUnpaid: totalArSalesUnpaid,
+                standalonePayments: totalArStandalonePayments,
+                returns: totalArReturns
+            },
             accountsPayable: ap, 
             inventoryValue,
             totalRevenue,
@@ -515,17 +571,127 @@ export default function DashboardPage() {
         </Card>
         
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">إجمالي الأرصدة (السيولة)</CardTitle>
-                    <DollarSign className="h-4 w-4 text-muted-foreground"/>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{kpiData.totalCash.toLocaleString()} ج.م</div>
-                    <p className="text-[10px] text-muted-foreground mt-1">{kpiData.balanceExplanation}</p>
-                </CardContent>
-            </Card>
-            <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">مستحقات العملاء (مديونيات)</CardTitle><Users className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{kpiData.accountsReceivable.toLocaleString()} ج.م</div></CardContent></Card>
+            <Dialog open={isCashBreakdownOpen} onOpenChange={setIsCashBreakdownOpen}>
+                <DialogTrigger asChild>
+                    <Card className="cursor-pointer hover:bg-muted/50 transition-colors border-primary/20 shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">إجمالي الأرصدة (السيولة)</CardTitle>
+                            <DollarSign className="h-4 w-4 text-muted-foreground text-primary"/>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{kpiData.totalCash.toLocaleString()} ج.م</div>
+                            <p className="text-[10px] text-muted-foreground mt-1">انقر لعرض مصادر وتدفق السيولة</p>
+                        </CardContent>
+                    </Card>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Wallet className="h-5 w-5 text-primary"/>
+                            مصادر وتدفق السيولة النقدية
+                        </DialogTitle>
+                        <DialogDescription>تفصيل المبالغ التي ساهمت في تكوين رصيد السيولة الحالي للفترة المختارة.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">الإيرادات والمدخلات (+)</div>
+                            <div className="flex justify-between text-sm">
+                                <span>أرصدة افتتاحية (الخزائن):</span>
+                                <span className="font-semibold text-green-600">+{kpiData.cashBreakdown.opening.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span>مقبوضات من العملاء:</span>
+                                <span className="font-semibold text-green-600">+{kpiData.cashBreakdown.customerPayments.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span>محصل نقدياً من الفواتير:</span>
+                                <span className="font-semibold text-green-600">+{kpiData.cashBreakdown.salesInitial.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span>دخل متنوع (إضافي):</span>
+                                <span className="font-semibold text-green-600">+{kpiData.cashBreakdown.extraIncome.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span>إيداعات رأس مال:</span>
+                                <span className="font-semibold text-green-600">+{kpiData.cashBreakdown.treasuryDeposits.toLocaleString()}</span>
+                            </div>
+                        </div>
+                        <Separator />
+                        <div className="space-y-2">
+                            <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">المدفوعات والمخرجات (-)</div>
+                            <div className="flex justify-between text-sm">
+                                <span>مصروفات تشغيلية:</span>
+                                <span className="font-semibold text-destructive">-{kpiData.cashBreakdown.outflows.expenses.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span>مدفوعات للموردين:</span>
+                                <span className="font-semibold text-destructive">-{kpiData.cashBreakdown.outflows.supplierPayments.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span>رواتب (صافي):</span>
+                                <span className="font-semibold text-destructive">-{kpiData.cashBreakdown.outflows.payroll.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span>سحوبات وتوزيعات أرباح:</span>
+                                <span className="font-semibold text-destructive">-{kpiData.cashBreakdown.outflows.distributions.toLocaleString()}</span>
+                            </div>
+                        </div>
+                        <div className="p-4 bg-muted rounded-lg flex justify-between items-center border-2 border-primary/20">
+                            <span className="font-bold text-lg">السيولة المتاحة:</span>
+                            <span className="font-black text-2xl text-primary">{kpiData.totalCash.toLocaleString()} ج.م</span>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isReceivablesBreakdownOpen} onOpenChange={setIsReceivablesBreakdownOpen}>
+                <DialogTrigger asChild>
+                    <Card className="cursor-pointer hover:bg-muted/50 transition-colors border-amber-200 shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">مستحقات العملاء (مديونيات)</CardTitle>
+                            <Users className="h-4 w-4 text-muted-foreground text-amber-600"/>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold text-amber-600">{kpiData.accountsReceivable.toLocaleString()} ج.م</div>
+                            <p className="text-[10px] text-muted-foreground mt-1">انقر لعرض تفاصيل المديونيات</p>
+                        </CardContent>
+                    </Card>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <ArrowUpCircle className="h-5 w-5 text-amber-600"/>
+                            تفاصيل مديونيات العملاء
+                        </DialogTitle>
+                        <DialogDescription>توضيح لكيفية احتساب إجمالي المبالغ المطلوبة من العملاء.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-3">
+                            <div className="flex justify-between text-sm">
+                                <span>أرصدة افتتاحية (قديمة):</span>
+                                <span className="font-semibold">+{kpiData.receivablesBreakdown.opening.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span>إجمالي مبيعات آجلة (جديدة):</span>
+                                <span className="font-semibold">+{kpiData.receivablesBreakdown.salesUnpaid.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm text-muted-foreground">
+                                <span>(-) تحصيلات مستقلة:</span>
+                                <span className="font-semibold text-green-600">-{kpiData.receivablesBreakdown.standalonePayments.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm text-muted-foreground">
+                                <span>(-) قيمة مرتجعات مبيعات:</span>
+                                <span className="font-semibold text-green-600">-{kpiData.receivablesBreakdown.returns.toLocaleString()}</span>
+                            </div>
+                        </div>
+                        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg flex justify-between items-center border-2 border-amber-200">
+                            <span className="font-bold text-lg">صافي المديونية:</span>
+                            <span className="font-black text-2xl text-amber-600">{kpiData.accountsReceivable.toLocaleString()} ج.م</span>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">مستحقات الموردين</CardTitle><Building className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold text-destructive">{kpiData.accountsPayable.toLocaleString()} ج.م</div></CardContent></Card>
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -580,7 +746,7 @@ export default function DashboardPage() {
         </div>
         
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Dialog open={isBreakdownOpen} onOpenChange={setIsBreakdownOpen}>
+            <Dialog open={isNetProfitBreakdownOpen} onOpenChange={setIsNetProfitBreakdownOpen}>
                 <DialogTrigger asChild>
                     <Card className="cursor-pointer hover:bg-muted/50 transition-colors border-primary/50 shadow-md">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
