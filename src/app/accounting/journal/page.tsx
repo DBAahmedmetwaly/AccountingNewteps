@@ -77,7 +77,7 @@ export default function JournalPage() {
         profitDistributions, partners, payrollRecords, stockInRecords,
         stockIssuesToReps, stockReturnsFromReps, stockAdjustmentRecords,
         deliveryStaff, fixedAssets, depreciationRecords, posSales, posReturns, loading,
-        users
+        users, settings
     } = useData();
 
     const itemsMap = useMemo(() => {
@@ -89,12 +89,39 @@ export default function JournalPage() {
     const journalEntries = useMemo(() => {
         const entries: JournalEntry[] = [];
         const getWarehouse = (id?: string) => warehouses.find((w: any) => w.id === id);
-        const getCashAccountName = (id?: string) => cashAccounts.find((c: any) => c.id === id)?.name || 'النقدية/البنك';
+        const getCashAccount = (id?: string) => cashAccounts.find((c: any) => c.id === id);
+        const getCashAccountName = (id?: string) => getCashAccount(id)?.name || 'النقدية/البنك';
         const getEmployeeName = (id?: string) => employees.find((e: any) => e.id === id)?.name || 'موظف غير معروف';
         const getCustomerName = (id?: string) => customers.find((c: any) => c.id === id)?.name || 'عميل غير معروف';
         const getSupplierName = (id?: string) => suppliers.find((s: any) => s.id === id)?.name || 'مورد غير معروف';
         const getPartnerName = (id?: string) => partners.find((p: any) => p.id === id)?.name || 'شريك غير معروف';
         
+        const fiscalYearStart = settings?.main?.financial?.fiscalYearStart || '2024-01-01';
+
+        // --- Opening Balances (The missing piece for accurate General Ledger) ---
+        
+        // 1. Customers OB
+        const totalCustomerOB = customers.reduce((sum: number, c: any) => sum + (Number(c.openingBalance) || 0), 0);
+        if (totalCustomerOB > 0) {
+            entries.push({ id: 'ob-ar-dr', date: fiscalYearStart, number: 'OB-001', description: 'إجمالي الأرصدة الافتتاحية للعملاء (مدين)', debit: totalCustomerOB, credit: 0, account: 'حسابات العملاء' });
+            entries.push({ id: 'ob-ar-cr', date: fiscalYearStart, number: 'OB-001', description: 'رصيد افتتاحي مقابل للعملاء', debit: 0, credit: totalCustomerOB, account: 'رأس المال / أرصدة افتتاحية' });
+        }
+
+        // 2. Suppliers OB
+        const totalSupplierOB = suppliers.reduce((sum: number, s: any) => sum + (Number(s.openingBalance) || 0), 0);
+        if (totalSupplierOB > 0) {
+            entries.push({ id: 'ob-ap-cr', date: fiscalYearStart, number: 'OB-002', description: 'إجمالي الأرصدة الافتتاحية للموردين (دائن)', debit: 0, credit: totalSupplierOB, account: 'حسابات الموردين' });
+            entries.push({ id: 'ob-ap-dr', date: fiscalYearStart, number: 'OB-002', description: 'رصيد افتتاحي مقابل للموردين', debit: totalSupplierOB, credit: 0, account: 'رأس المال / أرصدة افتتاحية' });
+        }
+
+        // 3. Cash Accounts OB
+        cashAccounts.forEach((acc: any) => {
+            if (acc.openingBalance > 0) {
+                entries.push({ id: `ob-cash-${acc.id}-dr`, date: fiscalYearStart, number: 'OB-003', warehouseId: acc.warehouseId, description: `رصيد افتتاحي: ${acc.name}`, debit: acc.openingBalance, credit: 0, account: acc.name });
+                entries.push({ id: `ob-cash-${acc.id}-cr`, date: fiscalYearStart, number: 'OB-003', warehouseId: acc.warehouseId, description: `رصيد افتتاحي مقابل: ${acc.name}`, debit: 0, credit: acc.openingBalance, account: 'رأس المال / أرصدة افتتاحية' });
+            }
+        });
+
         // --- Sales (Standard Invoices + POS) ---
         const allSales = [...salesInvoices.filter((s: any) => s.status === 'approved'), ...posSales];
         allSales.forEach((sale: any) => {
@@ -131,10 +158,9 @@ export default function JournalPage() {
         const allReturns = [...salesReturns, ...posReturns];
         allReturns.forEach((ret: any) => {
             const number = ret.receiptNumber || `م-ب-${ret.id.slice(-4)}`;
-            const cashAccName = getCashAccountName(ret.paidFromAccountId);
+            const cashAccName = getCashAccountName(ret.paidFromAccountId || (ret.warehouseId ? getCashAccount(warehouses.find(w => w.id === ret.warehouseId)?.id)?.id : undefined));
             
-            // Reverse revenue
-            entries.push({ id: `ret-rev-${ret.id}`, date: ret.date, warehouseId: ret.warehouseId, number: number, description: `مرتجع مبيعات ${number}`, debit: ret.total, credit: 0, account: 'إيرادات المبيعات' });
+            entries.push({ id: `ret-rev-${ret.id}`, date: ret.date, warehouseId: ret.warehouseId, number: number, description: `مرتجع مبيعات ${number} من ${ret.customerName || 'عميل كاشير'}`, debit: ret.total, credit: 0, account: 'إيرادات المبيعات' });
             
             if (ret.paidAmount && ret.paidAmount > 0) {
                 entries.push({ id: `ret-cash-${ret.id}`, date: ret.date, warehouseId: ret.warehouseId, number: number, description: `رد نقدي لمرتجع ${number}`, debit: 0, credit: ret.paidAmount, account: cashAccName });
@@ -145,7 +171,6 @@ export default function JournalPage() {
                 entries.push({ id: `ret-ar-${ret.id}`, date: ret.date, warehouseId: ret.warehouseId, number: number, description: `تخفيض مديونية عميل لمرتجع ${number}`, debit: 0, credit: amountAddedToBalance, account: 'حسابات العملاء' });
             }
 
-            // Reverse COGS
             const returnedCogs = ret.items.reduce((acc, i) => acc + (i.qty * (i.cost || 0)), 0);
             const inventoryAccount = `مخزون - ${getWarehouse(ret.warehouseId)?.name || 'غير محدد'}`;
             if (returnedCogs > 0) {
@@ -223,14 +248,15 @@ export default function JournalPage() {
         // --- Treasury Transactions (Capital/Partners) ---
         treasuryTransactions.forEach((tx: any) => {
             const number = tx.receiptNumber || `ح-خ-${tx.id.slice(-4)}`;
-            const accountName = getCashAccountName(tx.accountId);
+            const account = getCashAccount(tx.accountId);
+            const accountName = account?.name || 'النقدية/البنك';
             if (!tx.linkedTransaction) {
                 if (tx.type === 'deposit') {
-                    entries.push({ id: `tx-dep-debit-${tx.id}`, date: tx.date, number: number, description: `إيداع: ${tx.description}`, debit: tx.amount, credit: 0, account: accountName });
-                    entries.push({ id: `tx-dep-credit-${tx.id}`, date: tx.date, number: number, description: `إيداع رأس مال: ${tx.description}`, debit: 0, credit: tx.amount, account: 'رأس المال' });
+                    entries.push({ id: `tx-dep-debit-${tx.id}`, date: tx.date, warehouseId: account?.warehouseId, number: number, description: `إيداع: ${tx.description}`, debit: tx.amount, credit: 0, account: accountName });
+                    entries.push({ id: `tx-dep-credit-${tx.id}`, date: tx.date, warehouseId: account?.warehouseId, number: number, description: `إيداع رأس مال: ${tx.description}`, debit: 0, credit: tx.amount, account: 'رأس المال' });
                 } else {
-                     entries.push({ id: `tx-wit-debit-${tx.id}`, date: tx.date, number: number, description: `سحب: ${tx.description}`, debit: tx.amount, credit: 0, account: 'مسحوبات الشركاء' });
-                     entries.push({ id: `tx-wit-credit-${tx.id}`, date: tx.date, number: number, description: `سحب نقدي: ${tx.description}`, debit: 0, credit: tx.amount, account: accountName });
+                     entries.push({ id: `tx-wit-debit-${tx.id}`, date: tx.date, warehouseId: account?.warehouseId, number: number, description: `سحب: ${tx.description}`, debit: tx.amount, credit: 0, account: 'مسحوبات الشركاء' });
+                     entries.push({ id: `tx-wit-credit-${tx.id}`, date: tx.date, warehouseId: account?.warehouseId, number: number, description: `سحب نقدي: ${tx.description}`, debit: 0, credit: tx.amount, account: accountName });
                 }
             }
         });
@@ -238,17 +264,21 @@ export default function JournalPage() {
         // --- Customer Payments ---
         customerPayments.forEach((p: any) => {
             const number = p.receiptNumber || `س-ع-${p.id.slice(-4)}`;
-            const accountName = getCashAccountName(p.paidToAccountId);
-            entries.push({ id: `cust-pay-debit-${p.id}`, date: p.date, number: number, description: `تحصيل من العميل ${getCustomerName(p.customerId)} - سند ${number}`, debit: p.amount, credit: 0, account: accountName });
-            entries.push({ id: `cust-pay-credit-${p.id}`, date: p.date, number: number, description: `تخفيض مديونية العميل للسند ${number}`, debit: 0, credit: p.amount, account: 'حسابات العملاء' });
+            const account = getCashAccount(p.paidToAccountId);
+            const accountName = account?.name || 'النقدية/البنك';
+            const whId = account?.warehouseId;
+            entries.push({ id: `cust-pay-debit-${p.id}`, date: p.date, warehouseId: whId, number: number, description: `تحصيل من العميل ${getCustomerName(p.customerId)} - سند ${number}`, debit: p.amount, credit: 0, account: accountName });
+            entries.push({ id: `cust-pay-credit-${p.id}`, date: p.date, warehouseId: whId, number: number, description: `تخفيض مديونية العميل للسند ${number}`, debit: 0, credit: p.amount, account: 'حسابات العملاء' });
         });
 
         // --- Supplier Payments ---
         supplierPayments.forEach((p: any) => {
             const number = p.receiptNumber || `س-م-${p.id.slice(-4)}`;
-            const accountName = getCashAccountName(p.paidFromAccountId);
-            entries.push({ id: `supp-pay-debit-${p.id}`, date: p.date, number: number, description: `سداد للمورد ${getSupplierName(p.supplierId)} - سند ${number}`, debit: p.amount, credit: 0, account: 'حسابات الموردين' });
-            entries.push({ id: `supp-pay-credit-${p.id}`, date: p.date, number: number, description: `دفع من ${accountName} للسند ${number}`, debit: 0, credit: p.amount, account: accountName });
+            const account = getCashAccount(p.paidFromAccountId);
+            const accountName = account?.name || 'النقدية/البنك';
+            const whId = account?.warehouseId;
+            entries.push({ id: `supp-pay-debit-${p.id}`, date: p.date, warehouseId: whId, number: number, description: `سداد للمورد ${getSupplierName(p.supplierId)} - سند ${number}`, debit: p.amount, credit: 0, account: 'حسابات الموردين' });
+            entries.push({ id: `supp-pay-credit-${p.id}`, date: p.date, warehouseId: whId, number: number, description: `دفع من ${accountName} للسند ${number}`, debit: 0, credit: p.amount, account: accountName });
         });
 
         // --- Payroll Records ---
@@ -294,12 +324,12 @@ export default function JournalPage() {
                  if (val > 0) totalSurplus += val; else totalDeficit += Math.abs(val);
              });
              if (totalSurplus > 0) {
-                 entries.push({ id: `adj-sur-${adj.id}`, date: adj.date, number, description: `تسوية جرد (زيادة) في ${warehouse?.name}`, debit: totalSurplus, credit: 0, account: `مخزون - ${warehouse?.name || 'غير محدد'}` });
-                 entries.push({ id: `adj-sur-cr-${adj.id}`, date: adj.date, number, description: `أرباح تسوية مخزون ${number}`, debit: 0, credit: totalSurplus, account: 'أرباح تسوية المخزون' });
+                 entries.push({ id: `adj-sur-${adj.id}`, date: adj.date, warehouseId: adj.warehouseId, number, description: `تسوية جرد (زيادة) في ${warehouse?.name}`, debit: totalSurplus, credit: 0, account: `مخزون - ${warehouse?.name || 'غير محدد'}` });
+                 entries.push({ id: `adj-sur-cr-${adj.id}`, date: adj.date, warehouseId: adj.warehouseId, number, description: `أرباح تسوية مخزون ${number}`, debit: 0, credit: totalSurplus, account: 'أرباح تسوية المخزون' });
              }
              if (totalDeficit > 0) {
-                 entries.push({ id: `adj-def-${adj.id}`, date: adj.date, number, description: `خسائر تسوية مخزون ${number}`, debit: totalDeficit, credit: 0, account: 'خسائر تسوية المخزون' });
-                 entries.push({ id: `adj-def-cr-${adj.id}`, date: adj.date, number, description: `تسوية جرد (عجز) في ${warehouse?.name}`, debit: 0, credit: totalDeficit, account: `مخزون - ${warehouse?.name || 'غير محدد'}` });
+                 entries.push({ id: `adj-def-${adj.id}`, date: adj.date, warehouseId: adj.warehouseId, number, description: `خسائر تسوية مخزون ${number}`, debit: totalDeficit, credit: 0, account: 'خسائر تسوية المخزون' });
+                 entries.push({ id: `adj-def-cr-${adj.id}`, date: adj.date, warehouseId: adj.warehouseId, number, description: `تسوية جرد (عجز) في ${warehouse?.name}`, debit: 0, credit: totalDeficit, account: `مخزون - ${warehouse?.name || 'غير محدد'}` });
              }
         });
 
@@ -312,7 +342,7 @@ export default function JournalPage() {
         });
 
         return entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [salesInvoices, posSales, salesReturns, posReturns, purchaseInvoices, purchaseReturns, expenses, exceptionalIncomes, treasuryTransactions, customerPayments, supplierPayments, payrollRecords, profitDistributions, stockTransferRecords, stockAdjustmentRecords, depreciationRecords, warehouses, employees, customers, suppliers, partners, itemsMap, fixedAssets, users]);
+    }, [salesInvoices, posSales, salesReturns, posReturns, purchaseInvoices, purchaseReturns, expenses, exceptionalIncomes, treasuryTransactions, customerPayments, supplierPayments, payrollRecords, profitDistributions, stockTransferRecords, stockAdjustmentRecords, depreciationRecords, warehouses, employees, customers, suppliers, partners, itemsMap, fixedAssets, users, settings]);
 
     const uniqueAccounts = useMemo(() => {
         const accs = new Set<string>();
@@ -360,7 +390,8 @@ export default function JournalPage() {
                 const dateA = new Date(a.date).getTime();
                 const dateB = new Date(b.date).getTime();
                 if (dateA !== dateB) return dateA - dateB;
-                return a.id.localeCompare(b.id); // Tie-breaker for stable balance
+                // Important tie-breaker for chronological order
+                return a.id.localeCompare(b.id); 
             })
             .map(e => {
                 runningBalance += (e.debit - e.credit);
