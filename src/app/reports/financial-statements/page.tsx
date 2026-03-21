@@ -209,7 +209,7 @@ function BalanceSheet() {
         const apDetails = suppliers.map((supplier: any) => {
             let balance = Number(supplier.openingBalance) || 0;
             purchaseInvoices.filter((p: any) => p.supplierId === supplier.id).forEach((p: any) => { balance += (Number(p.total) - Number(p.paidAmount || 0)); });
-            supplierPayments.filter((p: any) => p.supplierId === supplier.id && !p.invoiceId).forEach((p: any) => balance -= Number(p.amount););
+            supplierPayments.filter((p: any) => p.supplierId === supplier.id && !p.invoiceId).forEach((p: any) => balance -= Number(p.amount));
             purchaseReturns.filter((r: any) => r.supplierId === supplier.id).forEach((r: any) => balance -= (Number(r.total) - Number(r.paidAmount || 0)));
             return { name: supplier.name, balance };
         }).filter(s => Math.abs(s.balance) > 0.01);
