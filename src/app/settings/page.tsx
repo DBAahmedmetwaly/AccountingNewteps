@@ -61,6 +61,7 @@ interface FinancialSettings {
     roundingDecimals: number;
     vatRate: number;
     inventoryValuationMethod: 'average' | 'last_purchase';
+    showInventoryLosses?: boolean; // New Setting
 }
 
 interface PosSettings {
@@ -141,7 +142,8 @@ export default function SettingsPage() {
                 purchaseWorkflow: 'direct', 
                 roundingDecimals: 2, 
                 vatRate: 14,
-                inventoryValuationMethod: 'last_purchase'
+                inventoryValuationMethod: 'last_purchase',
+                showInventoryLosses: true
             };
 
             setSettings({
@@ -173,7 +175,7 @@ export default function SettingsPage() {
              const defaultWorkDay = new Date().toISOString().split('T')[0];
                 const defaultSettings: Settings = {
                     general: { companyName: '', companyAddress: '', logoUrl: "/logo.png", language: 'ar', mobileFabPosition: 'bottom-right', invoiceFooter: '', desktopLayout: 'sidebar', toastDuration: 5, welcomeMessage: '', isClothingStore: false, licenseKey: '', licenseStatus: 'inactive', showWatermark: false, watermarkOpacity: 0.1 },
-                    financial: { openingCapital: 0, fiscalYearStart: '', currency: 'EGP', allowNegativeStock: false, scaleBarcodePrefix: '21', clothingBarcodePrefix: '23', standardItemBarcodePrefix: '25', purchaseWorkflow: 'direct', roundingDecimals: 2, vatRate: 14, inventoryValuationMethod: 'last_purchase' },
+                    financial: { openingCapital: 0, fiscalYearStart: '', currency: 'EGP', allowNegativeStock: false, scaleBarcodePrefix: '21', clothingBarcodePrefix: '23', standardItemBarcodePrefix: '25', purchaseWorkflow: 'direct', roundingDecimals: 2, vatRate: 14, inventoryValuationMethod: 'last_purchase', showInventoryLosses: true },
                     posSettings: { 
                         workDay: defaultWorkDay, 
                         scaleItemDefaultFocus: 'weight',
@@ -296,7 +298,7 @@ export default function SettingsPage() {
 
     if (loading || dataLoading || !settings) {
         return (
-            <div className="flex h-full w-full items-center justify-center">
+            <div className="flex h-screen w-full items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin"/>
             </div>
         );
@@ -561,6 +563,15 @@ export default function SettingsPage() {
                     </p>
                   </div>
                   <Switch id="allow-negative-stock" checked={settings.financial.allowNegativeStock} onCheckedChange={checked => handleFinancialChange('allowNegativeStock', checked)} />
+                </div>
+                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="show-inventory-losses">إظهار خسائر تسوية المخزون في قائمة الدخل</Label>
+                     <p className="text-xs text-muted-foreground">
+                      عند التفعيل، سيتم خصم خسائر عجز الجرد من صافي الربح في التقارير المالية.
+                    </p>
+                  </div>
+                  <Switch id="show-inventory-losses" checked={settings.financial.showInventoryLosses} onCheckedChange={checked => handleFinancialChange('showInventoryLosses', checked)} />
                 </div>
               </CardContent>
               <CardFooter>

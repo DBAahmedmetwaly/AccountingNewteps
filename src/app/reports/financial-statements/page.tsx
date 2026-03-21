@@ -25,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useData } from "@/contexts/data-provider";
-import { Loader2, ChevronDown, ChevronUp, Plus, Minus } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp, Plus, Minus, AlertTriangle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -54,7 +54,7 @@ interface PurchaseInvoice {
 }
 
 const useIncomeStatementData = () => {
-  const { salesInvoices, expenses, exceptionalIncomes, items, salesReturns, posSales, posReturns, payrollRecords, stockAdjustmentRecords, stockOutRecords, depreciationRecords } = useData();
+  const { salesInvoices, expenses, exceptionalIncomes, items, salesReturns, posSales, posReturns, payrollRecords, stockAdjustmentRecords, stockOutRecords, depreciationRecords, settings } = useData();
 
   return useMemo(() => {
     const approvedSales = salesInvoices.filter((s: any) => s.status === 'approved');
@@ -76,7 +76,7 @@ const useIncomeStatementData = () => {
 
     const costOfReturns = allReturns.reduce((acc, ret) => {
         return acc + (ret.items?.reduce((itemAcc: number, item: any) => {
-            const itemMaster = items.find((i:any) => i.id === item.id);
+            const itemMaster = items.find((i: any) => i.id === item.id);
             const masterCost = item.cost || itemMaster?.cost || 0;
             return itemAcc + (item.qty * masterCost);
         }, 0) || 0);
@@ -106,15 +106,20 @@ const useIncomeStatementData = () => {
         expensesByType[expense.expenseType] = (expensesByType[expense.expenseType] || 0) + expense.amount;
     });
     
-    const inventoryAdjustmentLosses = stockAdjustmentRecords?.reduce((acc: number, adj: any) => {
-        return acc + adj.items.reduce((sum: number, item: any) => {
-             const itemMaster = items.find((i:any) => i.id === item.itemId);
-             const cost = item.cost || itemMaster?.cost || 0;
-             const val = item.difference * cost;
-             return sum + (val < 0 ? Math.abs(val) : 0);
-        }, 0);
-    }, 0) || 0;
-    if (inventoryAdjustmentLosses > 0) expensesByType['خسائر تسوية المخزون'] = (expensesByType['خسائر تسوية المخزون'] || 0) + inventoryAdjustmentLosses;
+    // Condition check from settings
+    const showLosses = settings?.main?.financial?.showInventoryLosses !== false;
+
+    if (showLosses) {
+        const inventoryAdjustmentLosses = stockAdjustmentRecords?.reduce((acc: number, adj: any) => {
+            return acc + adj.items.reduce((sum: number, item: any) => {
+                 const itemMaster = items.find((i:any) => i.id === item.itemId);
+                 const cost = item.cost || itemMaster?.cost || 0;
+                 const val = item.difference * cost;
+                 return sum + (val < 0 ? Math.abs(val) : 0);
+            }, 0);
+        }, 0) || 0;
+        if (inventoryAdjustmentLosses > 0) expensesByType['خسائر تسوية المخزون'] = (expensesByType['خسائر تسوية المخزون'] || 0) + inventoryAdjustmentLosses;
+    }
 
     const stockOutLosses = stockOutRecords?.reduce((acc: number, so: any) => {
          return acc + so.items.reduce((sum: number, item: any) => {
@@ -140,7 +145,7 @@ const useIncomeStatementData = () => {
     const netIncome = netOperatingIncome + totalExceptionalIncome;
     
     return { grossRevenue, totalSalesReturns, totalSalesDiscount, costOfGoodsSold, totalExceptionalIncome, expensesByType, totalExpenses, netRevenue, grossProfit, netOperatingIncome, netIncome };
-  }, [salesInvoices, posSales, posReturns, expenses, exceptionalIncomes, items, salesReturns, payrollRecords, stockAdjustmentRecords, stockOutRecords, depreciationRecords]);
+  }, [salesInvoices, posSales, posReturns, expenses, exceptionalIncomes, items, salesReturns, payrollRecords, stockAdjustmentRecords, stockOutRecords, depreciationRecords, settings]);
 };
 
 function IncomeStatement() {
