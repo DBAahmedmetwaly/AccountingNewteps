@@ -76,7 +76,8 @@ export default function JournalPage() {
         suppliers, supplierPayments, customerPayments, stockOutRecords,
         profitDistributions, partners, payrollRecords, stockInRecords,
         stockIssuesToReps, stockReturnsFromReps, stockAdjustmentRecords,
-        deliveryStaff, fixedAssets, depreciationRecords, posSales, posReturns, loading
+        deliveryStaff, fixedAssets, depreciationRecords, posSales, posReturns, loading,
+        users
     } = useData();
 
     const itemsMap = useMemo(() => {
