@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useEffect, useState } from 'react';
@@ -76,21 +75,21 @@ export default function StockAdjustmentDetailsPage() {
              <Button onClick={() => router.back()}>الرجوع</Button>
         </div>
       </PageHeader>
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6 printable-area">
+      <main className="flex flex-1 flex-col gap-4 p-2 md:p-6 printable-area">
         <Card>
-          <CardHeader>
+          <CardHeader className="p-4 md:p-6">
             <CardTitle>تفاصيل إيصال تسوية مخزنية</CardTitle>
-             <div className="grid md:grid-cols-3 gap-4 text-sm text-muted-foreground">
-                <div>رقم الإيصال: {record.receiptNumber}</div>
-                <div>تاريخ التسوية: {new Date(record.date).toLocaleDateString('ar-EG')}</div>
-                <div>في مخزن: {getWarehouseName(record.warehouseId)}</div>
-                <div className="font-semibold">نوع التسوية: {isOpeningBalance ? 'جرد افتتاحي' : 'جرد دوري'}</div>
-                <div className="md:col-span-2">بواسطة: {record.createdByName || 'غير معروف'}</div>
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground mt-2">
+                <div><span className="font-bold text-foreground">رقم الإيصال:</span> {record.receiptNumber}</div>
+                <div><span className="font-bold text-foreground">تاريخ التسوية:</span> {new Date(record.date).toLocaleDateString('ar-EG')}</div>
+                <div><span className="font-bold text-foreground">في مخزن:</span> {getWarehouseName(record.warehouseId)}</div>
+                <div><span className="font-bold text-foreground">نوع التسوية:</span> {isOpeningBalance ? 'جرد افتتاحي' : 'جرد دوري'}</div>
+                <div className="md:col-span-2"><span className="font-bold text-foreground">بواسطة:</span> {record.createdByName || 'غير معروف'}</div>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="w-full overflow-auto">
-              <Table>
+          <CardContent className="p-2 md:p-6">
+            <div className="w-full overflow-x-auto border rounded-lg">
+              <Table className="min-w-[600px]">
                   <TableHeader>
                       <TableRow>
                           <TableHead>الصنف</TableHead>
@@ -102,12 +101,12 @@ export default function StockAdjustmentDetailsPage() {
                   <TableBody>
                       {record.items.map((item, index) => (
                           <TableRow key={index}>
-                              <TableCell>{item.name}</TableCell>
-                              {!isOpeningBalance && <TableCell className="text-center">{item.systemQty}</TableCell>}
-                              <TableCell className="text-center">{item.actualQty}</TableCell>
-                              <TableCell className={`text-center font-bold ${item.difference > 0 ? 'text-green-500' : 'text-destructive'}`}>
+                              <TableCell className="font-medium">{item.name}</TableCell>
+                              {!isOpeningBalance && <TableCell className="text-center font-mono">{item.systemQty}</TableCell>}
+                              <TableCell className="text-center font-mono">{item.actualQty}</TableCell>
+                              <TableCell className={`text-center font-bold ${item.difference > 0 ? 'text-green-500' : item.difference < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
                                 <span className="flex items-center justify-center gap-1">
-                                    {item.difference > 0 ? <ArrowUp /> : <ArrowDown />}
+                                    {item.difference > 0 ? <ArrowUp className="h-3 w-3" /> : item.difference < 0 ? <ArrowDown className="h-3 w-3" /> : null}
                                     {item.difference > 0 ? `+${item.difference}` : item.difference}
                                 </span>
                               </TableCell>
@@ -117,9 +116,9 @@ export default function StockAdjustmentDetailsPage() {
               </Table>
             </div>
             {record.notes && (
-                <div className="mt-4 border-t pt-4">
-                    <h4 className="font-semibold">ملاحظات:</h4>
-                    <p className="text-muted-foreground">{record.notes}</p>
+                <div className="mt-6 p-4 border rounded-lg bg-muted/20">
+                    <h4 className="font-semibold mb-1">ملاحظات:</h4>
+                    <p className="text-sm text-muted-foreground">{record.notes}</p>
                 </div>
             )}
           </CardContent>
