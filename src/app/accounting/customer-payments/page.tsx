@@ -11,13 +11,14 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Loader2, MoreHorizontal, Edit, Trash2, Info, Wallet, AlertTriangle } from "lucide-react";
+import { PlusCircle, Loader2, MoreHorizontal, Edit, Trash2, Info, Wallet, AlertTriangle, Filter, Search } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/auth-context';
@@ -319,6 +320,11 @@ export default function CustomerPaymentsPage() {
 
     const { toast } = useToast();
     const { user } = useAuth();
+
+    const [filters, setFilters] = useState({
+        fromDate: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0],
+        toDate: new Date().toISOString().split('T')[0]
+    });
     
      const getCustomerName = (customerId: string) => {
         return customers.find((c: Customer) => c.id === customerId)?.name || d.unknownCustomer;
@@ -374,6 +380,23 @@ export default function CustomerPaymentsPage() {
         }
     };
 
+    const filteredPayments = useMemo(() => {
+        return payments.filter((p: any) => {
+            const date = new Date(p.date);
+            const from = filters.fromDate ? new Date(filters.fromDate) : null;
+            const to = filters.toDate ? new Date(filters.toDate) : null;
+            if(from) from.setHours(0,0,0,0);
+            if(to) to.setHours(23,59,59,999);
+            if (from && date < from) return false;
+            if (to && date > to) return false;
+            return true;
+        }).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [payments, filters]);
+
+    const totalAmount = useMemo(() => {
+        return filteredPayments.reduce((acc, p) => acc + (p.amount || 0), 0);
+    }, [filteredPayments]);
+
 
   return (
     <>
@@ -406,7 +429,19 @@ export default function CustomerPaymentsPage() {
             
             <Card className="lg:col-span-3">
                 <CardHeader>
-                    <CardTitle>{d.paymentsLog}</CardTitle>
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <CardTitle>{d.paymentsLog}</CardTitle>
+                        <div className="flex items-center gap-2">
+                            <div className="grid gap-1">
+                                <Label className="text-[10px]">{dictionary.general.from}</Label>
+                                <Input type="date" value={filters.fromDate} onChange={e => setFilters({...filters, fromDate: e.target.value})} className="h-8 text-xs w-32" />
+                            </div>
+                            <div className="grid gap-1">
+                                <Label className="text-[10px]">{dictionary.general.to}</Label>
+                                <Input type="date" value={filters.toDate} onChange={e => setFilters({...filters, toDate: e.target.value})} className="h-8 text-xs w-32" />
+                            </div>
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {loading ? (
@@ -425,8 +460,8 @@ export default function CustomerPaymentsPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {payments.length > 0 ? (
-                                        payments.map((payment : CustomerPayment) => (
+                                    {filteredPayments.length > 0 ? (
+                                        filteredPayments.map((payment : CustomerPayment) => (
                                             <TableRow key={payment.id}>
                                                 <TableCell>
                                                     <div className="font-medium">{getCustomerName(payment.customerId)}</div>
@@ -476,6 +511,15 @@ export default function CustomerPaymentsPage() {
                                         </TableRow>
                                     )}
                                 </TableBody>
+                                {filteredPayments.length > 0 && (
+                                    <TableFooter>
+                                        <TableRow className="bg-muted/50 font-bold">
+                                            <TableCell colSpan={2}>إجمالي المقبوضات للفترة</TableCell>
+                                            <TableCell className="text-center text-primary text-lg">{totalAmount.toLocaleString()} ج.م</TableCell>
+                                            <TableCell></TableCell>
+                                        </TableRow>
+                                    </TableFooter>
+                                )}
                             </Table>
                         </div>
                     )}
