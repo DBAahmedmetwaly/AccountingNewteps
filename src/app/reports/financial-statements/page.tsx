@@ -39,7 +39,6 @@ interface SaleInvoice {
   date: string;
   subtotal: number;
   warehouseId: string;
-  paidToAccountId?: string;
 }
 interface PurchaseInvoice {
   id: string;
@@ -48,8 +47,6 @@ interface PurchaseInvoice {
   paidAmount?: number;
   date: string;
   warehouseId: string;
-  paidFromAccountId?: string;
-  items: { id: string; qty: number; cost?: number }[];
 }
 interface Expense {
   id: string;
@@ -57,93 +54,7 @@ interface Expense {
   expenseType: string;
   date: string;
   paidFromAccountId: string;
-  status?: 'paid' | 'pending';
 }
-interface ExceptionalIncome {
-    id: string;
-    amount: number;
-    date: string;
-    paidToAccountId: string;
-}
-interface Customer {
-  id: string;
-  openingBalance: number;
-}
-interface Supplier {
-  id: string;
-  openingBalance: number;
-}
-interface Partner {
-  id: string;
-  capital: number;
-}
-interface Item {
-    id: string;
-    name: string;
-    unit: string;
-    price: number;
-    cost?: number;
-}
-interface CustomerPayment {
-    id: string;
-    amount: number;
-    customerId: string;
-    paidToAccountId: string;
-    date: string;
-    invoiceId?: string;
-}
-interface SupplierPayment {
-    id: string;
-    amount: number;
-    supplierId: string;
-    paidFromAccountId: string;
-    date: string;
-    invoiceId?: string;
-}
-interface SalesReturn {
-    id: string;
-    total: number;
-    paidAmount?: number;
-    paidFromAccountId?: string;
-    customerId: string;
-    date: string;
-    warehouseId: string;
-    items: { id: string; qty: number; }[];
-}
-interface PurchaseReturn {
-    id: string;
-    total: number;
-    paidAmount?: number;
-    paidToAccountId?: string;
-    supplierId: string;
-    date: string;
-    warehouseId: string;
-    items: { id: string; qty: number; }[];
-}
-interface StockInRecord { id: string; warehouseId: string; items: { itemId: string; name: string; qty: number; cost?: number; }[]; date: string;}
-interface InventoryClosing { id: string; warehouseId: string; closingDate: string; balances: { itemId: string, balance: number }[] }
-interface TreasuryTransaction {
-    id: string;
-    type: 'deposit' | 'withdrawal';
-    amount: number;
-    accountId: string;
-    date: string;
-    linkedTransaction?: boolean;
-}
-interface EmployeeAdvance {
-    id: string;
-    amount: number;
-    paidFromAccountId: string;
-    date: string;
-}
-interface ProfitDistribution {
-    id: string;
-    amount: number;
-    paidFromAccountId: string;
-    date: string;
-}
-interface PosSale { id: string; warehouseId: string; items: { id: string; qty: number; cost?: number; price: number; }[]; date: string; total: number; discount: number; subtotal: number; paidAmount?: number; paidToAccountId?: string; }
-interface PosReturn { id: string; warehouseId: string; items: { id: string; qty: number; price: number; cost?: number; }[]; date: string; total: number; paidAmount?: number; }
 interface PayrollRecord {
     id: string;
     date: string;
@@ -152,37 +63,20 @@ interface PayrollRecord {
         basicSalary: number;
         totalRewards: number;
         totalPenalties: number;
-        totalAdvances: number;
         netSalary: number;
     }[];
-}
-
-interface FixedAsset {
-    id: string;
-    name: string;
-    cost: number;
-    status: 'active' | 'disposed' | 'fully_depreciated';
-}
-
-interface DepreciationRecord {
-    id: string;
-    assetId: string;
-    date: string;
-    amount: number;
-    note?: string;
 }
 
 const useIncomeStatementData = () => {
   const { salesInvoices, expenses, exceptionalIncomes, items, salesReturns, posSales, posReturns, payrollRecords, stockAdjustmentRecords, stockOutRecords, depreciationRecords } = useData();
 
   return useMemo(() => {
-    const approvedSales = salesInvoices.filter((s: SaleInvoice) => s.status === 'approved');
+    const approvedSales = salesInvoices.filter((s: any) => s.status === 'approved');
     const allSales = [...approvedSales, ...posSales];
 
     const grossRevenue = allSales.reduce((acc, sale) => acc + (sale.subtotal || (sale.total + (sale.discount || 0))), 0);
     const totalSalesDiscount = allSales.reduce((acc, sale) => acc + (sale.discount || 0), 0);
     
-    // Combine standard and POS returns
     const allReturns = [...salesReturns, ...posReturns];
     const totalSalesReturns = allReturns.reduce((acc, ret) => acc + ret.total, 0);
     
@@ -206,10 +100,9 @@ const useIncomeStatementData = () => {
     if (costOfGoodsSold < 0) costOfGoodsSold = 0;
 
     let totalExceptionalIncome = exceptionalIncomes.reduce((acc, income) => acc + income.amount, 0);
-    const payrollPenalties = payrollRecords?.reduce((acc: number, record: PayrollRecord) => {
-        return acc + record.payrollData.reduce((sum, p) => sum + p.totalPenalties, 0);
+    const payrollPenalties = payrollRecords?.reduce((acc: number, record: any) => {
+        return acc + record.payrollData.reduce((sum: number, p: any) => sum + p.totalPenalties, 0);
     }, 0) || 0;
-    
     totalExceptionalIncome += payrollPenalties;
 
     const inventoryAdjustmentGains = stockAdjustmentRecords?.reduce((acc: number, adj: any) => {
@@ -220,7 +113,6 @@ const useIncomeStatementData = () => {
              return sum + (val > 0 ? val : 0);
         }, 0);
     }, 0) || 0;
-
     totalExceptionalIncome += inventoryAdjustmentGains;
 
     const expensesByType: { [key: string]: number } = {};
@@ -236,7 +128,6 @@ const useIncomeStatementData = () => {
              return sum + (val < 0 ? Math.abs(val) : 0);
         }, 0);
     }, 0) || 0;
-
     if (inventoryAdjustmentLosses > 0) expensesByType['خسائر تسوية المخزون'] = (expensesByType['خسائر تسوية المخزون'] || 0) + inventoryAdjustmentLosses;
 
     const stockOutLosses = stockOutRecords?.reduce((acc: number, so: any) => {
@@ -246,16 +137,14 @@ const useIncomeStatementData = () => {
              return sum + (item.qty * cost);
          }, 0);
     }, 0) || 0;
-
     if (stockOutLosses > 0) expensesByType['بضاعة تالفة / هوالك'] = (expensesByType['بضاعة تالفة / هوالك'] || 0) + stockOutLosses;
 
-    const payrollExpenses = payrollRecords?.reduce((acc: number, record: PayrollRecord) => {
-        return acc + record.payrollData.reduce((sum, p) => sum + p.basicSalary + p.totalRewards, 0);
+    const payrollExpenses = payrollRecords?.reduce((acc: number, record: any) => {
+        return acc + record.payrollData.reduce((sum: number, p: any) => sum + p.basicSalary + p.totalRewards, 0);
     }, 0) || 0;
-
     if (payrollExpenses > 0) expensesByType['رواتب ومكافآت الموظفين'] = (expensesByType['رواتب ومكافآت الموظفين'] || 0) + payrollExpenses;
 
-    const totalDepreciation = depreciationRecords?.reduce((acc: number, rec: DepreciationRecord) => acc + rec.amount, 0) || 0;
+    const totalDepreciation = depreciationRecords?.reduce((acc: number, rec: any) => acc + rec.amount, 0) || 0;
     if (totalDepreciation > 0) expensesByType['مصروف الإهلاك'] = (expensesByType['مصروف الإهلاك'] || 0) + totalDepreciation;
 
     const totalExpenses = Object.values(expensesByType).reduce((acc, amount) => acc + amount, 0);
@@ -330,15 +219,12 @@ function BalanceSheet() {
         
         // --- Cash Calculation ---
         let cash = cashAccounts.reduce((acc: number, ca: any) => acc + (ca.openingBalance || 0), 0);
-        
-        // Inflows
         customerPayments.forEach((p:any) => cash += p.amount);
         exceptionalIncomes.forEach((i:any) => cash += i.amount);
         treasuryTransactions.filter((tx:any) => tx.type === 'deposit' && !tx.linkedTransaction).forEach((tx:any) => cash += tx.amount);
         repRemittances.forEach((rem: any) => cash += rem.amount);
         purchaseReturns.filter(r => r.paidAmount > 0).forEach(r => cash += r.paidAmount);
         
-        // Deduct initial cash already in sales invoices (avoiding double count with customerPayments)
         salesInvoices.filter((s:any) => s.status === 'approved' && s.paidAmount > 0).forEach((s: any) => {
             const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
             const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
@@ -350,7 +236,6 @@ function BalanceSheet() {
             if (initialCash > 0) cash += initialCash;
         });
 
-        // Outflows
         expenses.filter(e => e.status !== 'pending').forEach((e:any) => cash -= e.amount);
         supplierPayments.forEach((p:any) => cash -= p.amount);
         employeeAdvances.forEach((ea:any) => cash -= ea.amount);
@@ -360,7 +245,6 @@ function BalanceSheet() {
         posReturns.filter(r => r.paidAmount > 0).forEach(r => cash -= r.paidAmount);
         payrollRecords?.forEach((pr: any) => { cash -= pr.payrollData.reduce((sum: number, p: any) => sum + p.netSalary, 0); });
         
-        // Deduct initial paid already in purchase invoices (avoiding double count with supplierPayments)
         purchaseInvoices.filter(p => p.paidAmount > 0).forEach((p: any) => {
             const linkedPaymentsTotal = supplierPayments.filter(sp => sp.invoiceId === p.id).reduce((sum, sp) => sum + sp.amount, 0);
             const initialPaid = (p.paidAmount || 0) - linkedPaymentsTotal;
@@ -375,13 +259,28 @@ function BalanceSheet() {
         const fixedAssetsGross = fixedAssets?.reduce((acc: number, asset: any) => (asset.status === 'active' || asset.status === 'fully_depreciated' ? acc + (asset.cost || 0) : acc), 0) || 0;
         const accDepreciation = depreciationRecords?.reduce((acc: number, rec: any) => acc + rec.amount, 0) || 0;
 
-        // --- Capital Calculation ---
-        let totalCapital = partners.reduce((acc: number, p: any) => acc + (p.capital || 0), 0);
+        // --- Capital Calculation (CRITICAL FIX) ---
+        // Capital = (AR OB + Cash OB + Inv OB) - (AP OB) + Partners Capital + Treasury
+        const initialAR = customers.reduce((acc: number, c: any) => acc + (Number(c.openingBalance) || 0), 0);
+        const initialAP = suppliers.reduce((acc: number, s: any) => acc + (Number(s.openingBalance) || 0), 0);
+        const initialCash = cashAccounts.reduce((acc: number, ca: any) => acc + (Number(ca.openingBalance) || 0), 0);
+        
+        let initialInvValue = 0;
+        stockInRecords.filter(r => r.reason === 'opening_stock').forEach(r => {
+            r.items.forEach((i: any) => initialInvValue += (i.qty * (i.cost || 0)));
+        });
+        stockAdjustmentRecords.filter(r => r.reason === 'opening_balance').forEach(r => {
+            r.items.forEach((i: any) => initialInvValue += (i.actualQty * (i.cost || 0)));
+        });
+
+        let totalCapital = (initialAR + initialCash + initialInvValue - initialAP);
+        totalCapital += partners.reduce((acc: number, p: any) => acc + (p.capital || 0), 0);
+        
         treasuryTransactions.filter((tx: any) => tx.type === 'deposit' && !tx.linkedTransaction).forEach((tx: any) => totalCapital += tx.amount);
         treasuryTransactions.filter((tx: any) => tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: any) => totalCapital -= tx.amount);
 
         return { accountsReceivable: ar, accountsPayable: ap, cashAndEquivalents: cash, employeeAdvancesBalance: empAdvances, fixedAssetsGross, accumulatedDepreciation: accDepreciation, fixedAssetsNet: fixedAssetsGross - accDepreciation, totalCapital };
-    }, [customers, suppliers, partners, salesInvoices, purchaseInvoices, customerPayments, supplierPayments, salesReturns, purchaseReturns, cashAccounts, treasuryTransactions, expenses, exceptionalIncomes, employeeAdvances, profitDistributions, posSales, posReturns, payrollRecords, fixedAssets, depreciationRecords, repRemittances]);
+    }, [customers, suppliers, partners, salesInvoices, purchaseInvoices, customerPayments, supplierPayments, salesReturns, purchaseReturns, cashAccounts, treasuryTransactions, expenses, exceptionalIncomes, employeeAdvances, profitDistributions, posSales, posReturns, payrollRecords, fixedAssets, depreciationRecords, repRemittances, stockInRecords, stockAdjustmentRecords]);
 
     const inventoryValue = useMemo(() => {
         let total = 0;
@@ -411,7 +310,6 @@ function BalanceSheet() {
 
                 stock += warehouseStock;
             });
-            // Negative stock contributes to liabilities but for balance we sum it algebraically
             total += stock * (item.cost || 0);
         });
         return total;
@@ -456,7 +354,7 @@ function BalanceSheet() {
                 </Table>
                  <Table className="mt-4">
                     <TableBody>
-                         <TableRow><TableCell>رأس المال وإيداعات الشركاء</TableCell><TableCell className="text-left">ج.م {stats.totalCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell></TableRow>
+                         <TableRow><TableCell>رأس المال الإجمالي (الافتتاحي والإضافي)</TableCell><TableCell className="text-left">ج.م {stats.totalCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell></TableRow>
                          <TableRow><TableCell>الأرباح المحتجزة (صافي الدخل)</TableCell><TableCell className="text-left">ج.م {netIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell></TableRow>
                         <TableRow><TableCell className="pl-8 text-muted-foreground">(-) توزيعات الأرباح</TableCell><TableCell className="text-left text-destructive">- ج.م {totalDistributions.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell></TableRow>
                     </TableBody>
