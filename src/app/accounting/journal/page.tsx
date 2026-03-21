@@ -19,8 +19,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from "@/components/ui/table";
-import { Loader2, BookOpen, List, History, ArrowRight } from "lucide-react";
+import { Loader2, BookOpen, List, History, ArrowRight, Undo2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -197,8 +198,6 @@ export default function JournalPage() {
                  entries.push({ id: `adj-def-cr-${adj.id}`, date: adj.date, number, description: `تسوية جرد (عجز)`, debit: 0, credit: totalDeficit, account: `مخزون - ${warehouse?.name}` });
              }
         });
-
-        // ... Add others like returns, payroll, etc. as needed
 
         return entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [salesInvoices, purchaseInvoices, expenses, treasuryTxs, customerPayments, supplierPayments, stockAdjustmentRecords, warehouses, employees, customers, suppliers, partners, itemsMap]);
