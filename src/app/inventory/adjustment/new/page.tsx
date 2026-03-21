@@ -23,6 +23,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Html5Qrcode } from "html5-qrcode";
 
 interface AdjustmentItem {
   itemId: string;
@@ -69,9 +70,8 @@ export default function NewStockAdjustmentPage() {
     const [autoOpenScanner, setAutoOpenScanner] = useState(false);
     const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
     
-    const videoRef = useRef<HTMLVideoElement>(null);
     const newItemQtyInputRef = useRef<HTMLInputElement>(null);
-    const streamRef = useRef<MediaStream | null>(null);
+    const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
 
     const authorizedBranches = useMemo(() => {
         const b = warehouses.filter((w: any) => !w.isMain && !w.isRepWarehouse && !w.repId);
@@ -131,92 +131,47 @@ export default function NewStockAdjustmentPage() {
     }, [availableItems, items, toast]);
 
     useEffect(() => {
-        let animationFrameId: number;
-        let isProcessing = false;
+        const startScanner = async () => {
+            if (!isScannerOpen) return;
 
-        const startCamera = async () => {
-            if (!isScannerOpen || !videoRef.current) return;
-            
             try {
-                // Request camera permission explicitly first
-                const constraints = {
-                    video: {
-                        facingMode: "environment",
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    }
-                };
+                const html5QrCode = new Html5Qrcode("reader");
+                html5QrCodeRef.current = html5QrCode;
 
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                
-                if (!videoRef.current) {
-                    stream.getTracks().forEach(track => track.stop());
-                    return;
-                }
+                const qrConfig = { fps: 10, qrbox: { width: 250, height: 250 } };
 
-                streamRef.current = stream;
-                videoRef.current.srcObject = stream;
+                await html5QrCode.start(
+                    { facingMode: "environment" },
+                    qrConfig,
+                    (decodedText) => {
+                        handleScanSuccess(decodedText);
+                    },
+                    undefined
+                );
                 setHasCameraPermission(true);
-
-                // Wait for the video to be ready before playing
-                videoRef.current.onloadedmetadata = () => {
-                    videoRef.current?.play().catch(e => console.error("Video play failed:", e));
-                };
-
-                // Check for BarcodeDetector support
-                if (!("BarcodeDetector" in window)) {
-                    console.warn("BarcodeDetector not supported in this browser");
-                    return;
-                }
-
-                const barcodeDetector = new (window as any).BarcodeDetector({ 
-                    formats: ['ean_13', 'code_128', 'qr_code', 'upc_a', 'upc_e', 'code_39'] 
-                });
-
-                const detect = async () => {
-                    if (!isScannerOpen || isProcessing || !videoRef.current) return;
-
-                    if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-                        isProcessing = true;
-                        try {
-                            const barcodes = await barcodeDetector.detect(videoRef.current);
-                            if (barcodes.length > 0) {
-                                handleScanSuccess(barcodes[0].rawValue);
-                                return; 
-                            }
-                        } catch (err) {
-                            console.error("Detection error:", err);
-                        } finally {
-                            isProcessing = false;
-                        }
-                    }
-                    animationFrameId = requestAnimationFrame(detect);
-                };
-                
-                animationFrameId = requestAnimationFrame(detect);
             } catch (err: any) {
-                console.error('Camera access failed:', err);
+                console.error("Scanner startup failed:", err);
                 setHasCameraPermission(false);
-                toast({ 
-                    variant: 'destructive', 
-                    title: 'خطأ في الكاميرا', 
-                    description: err.name === 'NotAllowedError' ? 'تم رفض إذن الكاميرا. يرجى تفعيله من الإعدادات.' : 'تعذر تشغيل الكاميرا الخلفية.'
+                toast({
+                    variant: "destructive",
+                    title: "خطأ في الكاميرا",
+                    description: "فشل تشغيل الكاميرا. تأكد من منح الإذن واستخدام HTTPS."
                 });
                 setIsScannerOpen(false);
             }
         };
 
         if (isScannerOpen) {
-            startCamera();
+            // Small timeout to ensure DOM element "reader" exists
+            const timer = setTimeout(startScanner, 100);
+            return () => {
+                clearTimeout(timer);
+                if (html5QrCodeRef.current) {
+                    html5QrCodeRef.current.stop().catch(console.error);
+                    html5QrCodeRef.current = null;
+                }
+            };
         }
-
-        return () => {
-            if (streamRef.current) {
-                streamRef.current.getTracks().forEach(track => track.stop());
-                streamRef.current = null;
-            }
-            if (animationFrameId) cancelAnimationFrame(animationFrameId);
-        };
     }, [isScannerOpen, handleScanSuccess, toast]);
 
     const availableItemsForCombobox = useMemo(() => {
@@ -408,18 +363,7 @@ export default function NewStockAdjustmentPage() {
                   <DialogDescription>وجه الكاميرا الخلفية نحو الكود للتعرف عليه تلقائياً.</DialogDescription>
               </DialogHeader>
               <div className="relative w-full aspect-square bg-black rounded-lg overflow-hidden border-2 border-primary/20 shadow-inner">
-                  <video 
-                    ref={videoRef} 
-                    className="w-full h-full object-cover" 
-                    autoPlay 
-                    playsInline 
-                    muted 
-                  />
-                  <div className="absolute inset-0 border-[40px] border-black/40 pointer-events-none">
-                      <div className="w-full h-full border-2 border-primary/60 rounded-sm relative">
-                          <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-red-500/60 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
-                      </div>
-                  </div>
+                  <div id="reader" className="w-full h-full" />
                   {hasCameraPermission === false && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/80 p-4">
                         <Alert variant="destructive" className="bg-background">
