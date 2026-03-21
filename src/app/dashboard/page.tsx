@@ -59,6 +59,7 @@ const chartConfig = {
 };
 
 export default function DashboardPage() {
+    const allDataContext = useData();
     const { 
         items, salesInvoices, posSales, purchaseInvoices, customers, suppliers,
         customerPayments, supplierPayments, salesReturns, purchaseReturns,
@@ -66,7 +67,7 @@ export default function DashboardPage() {
         employeeAdvances, profitDistributions, inventory, warehouses, loading, stockOutRecords,
         inventoryClosings, stockInRecords, stockTransferRecords, stockAdjustmentRecords,
         posReturns, stockIssuesToReps, stockReturnsFromReps, payrollRecords, settings
-    } = useData();
+    } = allDataContext;
     const { user } = useAuth();
     const isMobile = useIsMobile();
     const [filters, setFilters] = useState({
@@ -74,8 +75,6 @@ export default function DashboardPage() {
         fromDate: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0],
         toDate: new Date().toISOString().split('T')[0]
     });
-    const [recomputedInventoryValue, setRecomputedInventoryValue] = useState<number | null>(null);
-    const [invLoading, setInvLoading] = useState(false);
     
     // UI Dialog States
     const [isNetProfitBreakdownOpen, setIsNetProfitBreakdownOpen] = useState(false);
@@ -147,16 +146,43 @@ export default function DashboardPage() {
 
     }, [filters, salesInvoices, posSales, salesReturns, purchaseReturns, expenses, exceptionalIncomes, user, posReturns]);
 
+    // New Memo for Automatic Accurate Inventory Calculation
+    const accurateInventoryValue = useMemo(() => {
+        if (loading) return 0;
+        
+        const userWarehouseIds = user?.warehouseIds || [];
+        const isSuperAdmin = userWarehouseIds.includes('all');
+        const activeWarehouseId = filters.warehouseId;
+        
+        const isWarehouseAllowed = (wId?: string) => {
+            if (activeWarehouseId !== 'all') return wId === activeWarehouseId;
+            if (isSuperAdmin) return true;
+            return userWarehouseIds.includes(wId || '');
+        };
+        
+        const warehousesToConsider = warehouses.filter((w: any) => isWarehouseAllowed(w.id));
+        
+        let total = 0;
+        items.forEach((item: any) => {
+            const itemCost = Number(item.cost) || 0;
+            let totalQty = 0;
+            warehousesToConsider.forEach((w: any) => {
+                const qty = calculateStockForItemInWarehouse(item.id, w.id, allDataContext);
+                totalQty += Number(qty) || 0;
+            });
+            total += totalQty * itemCost;
+        });
+        return total;
+    }, [loading, items, warehouses, user, filters.warehouseId, inventoryClosings, stockInRecords, stockOutRecords, stockTransferRecords, stockAdjustmentRecords, salesInvoices, salesReturns, posSales, posReturns, purchaseReturns, stockIssuesToReps, stockReturnsFromReps]);
+
     const kpiData = useMemo(() => {
         const userWarehouseIds = user?.warehouseIds || [];
         const isSuperAdmin = userWarehouseIds.includes('all');
         const activeWarehouseId = filters.warehouseId;
         
-        // Revised logic: Include General accounts (no warehouseId) when filtering for "all"
         const isAccountAllowed = (acc: CashAccount) => {
             if (activeWarehouseId !== 'all') return acc.warehouseId === activeWarehouseId;
             if (isSuperAdmin) return true;
-            // For managers, show their branches plus general accounts
             return !acc.warehouseId || userWarehouseIds.includes(acc.warehouseId);
         };
 
@@ -187,7 +213,6 @@ export default function DashboardPage() {
             if (filteredCashAccountIds.has(r.paidToAccountId)) purchaseReturnsCash += Number(r.paidAmount) || 0;
         });
         
-        // Sum cash from sales, excluding what was accounted for in customerPayments (linked to invoice)
         const allSales = [...salesInvoices.filter((s:any) => s.status === 'approved'), ...posSales];
         allSales.forEach((s: any) => {
             const targetId = s.paidToAccountId || (filteredCashAccounts.find(acc => acc.warehouseId === s.warehouseId)?.id);
@@ -267,20 +292,6 @@ export default function DashboardPage() {
             if (isSuperAdmin) return true;
             return userWarehouseIds.includes(wId || '');
         };
-        const warehousesToConsider = warehouses.filter((w: any) => isWarehouseAllowed(w.id));
-
-        const inventoryValue = items.reduce((sum: number, item: any) => {
-            let itemTotalBalance = 0;
-            warehousesToConsider.forEach((warehouse: any) => {
-                const warehouseInventory = inventory.filter((inv: any) => inv.warehouseId === warehouse.id);
-                warehouseInventory.forEach((sectionRecord: any) => {
-                    if (sectionRecord.items && sectionRecord.items[item.id]) {
-                        itemTotalBalance += (Number(sectionRecord.items[item.id].balance) || 0);
-                    }
-                });
-            });
-            return sum + (itemTotalBalance * (Number(item.cost) || 0));
-        }, 0);
 
         let totalArOpening = 0;
         let totalArSalesUnpaid = 0;
@@ -383,7 +394,6 @@ export default function DashboardPage() {
                 returns: totalArReturns
             },
             accountsPayable: ap, 
-            inventoryValue,
             totalRevenue,
             totalCashFromSales,
             totalExpenses,
@@ -403,48 +413,8 @@ export default function DashboardPage() {
     }, [
         cashAccounts, customerPayments, exceptionalIncomes, treasuryTransactions, expenses, 
         supplierPayments, purchaseInvoices, employeeAdvances, profitDistributions, customers, 
-        salesInvoices, posSales, salesReturns, suppliers, purchaseReturns, inventory, items, warehouses, filters.warehouseId, user, filteredData, posReturns, payrollRecords
+        salesInvoices, posSales, salesReturns, suppliers, purchaseReturns, items, warehouses, filters.warehouseId, user, filteredData, posReturns, payrollRecords
     ]);
-
-    const handleRecomputeInventoryValue = () => {
-        setInvLoading(true);
-        setTimeout(() => {
-            const userWarehouseIds = user?.warehouseIds || [];
-            const isSuperAdmin = userWarehouseIds.includes('all');
-            const activeWarehouseId = filters.warehouseId;
-            const isWarehouseAllowed = (wId?: string) => {
-                if (activeWarehouseId !== 'all') return wId === activeWarehouseId;
-                if (isSuperAdmin) return true;
-                return userWarehouseIds.includes(wId || '');
-            };
-            const warehousesToConsider = warehouses.filter((w: any) => isWarehouseAllowed(w.id));
-            let total = 0;
-            items.forEach((item: any) => {
-                const itemCost = Number(item.cost) || 0;
-                let totalQty = 0;
-                warehousesToConsider.forEach((w: any) => {
-                    const qty = calculateStockForItemInWarehouse(item.id, w.id, {
-                        inventoryClosings,
-                        stockInRecords,
-                        stockOutRecords,
-                        stockTransferRecords,
-                        stockAdjustmentRecords,
-                        salesInvoices,
-                        salesReturns,
-                        posSales,
-                        posReturns,
-                        purchaseReturns,
-                        stockIssuesToReps,
-                        stockReturnsFromReps,
-                    });
-                    totalQty += Number(qty) || 0;
-                });
-                total += totalQty * itemCost;
-            });
-            setRecomputedInventoryValue(total);
-            setInvLoading(false);
-        }, 50);
-    };
 
     const salesAndProfitChartData = useMemo(() => {
         const dailyData: { [date: string]: { sales: number; profit: number } } = {};
@@ -716,13 +686,8 @@ export default function DashboardPage() {
                     <Package className="h-4 w-4 text-muted-foreground"/>
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{ (recomputedInventoryValue ?? kpiData.inventoryValue).toLocaleString() } ج.م</div>
-                    <div className="mt-3 flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={handleRecomputeInventoryValue}>
-                            احتساب الآن
-                        </Button>
-                        {invLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-                    </div>
+                    <div className="text-2xl font-bold">{accurateInventoryValue.toLocaleString()} ج.م</div>
+                    <p className="text-[10px] text-muted-foreground mt-1">يتم احتسابه آلياً بناءً على الأرصدة الحقيقية</p>
                 </CardContent>
             </Card>
         </div>
