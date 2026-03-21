@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { useData } from "@/contexts/data-provider";
-import { Loader2, Printer } from "lucide-react";
+import { Loader2, Printer, Info } from "lucide-react";
 import React, { useState, useMemo, useEffect } from "react";
 
 // Data interfaces

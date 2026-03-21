@@ -1,3 +1,4 @@
+
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -316,7 +317,7 @@ export default function NewStockAdjustmentPage() {
                 date: dateObj.toISOString(),
                 items: itemsWithDifference.map(item => ({
                     itemId: item.itemId,
-                    name: item.name,
+                    name: item.itemName,
                     difference: item.difference,
                     actualQty: item.actualQty,
                     systemQty: item.systemQty,
