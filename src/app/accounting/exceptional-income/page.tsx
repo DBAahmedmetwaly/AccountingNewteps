@@ -26,7 +26,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useData } from '@/contexts/data-provider';
 
 
-// تعريف واجهات البيانات (Interfaces) لضمان تطابق أنواع البيانات
+// تعريف واجهات البيانات (Interfaces) لضمان تطابق أنواع البيانات لضمان تطابق أنواع البيانات
 interface ExceptionalIncome {
     id?: string;
     date: string;
@@ -137,15 +137,8 @@ export default function ExceptionalIncomePage() {
             
             // Fix: Include current time
             const now = new Date();
-            const selectedDate = new Date(data.date);
-            const finalDate = new Date(
-                selectedDate.getFullYear(),
-                selectedDate.getMonth(),
-                selectedDate.getDate(),
-                now.getHours(),
-                now.getMinutes(),
-                now.getSeconds()
-            );
+            const [year, month, day] = data.date.split('-').map(Number);
+            const finalDate = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds());
 
             const newIncome: ExceptionalIncome = {
                 ...data,

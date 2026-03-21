@@ -334,15 +334,8 @@ export default function CustomerPaymentsPage() {
             
             // Fix: Include current time to ensure proper chronological order
             const now = new Date();
-            const selectedDate = new Date(data.date);
-            const finalDate = new Date(
-                selectedDate.getFullYear(),
-                selectedDate.getMonth(),
-                selectedDate.getDate(),
-                now.getHours(),
-                now.getMinutes(),
-                now.getSeconds()
-            );
+            const [year, month, day] = data.date.split('-').map(Number);
+            const finalDate = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds());
 
             const newPayment: CustomerPayment = {
                 ...data,

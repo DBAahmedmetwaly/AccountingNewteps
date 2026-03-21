@@ -368,11 +368,13 @@ export default function SalesInvoicePage() {
                 }
             });
             
-            const date = new Date();
+            const now = new Date();
+            const [y, m, d] = invoiceDate.split('-').map(Number);
+            const finalInvoiceDate = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds());
 
             const invoiceData: any = {
                 invoiceNumber,
-                date: new Date(invoiceDate).toISOString(),
+                date: finalInvoiceDate.toISOString(),
                 customerId,
                 customerName,
                 warehouseId,

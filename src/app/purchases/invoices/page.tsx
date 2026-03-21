@@ -303,7 +303,7 @@ export default function PurchaseInvoicePage() {
 
   const handleAddItem = () => {
     if (!newItem.id || newItem.qty <= 0 || newItem.cost < 0) {
-        toast({ variant: "destructive", title: "خطأ", description: "يرجى اختيار صنف وإدخال كمية وتكلفة صالحة."});
+        toast({ variant: "destructive", title: "خطأ", description: "يرجى اختيار صنف وإدخل كمية وتكلفة صالحة."});
         return;
     }
     
@@ -404,11 +404,8 @@ export default function PurchaseInvoicePage() {
         });
         
         const now = new Date();
-        const selectedDate = new Date(invoiceDate);
-        const finalInvoiceDate = new Date(
-            selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(),
-            now.getHours(), now.getMinutes(), now.getSeconds()
-        );
+        const [y, m, d] = invoiceDate.split('-').map(Number);
+        const finalInvoiceDate = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds());
 
         const batchNumberToSave = batchNumber || await getNextId('batch'); 
 
