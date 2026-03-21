@@ -70,10 +70,10 @@ export default function JournalPage() {
 
     const {
         salesInvoices, purchaseInvoices, expenses, exceptionalIncomes, warehouses,
-        stockTransferRecords: transfers, items: itemsData, cashAccounts,
-        treasuryTransactions: treasuryTxs, employeeAdvances, employees,
+        stockTransferRecords, items: itemsData, cashAccounts,
+        treasuryTransactions, employeeAdvances, employees,
         employeeAdjustments, salesReturns, purchaseReturns, customers,
-        suppliers, supplierPayments, customerPayments, stockOutRecords: stockOuts,
+        suppliers, supplierPayments, customerPayments, stockOutRecords,
         profitDistributions, partners, payrollRecords, stockInRecords,
         stockIssuesToReps, stockReturnsFromReps, stockAdjustmentRecords,
         deliveryStaff, fixedAssets, depreciationRecords, posSales, posReturns, loading
@@ -220,16 +220,16 @@ export default function JournalPage() {
         });
 
         // --- Treasury Transactions (Capital/Partners) ---
-        treasuryTxs.forEach((tx: any) => {
+        treasuryTransactions.forEach((tx: any) => {
             const number = tx.receiptNumber || `ح-خ-${tx.id.slice(-4)}`;
             const accountName = getCashAccountName(tx.accountId);
             if (!tx.linkedTransaction) {
                 if (tx.type === 'deposit') {
-                    entries.push({ id: `trx-dep-debit-${tx.id}`, date: tx.date, number: number, description: `إيداع: ${tx.description}`, debit: tx.amount, credit: 0, account: accountName });
-                    entries.push({ id: `trx-dep-credit-${tx.id}`, date: tx.date, number: number, description: `إيداع رأس مال: ${tx.description}`, debit: 0, credit: tx.amount, account: 'رأس المال' });
+                    entries.push({ id: `tx-dep-debit-${tx.id}`, date: tx.date, number: number, description: `إيداع: ${tx.description}`, debit: tx.amount, credit: 0, account: accountName });
+                    entries.push({ id: `tx-dep-credit-${tx.id}`, date: tx.date, number: number, description: `إيداع رأس مال: ${tx.description}`, debit: 0, credit: tx.amount, account: 'رأس المال' });
                 } else {
-                     entries.push({ id: `trx-wit-debit-${tx.id}`, date: tx.date, number: number, description: `سحب: ${tx.description}`, debit: tx.amount, credit: 0, account: 'مسحوبات الشركاء' });
-                     entries.push({ id: `trx-wit-credit-${tx.id}`, date: tx.date, number: number, description: `سحب نقدي: ${tx.description}`, debit: 0, credit: tx.amount, account: accountName });
+                     entries.push({ id: `tx-wit-debit-${tx.id}`, date: tx.date, number: number, description: `سحب: ${tx.description}`, debit: tx.amount, credit: 0, account: 'مسحوبات الشركاء' });
+                     entries.push({ id: `tx-wit-credit-${tx.id}`, date: tx.date, number: number, description: `سحب نقدي: ${tx.description}`, debit: 0, credit: tx.amount, account: accountName });
                 }
             }
         });
@@ -311,7 +311,7 @@ export default function JournalPage() {
         });
 
         return entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [salesInvoices, posSales, salesReturns, posReturns, purchaseInvoices, purchaseReturns, expenses, exceptionalIncomes, treasuryTxs, customerPayments, supplierPayments, payrollRecords, profitDistributions, stockTransferRecords, stockAdjustmentRecords, depreciationRecords, warehouses, employees, customers, suppliers, partners, itemsMap, fixedAssets]);
+    }, [salesInvoices, posSales, salesReturns, posReturns, purchaseInvoices, purchaseReturns, expenses, exceptionalIncomes, treasuryTransactions, customerPayments, supplierPayments, payrollRecords, profitDistributions, stockTransferRecords, stockAdjustmentRecords, depreciationRecords, warehouses, employees, customers, suppliers, partners, itemsMap, fixedAssets, users]);
 
     const uniqueAccounts = useMemo(() => {
         const accs = new Set<string>();
