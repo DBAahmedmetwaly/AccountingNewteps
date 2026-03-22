@@ -15,7 +15,8 @@ import {
   AreaChart, 
   Tooltip,
   ResponsiveContainer,
-  Legend
+  Legend,
+  LabelList
 } from "recharts";
 import { useData } from "@/contexts/data-provider";
 import {
@@ -38,6 +39,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 // Chart configuration for colors and labels
 const chartConfig = {
