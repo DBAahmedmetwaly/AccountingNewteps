@@ -1,5 +1,4 @@
 
-
 // src/lib/dictionary.ts
 
 export const dictionary = {
@@ -156,7 +155,7 @@ export const dictionary = {
     priceChangeLog: 'سجل تغييرات الأسعار',
     itemExpiryReport: 'تقرير قرب انتهاء الصلاحية',
     financialAndAccountsReports: 'تقارير مالية وحسابات',
-    customerReceivables: 'مستحقات العملاء',
+    customerReceivables: 'مستحقات لدى العملاء',
     supplierPayables: 'مستحقات الموردين',
     supplierStatement: 'كشف حساب الموردين',
     cashAccountStatement: 'كشف حساب الخزينة',

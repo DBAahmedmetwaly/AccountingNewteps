@@ -20,7 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useData } from "@/contexts/data-provider";
-import { Loader2, Building2, Search } from "lucide-react";
+import { Loader2, Building2, Search, Save, Wallet } from "lucide-react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, LabelList } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -31,6 +31,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 // Data Interfaces
 interface Supplier {
@@ -43,20 +44,29 @@ interface Supplier {
 interface PurchaseInvoice { id: string; supplierId: string; total: number; paidAmount?: number; }
 interface SupplierPayment { id: string; supplierId: string; amount: number; invoiceId?: string; }
 interface PurchaseReturn { id: string; supplierId: string; total: number; paidAmount?: number; }
-interface CashAccount { id: string; name: string; }
+interface CashAccount { id: string; name: string; userId?: string; salesRepId?: string; }
 
 const QuickPaymentDialog = ({ supplier, onSave }: { supplier: any, onSave: () => void }) => {
-    const { cashAccounts, dbAction, getNextId } = useData();
+    const { cashAccounts, dbAction, getNextId, warehouses } = useData();
     const { user } = useAuth();
     const { toast } = useToast();
-    const [amount, setAmount] = useState(supplier.currentBalance);
+    const [amount, setAmount] = useState(supplier.currentBalance > 0 ? supplier.currentBalance : 0);
     const [paidFromAccountId, setPaidFromAccountId] = useState('');
+    const [notes, setNotes] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
 
     const cashAccountOptions = useMemo(() => {
-        return cashAccounts.filter((acc: CashAccount) => !(acc as any).warehouseId).map((acc: CashAccount) => ({ value: acc.id, label: acc.name }));
-    }, [cashAccounts]);
+        return cashAccounts
+            .filter((acc: any) => !acc.userId && !acc.salesRepId) // استبعاد عهد المناديب
+            .map((acc: any) => {
+                const warehouse = warehouses.find(w => w.id === acc.warehouseId);
+                return { 
+                    value: acc.id, 
+                    label: warehouse ? `${acc.name} (${warehouse.name})` : acc.name 
+                };
+            });
+    }, [cashAccounts, warehouses]);
 
     const handleSavePayment = async () => {
         if (!amount || amount <= 0 || !paidFromAccountId) {
@@ -66,18 +76,22 @@ const QuickPaymentDialog = ({ supplier, onSave }: { supplier: any, onSave: () =>
         setIsSaving(true);
         try {
             const receiptNumber = `س-م-${await getNextId('supplierPayment')}`;
+            
+            // تسجيل بالوقت الحالي الفعلي
+            const now = new Date();
+
             const newPayment = {
-                date: new Date().toISOString(),
+                date: now.toISOString(),
                 amount: Number(amount),
                 supplierId: supplier.id,
                 paidFromAccountId,
-                notes: `دفعة سريعة من تقرير المستحقات`,
+                notes: notes || `سداد سريع من تقرير مستحقات الموردين`,
                 receiptNumber,
                 createdById: user?.id,
                 createdByName: user?.name,
             };
             await dbAction('supplierPayments', 'add', newPayment);
-            toast({ title: 'تم الحفظ بنجاح', description: `تم سداد دفعة للمورد ${supplier.name}` });
+            toast({ title: 'تم الحفظ بنجاح', description: `تم سداد دفعة للمورد ${supplier.name} برقم: ${receiptNumber}` });
             onSave();
             setIsOpen(false);
         } catch (error) {
@@ -92,30 +106,41 @@ const QuickPaymentDialog = ({ supplier, onSave }: { supplier: any, onSave: () =>
             <DialogTrigger asChild>
                 <Button size="sm" variant="outline">سداد دفعة</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-xl">
                 <DialogHeader>
-                    <DialogTitle>تسجيل دفعة سريعة للمورد: {supplier.name}</DialogTitle>
+                    <DialogTitle>تسجيل سداد دفعة: {supplier.name}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="amount">المبلغ المدفوع</Label>
-                        <Input id="amount" type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="text-lg font-bold" />
+                    <div className="bg-muted p-4 rounded-lg flex justify-between items-center border">
+                        <span className="text-sm font-semibold">المستحق للمورد:</span>
+                        <span className="text-xl font-bold text-destructive">{supplier.currentBalance.toLocaleString()} ج.م</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="amount">المبلغ المدفوع</Label>
+                            <Input id="amount" type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="text-lg font-bold" onFocus={e => e.target.select()} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="account">خصم من (الخزينة/البنك)</Label>
+                            <Combobox
+                                options={cashAccountOptions}
+                                value={paidFromAccountId}
+                                onValueChange={setPaidFromAccountId}
+                                placeholder="اختر حساب الصرف..."
+                                emptyMessage="لا يوجد خزائن متاحة."
+                            />
+                        </div>
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="account">دفع من حساب</Label>
-                        <Combobox
-                            options={cashAccountOptions}
-                            value={paidFromAccountId}
-                            onValueChange={setPaidFromAccountId}
-                            placeholder="اختر حساب الدفع..."
-                            emptyMessage="لم يتم العثور على حساب."
-                        />
+                        <Label htmlFor="notes">ملاحظات</Label>
+                        <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="أدخل أي ملاحظات إضافية..." />
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button onClick={handleSavePayment} disabled={isSaving}>
-                        {isSaving && <Loader2 className="animate-spin ml-2 h-4 w-4" />}
-                        حفظ الدفعة
+                    <Button variant="ghost" onClick={() => setIsOpen(false)}>إلغاء</Button>
+                    <Button onClick={handleSavePayment} disabled={isSaving || !paidFromAccountId || amount <= 0}>
+                        {isSaving ? <Loader2 className="animate-spin ml-2 h-4 w-4" /> : <Save className="ml-2 h-4 w-4" />}
+                        تأكيد وحفظ السداد
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -188,7 +213,7 @@ export default function SupplierPayablesReport() {
             <div className="flex-1 flex flex-col gap-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">إجمالي المستحقات</CardTitle>
+                        <CardTitle className="text-sm font-medium">إجمالي المستحقات للموردين</CardTitle>
                         <Building2 className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
