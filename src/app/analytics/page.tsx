@@ -32,10 +32,9 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import PageHeader from "@/components/page-header";
-import { Loader2, TrendingUp, DollarSign, ShoppingBag, Percent, Filter, Calendar, CreditCard, Wallet, PieChart } from "lucide-react";
+import { Loader2, TrendingUp, DollarSign, ShoppingBag, Percent, Filter, Calendar, CreditCard, Wallet, PieChart, Users2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -57,6 +56,10 @@ const chartConfig = {
   revenue: {
     label: "الإيراد",
     color: "hsl(var(--primary))",
+  },
+  rep: {
+    label: "مبيعات المندوب",
+    color: "hsl(var(--chart-4))",
   }
 };
 
@@ -67,13 +70,14 @@ export default function AnalyticsPage() {
     const { 
         items, salesInvoices, purchaseInvoices, warehouses, 
         expenses, posSales, salesReturns, posReturns, 
-        exceptionalIncomes, loading 
+        exceptionalIncomes, users, loading 
     } = allDataContext;
     
     const isMobile = useIsMobile();
 
+    // Default to last 5 months
     const [dateRange, setDateRange] = useState({
-      from: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0],
+      from: new Date(new Date().setMonth(new Date().getMonth() - 5)).toISOString().split('T')[0],
       to: new Date().toISOString().split('T')[0]
     });
     const [selectedWarehouse, setSelectedWarehouse] = useState('all');
@@ -121,6 +125,8 @@ export default function AnalyticsPage() {
         let cashSales = 0;
         let creditSales = 0;
 
+        const repSalesMap = new Map<string, number>();
+
         filteredSales.forEach(sale => {
             const dateKey = new Date(sale.date).toISOString().split('T')[0];
             const current = dailyDataMap.get(dateKey) || { date: dateKey, sales: 0, profit: 0, expenses: 0 };
@@ -139,6 +145,11 @@ export default function AnalyticsPage() {
             const paid = sale.paidAmount || 0;
             cashSales += paid;
             creditSales += (sale.total - paid);
+
+            // Rep Performance (only for standard invoices usually)
+            if (sale.salesRepId) {
+                repSalesMap.set(sale.salesRepId, (repSalesMap.get(sale.salesRepId) || 0) + saleRevenue);
+            }
 
             dailyDataMap.set(dateKey, current);
         });
@@ -202,6 +213,14 @@ export default function AnalyticsPage() {
             }
         });
 
+        const repPerformance = Array.from(repSalesMap.entries()).map(([repId, amount]) => {
+            const user = users.find(u => u.id === repId);
+            return {
+                name: user?.name || "مندوب غير معروف",
+                amount
+            };
+        }).sort((a,b) => b.amount - a.amount);
+
         return {
             kpis: {
                 totalRevenue,
@@ -225,9 +244,10 @@ export default function AnalyticsPage() {
             warehouseData: warehouses.map(w => ({
                 name: w.name,
                 sales: filteredSales.filter(s => s.warehouseId === w.id).reduce((sum, s) => sum + s.total, 0)
-            })).sort((a,b) => b.sales - a.sales)
+            })).sort((a,b) => b.sales - a.sales),
+            repPerformance
         };
-    }, [loading, dateRange, selectedWarehouse, salesInvoices, posSales, salesReturns, posReturns, expenses, exceptionalIncomes, items, warehouses, calculateItemCost]);
+    }, [loading, dateRange, selectedWarehouse, salesInvoices, posSales, salesReturns, posReturns, expenses, exceptionalIncomes, items, warehouses, users, calculateItemCost]);
 
     if (loading || !analytics) {
         return (
@@ -247,7 +267,7 @@ export default function AnalyticsPage() {
                 
                 <Card className="shadow-sm border-primary/10">
                     <CardContent className="p-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                             <div className="space-y-2">
                                 <Label className="flex items-center gap-2"><Calendar className="h-4 w-4"/> من تاريخ</Label>
                                 <Input type="date" value={dateRange.from} onChange={(e) => setDateRange(prev => ({...prev, from: e.target.value}))} />
@@ -266,7 +286,6 @@ export default function AnalyticsPage() {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <Button className="w-full bg-primary hover:bg-primary/90">تحديث البيانات</Button>
                         </div>
                     </CardContent>
                 </Card>
@@ -278,7 +297,7 @@ export default function AnalyticsPage() {
                             <DollarSign className="h-4 w-4 text-primary" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-black">{analytics.kpis.totalRevenue.toLocaleString()} ج.م</div>
+                            <div className="text-2xl font-bold tracking-tight">{analytics.kpis.totalRevenue.toLocaleString()} ج.م</div>
                             <p className="text-[10px] text-muted-foreground mt-1">إجمالي الفواتير الصافية</p>
                         </CardContent>
                     </Card>
@@ -288,7 +307,7 @@ export default function AnalyticsPage() {
                             <TrendingUp className="h-4 w-4 text-green-600" />
                         </CardHeader>
                         <CardContent>
-                            <div className={cn("text-2xl font-black", analytics.kpis.netProfit >= 0 ? "text-green-600" : "text-destructive")}>
+                            <div className={cn("text-2xl font-bold tracking-tight", analytics.kpis.netProfit >= 0 ? "text-green-600" : "text-destructive")}>
                                 {analytics.kpis.netProfit.toLocaleString()} ج.م
                             </div>
                             <p className="text-[10px] text-muted-foreground mt-1">بعد خصم التكلفة والمصروفات</p>
@@ -300,7 +319,7 @@ export default function AnalyticsPage() {
                             <CreditCard className="h-4 w-4 text-amber-600" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-black text-amber-600">{analytics.kpis.debtRatio.toFixed(1)}%</div>
+                            <div className="text-2xl font-bold tracking-tight text-amber-600">{analytics.kpis.debtRatio.toFixed(1)}%</div>
                             <p className="text-[10px] text-muted-foreground mt-1">نسبة المديونية من إجمالي المبيعات</p>
                         </CardContent>
                     </Card>
@@ -310,7 +329,7 @@ export default function AnalyticsPage() {
                             <Percent className="h-4 w-4 text-blue-600" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-black text-blue-600">{analytics.kpis.grossMargin.toFixed(1)}%</div>
+                            <div className="text-2xl font-bold tracking-tight text-blue-600">{analytics.kpis.grossMargin.toFixed(1)}%</div>
                             <p className="text-[10px] text-muted-foreground mt-1">من إجمالي قيمة المبيعات</p>
                         </CardContent>
                     </Card>
@@ -318,7 +337,7 @@ export default function AnalyticsPage() {
 
                 <Card className="shadow-md">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><TrendingUp className="text-primary"/> اتجاهات المبيعات والأرباح</CardTitle>
+                        <CardTitle className="flex items-center gap-2"><TrendingUp className="text-primary h-5 w-5"/> اتجاهات المبيعات والأرباح</CardTitle>
                         <CardDescription>مقارنة النشاط اليومي مقابل المصروفات.</CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -350,18 +369,18 @@ export default function AnalyticsPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <Card className="shadow-md">
                         <CardHeader>
-                            <CardTitle>الأصناف الأكثر تحقيقاً للربح الصافي</CardTitle>
-                            <CardDescription>أفضل 8 أصناف من حيث الربحية بعد خصم التكاليف.</CardDescription>
+                            <CardTitle className="flex items-center gap-2"><Users2 className="text-primary h-5 w-5"/> أداء المناديب</CardTitle>
+                            <CardDescription>إجمالي المبيعات المحققة لكل مندوب.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <ChartContainer config={chartConfig} className="h-[350px] w-full">
-                                <RechartsBarChart data={analytics.topItemsByProfit} layout="vertical" margin={{ left: -20, right: 40 }}>
+                                <RechartsBarChart data={analytics.repPerformance} layout="vertical" margin={{ left: isMobile ? -20 : 10, right: 40 }}>
                                     <CartesianGrid horizontal={false} opacity={0.2} />
                                     <XAxis type="number" hide />
-                                    <YAxis dataKey="name" type="category" width={120} tickLine={false} axisLine={false} fontSize={11} />
+                                    <YAxis dataKey="name" type="category" width={isMobile ? 0 : 120} tickLine={false} axisLine={false} fontSize={11} tick={!isMobile} />
                                     <ChartTooltip content={<ChartTooltipContent />} />
-                                    <Bar dataKey="profit" name="الربح" fill="var(--color-profit)" radius={[0, 4, 4, 0]}>
-                                        <LabelList dataKey="profit" position="right" fontSize={10} formatter={(v: number) => v.toLocaleString()} />
+                                    <Bar dataKey="amount" name="المبيعات" fill="var(--color-rep)" radius={[0, 4, 4, 0]}>
+                                        <LabelList dataKey="amount" position="right" fontSize={10} formatter={(v: number) => v.toLocaleString()} />
                                     </Bar>
                                 </RechartsBarChart>
                             </ChartContainer>
@@ -370,11 +389,33 @@ export default function AnalyticsPage() {
 
                     <Card className="shadow-md">
                         <CardHeader>
+                            <CardTitle>الأصناف الأكثر تحقيقاً للربح الصافي</CardTitle>
+                            <CardDescription>أفضل 8 أصناف من حيث الربحية بعد خصم التكاليف.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <ChartContainer config={chartConfig} className="h-[350px] w-full">
+                                <RechartsBarChart data={analytics.topItemsByProfit} layout="vertical" margin={{ left: isMobile ? -20 : 10, right: 40 }}>
+                                    <CartesianGrid horizontal={false} opacity={0.2} />
+                                    <XAxis type="number" hide />
+                                    <YAxis dataKey="name" type="category" width={isMobile ? 0 : 120} tickLine={false} axisLine={false} fontSize={11} tick={!isMobile} />
+                                    <ChartTooltip content={<ChartTooltipContent />} />
+                                    <Bar dataKey="profit" name="الربح" fill="var(--color-profit)" radius={[0, 4, 4, 0]}>
+                                        <LabelList dataKey="profit" position="right" fontSize={10} formatter={(v: number) => v.toLocaleString()} />
+                                    </Bar>
+                                </RechartsBarChart>
+                            </ChartContainer>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card className="shadow-md flex flex-col">
+                        <CardHeader>
                             <CardTitle className="flex items-center gap-2"><PieChart className="text-destructive h-5 w-5" /> توزيع المصروفات</CardTitle>
                             <CardDescription>تحليل المصروفات التشغيلية حسب التصنيف.</CardDescription>
                         </CardHeader>
-                        <CardContent className="flex items-center justify-center">
-                            <div className="h-[350px] w-full">
+                        <CardContent className="flex-1 flex items-center justify-center p-0 pb-6">
+                            <div className="h-[300px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <RechartsPieChart>
                                         <Pie
@@ -383,27 +424,27 @@ export default function AnalyticsPage() {
                                             outerRadius={100}
                                             paddingAngle={5}
                                             dataKey="value"
+                                            cx="50%"
+                                            cy="50%"
                                         >
                                             {analytics.expensesByType.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
                                             ))}
                                         </Pie>
                                         <Tooltip formatter={(val: number) => val.toLocaleString() + " ج.م"} />
-                                        <Legend layout="vertical" align="right" verticalAlign="middle" />
+                                        <Legend verticalAlign="bottom" height={36}/>
                                     </RechartsPieChart>
                                 </ResponsiveContainer>
                             </div>
                         </CardContent>
                     </Card>
-                </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <Card className="shadow-md">
+                    <Card className="shadow-md flex flex-col">
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><Wallet className="text-primary h-5 w-5" /> جودة المبيعات (نقدي vs آجل)</CardTitle>
+                            <CardTitle className="flex items-center gap-2"><Wallet className="text-primary h-5 w-5" /> جودة المبيعات (نقد مقابل ديون)</CardTitle>
                             <CardDescription>نسبة المبالغ المحصلة فعلياً مقابل المديونيات.</CardDescription>
                         </CardHeader>
-                        <CardContent className="flex items-center justify-center">
+                        <CardContent className="flex-1 flex items-center justify-center p-0 pb-6">
                             <div className="h-[300px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <RechartsPieChart>
@@ -413,44 +454,46 @@ export default function AnalyticsPage() {
                                             outerRadius={100}
                                             dataKey="value"
                                             label={({name, percent}) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                            cx="50%"
+                                            cy="50%"
                                         >
-                                            <Cell fill="#10b981" />
-                                            <Cell fill="#ef4444" />
+                                            <Cell fill="#10b981" stroke="none" />
+                                            <Cell fill="#ef4444" stroke="none" />
                                         </Pie>
                                         <Tooltip formatter={(val: number) => val.toLocaleString() + " ج.م"} />
-                                        <Legend verticalAlign="bottom" />
+                                        <Legend verticalAlign="bottom" height={36}/>
                                     </RechartsPieChart>
                                 </ResponsiveContainer>
                             </div>
                         </CardContent>
                     </Card>
-
-                    <Card className="shadow-md">
-                        <CardHeader>
-                            <CardTitle>أداء المبيعات حسب الفرع</CardTitle>
-                            <CardDescription>مقارنة حجم المبيعات بين الفروع المختلفة.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-6 pt-4">
-                                {analytics.warehouseData.map((w, idx) => (
-                                    <div key={idx} className="space-y-2">
-                                        <div className="flex justify-between text-sm">
-                                            <span className="font-semibold">{w.name}</span>
-                                            <span className="font-mono">{w.sales.toLocaleString()} ج.م</span>
-                                        </div>
-                                        <div className="h-3 w-full bg-muted rounded-full overflow-hidden border">
-                                            <div 
-                                                className="h-full bg-primary transition-all duration-500" 
-                                                style={{ width: `${(w.sales / (analytics.kpis.totalRevenue || 1)) * 100}%` }}
-                                            />
-                                        </div>
-                                    </div>
-                                ))}
-                                {analytics.warehouseData.length === 0 && <p className="text-center text-muted-foreground py-4">لا توجد بيانات فروع.</p>}
-                            </div>
-                        </CardContent>
-                    </Card>
                 </div>
+
+                <Card className="shadow-md">
+                    <CardHeader>
+                        <CardTitle>أداء المبيعات حسب الفرع</CardTitle>
+                        <CardDescription>مقارنة حجم المبيعات بين الفروع المختلفة.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-6 pt-4">
+                            {analytics.warehouseData.map((w, idx) => (
+                                <div key={idx} className="space-y-2">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="font-semibold">{w.name}</span>
+                                        <span className="font-mono">{w.sales.toLocaleString()} ج.م</span>
+                                    </div>
+                                    <div className="h-3 w-full bg-muted rounded-full overflow-hidden border">
+                                        <div 
+                                            className="h-full bg-primary transition-all duration-500" 
+                                            style={{ width: `${(w.sales / (analytics.kpis.totalRevenue || 1)) * 100}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                            {analytics.warehouseData.length === 0 && <p className="text-center text-muted-foreground py-4">لا توجد بيانات فروع.</p>}
+                        </div>
+                    </CardContent>
+                </Card>
             </main>
         </>
     );
