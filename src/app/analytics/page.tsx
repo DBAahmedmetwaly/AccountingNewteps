@@ -126,6 +126,7 @@ export default function AnalyticsPage() {
         let creditSales = 0;
 
         const repSalesMap = new Map<string, number>();
+        const itemStats = new Map<string, { name: string, qty: number, revenue: number, profit: number }>();
 
         filteredSales.forEach(sale => {
             const dateKey = new Date(sale.date).toISOString().split('T')[0];
@@ -134,7 +135,18 @@ export default function AnalyticsPage() {
             const saleRevenue = sale.total;
             const saleCOGS = sale.items?.reduce((sum: number, si: any) => {
                 const master = items.find(i => i.id === si.id);
-                return sum + (si.qty * calculateItemCost(master, si));
+                const cost = calculateItemCost(master, si);
+                
+                // Track per-item stats
+                if (master) {
+                    const stats = itemStats.get(si.id) || { name: master.name, qty: 0, revenue: 0, profit: 0 };
+                    stats.qty += si.qty;
+                    stats.revenue += si.qty * si.price;
+                    stats.profit += (si.qty * si.price) - (si.qty * cost);
+                    itemStats.set(si.id, stats);
+                }
+
+                return sum + (si.qty * cost);
             }, 0) || 0;
 
             current.sales += saleRevenue;
@@ -161,7 +173,18 @@ export default function AnalyticsPage() {
             const retValue = ret.total;
             const retCOGS = ret.items?.reduce((sum: number, ri: any) => {
                 const master = items.find(i => i.id === ri.id);
-                return sum + (ri.qty * calculateItemCost(master, ri));
+                const cost = calculateItemCost(master, ri);
+
+                // Track per-item stats (reduce from stats)
+                if (master) {
+                    const stats = itemStats.get(ri.id) || { name: master.name, qty: 0, revenue: 0, profit: 0 };
+                    stats.qty -= ri.qty;
+                    stats.revenue -= ri.qty * ri.price;
+                    stats.profit -= (ri.qty * ri.price) - (ri.qty * cost);
+                    itemStats.set(ri.id, stats);
+                }
+
+                return sum + (ri.qty * cost);
             }, 0) || 0;
 
             current.sales -= retValue;
@@ -187,20 +210,6 @@ export default function AnalyticsPage() {
         const totalExtraIncome = filteredIncome.reduce((sum, i) => sum + i.amount, 0);
         const netProfit = (totalRevenue - totalCOGS) - totalExpAmount + totalExtraIncome;
         const grossMargin = totalRevenue > 0 ? ((totalRevenue - totalCOGS) / totalRevenue) * 100 : 0;
-
-        const itemStats = new Map<string, { name: string, qty: number, revenue: number, profit: number }>();
-        filteredSales.forEach(sale => {
-            sale.items?.forEach((si: any) => {
-                const master = items.find(i => i.id === si.id);
-                if (!master) return;
-                const stats = itemStats.get(si.id) || { name: master.name, qty: 0, revenue: 0, profit: 0 };
-                const cost = calculateItemCost(master, si);
-                stats.qty += si.qty;
-                stats.revenue += si.qty * si.price;
-                stats.profit += (si.qty * si.price) - (si.qty * cost);
-                itemStats.set(si.id, stats);
-            });
-        });
 
         const paymentStats = new Map<string, number>();
         filteredSales.forEach(sale => {
@@ -234,7 +243,7 @@ export default function AnalyticsPage() {
                 ...d,
                 date: new Date(d.date).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' })
             })),
-            topItemsByProfit: Array.from(itemStats.values()).sort((a,b) => b.profit - a.profit).slice(0, 8),
+            itemProfitLossData: Array.from(itemStats.values()).sort((a,b) => b.profit - a.profit).slice(0, 15),
             expensesByType: Array.from(expensesByTypeMap.entries()).map(([name, value]) => ({ name, value })),
             paymentData: Array.from(paymentStats.entries()).map(([name, value]) => ({ name, value })),
             debtData: [
@@ -389,17 +398,20 @@ export default function AnalyticsPage() {
 
                     <Card className="shadow-md">
                         <CardHeader>
-                            <CardTitle>الأصناف الأكثر تحقيقاً للربح الصافي</CardTitle>
-                            <CardDescription>أفضل 8 أصناف من حيث الربحية بعد خصم التكاليف.</CardDescription>
+                            <CardTitle>تقرير أرباح وخسائر الأصناف</CardTitle>
+                            <CardDescription>تحليل صافي الربح لكل صنف (المبيعات مطروحاً منها التكلفة والمرتجعات).</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <ChartContainer config={chartConfig} className="h-[350px] w-full">
-                                <RechartsBarChart data={analytics.topItemsByProfit} layout="vertical" margin={{ left: isMobile ? -20 : 10, right: 40 }}>
+                                <RechartsBarChart data={analytics.itemProfitLossData} layout="vertical" margin={{ left: isMobile ? -20 : 10, right: 40 }}>
                                     <CartesianGrid horizontal={false} opacity={0.2} />
                                     <XAxis type="number" hide />
                                     <YAxis dataKey="name" type="category" width={isMobile ? 0 : 120} tickLine={false} axisLine={false} fontSize={11} tick={!isMobile} />
                                     <ChartTooltip content={<ChartTooltipContent />} />
-                                    <Bar dataKey="profit" name="الربح" fill="var(--color-profit)" radius={[0, 4, 4, 0]}>
+                                    <Bar dataKey="profit" name="صافي الربح" radius={[0, 4, 4, 0]}>
+                                        {analytics.itemProfitLossData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.profit >= 0 ? "#10b981" : "#ef4444"} />
+                                        ))}
                                         <LabelList dataKey="profit" position="right" fontSize={10} formatter={(v: number) => v.toLocaleString()} />
                                     </Bar>
                                 </RechartsBarChart>
