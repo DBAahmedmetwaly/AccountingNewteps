@@ -54,6 +54,10 @@ const chartConfig = {
   expenses: {
     label: "المصروفات",
     color: "hsl(var(--destructive))",
+  },
+  revenue: {
+    label: "الإيراد",
+    color: "hsl(var(--primary))",
   }
 };
 
@@ -62,9 +66,8 @@ const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"
 export default function AnalyticsPage() {
     const allDataContext = useData();
     const { 
-        items, salesInvoices, purchaseInvoices, suppliers, warehouses, 
-        customers, expenses, users, posSales, customerPayments, 
-        supplierPayments, salesReturns, purchaseReturns, posReturns, 
+        items, salesInvoices, purchaseInvoices, warehouses, 
+        expenses, posSales, salesReturns, posReturns, 
         exceptionalIncomes, loading 
     } = allDataContext;
     
@@ -322,30 +325,28 @@ export default function AnalyticsPage() {
                         <CardDescription>يوضح الرسم البياني حجم النشاط اليومي مقارنة بالمصروفات والأرباح.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="h-[350px] w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={analytics.trendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                    <defs>
-                                        <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.1}/>
-                                            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
-                                        </linearGradient>
-                                        <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
-                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
-                                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={10} fontSize={12} />
-                                    <YAxis tickLine={false} axisLine={false} fontSize={12} tickFormatter={(val) => val.toLocaleString()} />
-                                    <Tooltip content={<ChartTooltipContent />} />
-                                    <Legend verticalAlign="top" height={36}/>
-                                    <Area type="monotone" dataKey="sales" name="المبيعات" stroke="hsl(var(--primary))" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
-                                    <Area type="monotone" dataKey="profit" name="الأرباح" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorProfit)" />
-                                    <Area type="monotone" dataKey="expenses" name="المصروفات" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" fill="none" />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
+                        <ChartContainer config={chartConfig} className="h-[350px] w-full">
+                            <AreaChart data={analytics.trendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="var(--color-sales)" stopOpacity={0.1}/>
+                                        <stop offset="95%" stopColor="var(--color-sales)" stopOpacity={0}/>
+                                    </linearGradient>
+                                    <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="var(--color-profit)" stopOpacity={0.1}/>
+                                        <stop offset="95%" stopColor="var(--color-profit)" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                                <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={10} fontSize={12} />
+                                <YAxis tickLine={false} axisLine={false} fontSize={12} tickFormatter={(val) => val.toLocaleString()} />
+                                <ChartTooltip content={<ChartTooltipContent />} />
+                                <Legend verticalAlign="top" height={36}/>
+                                <Area type="monotone" dataKey="sales" name="المبيعات" stroke="var(--color-sales)" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
+                                <Area type="monotone" dataKey="profit" name="الأرباح" stroke="var(--color-profit)" strokeWidth={3} fillOpacity={1} fill="url(#colorProfit)" />
+                                <Area type="monotone" dataKey="expenses" name="المصروفات" stroke="var(--color-expenses)" strokeWidth={2} strokeDasharray="5 5" fill="none" />
+                            </AreaChart>
+                        </ChartContainer>
                     </CardContent>
                 </Card>
 
@@ -357,19 +358,17 @@ export default function AnalyticsPage() {
                             <CardDescription>أعلى 10 أصناف مبيعاً من حيث القيمة المالية.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="h-[350px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <RechartsBarChart data={analytics.topItems} layout="vertical" margin={{ left: -20, right: 40 }}>
-                                        <CartesianGrid horizontal={false} opacity={0.2} />
-                                        <XAxis type="number" hide />
-                                        <YAxis dataKey="name" type="category" width={120} tickLine={false} axisLine={false} fontSize={11} />
-                                        <Tooltip content={<ChartTooltipContent />} />
-                                        <Bar dataKey="revenue" name="الإيراد" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]}>
-                                            <LabelList dataKey="revenue" position="right" fontSize={10} formatter={(v: number) => v.toLocaleString()} />
-                                        </Bar>
-                                    </RechartsBarChart>
-                                </ResponsiveContainer>
-                            </div>
+                            <ChartContainer config={chartConfig} className="h-[350px] w-full">
+                                <RechartsBarChart data={analytics.topItems} layout="vertical" margin={{ left: -20, right: 40 }}>
+                                    <CartesianGrid horizontal={false} opacity={0.2} />
+                                    <XAxis type="number" hide />
+                                    <YAxis dataKey="name" type="category" width={120} tickLine={false} axisLine={false} fontSize={11} />
+                                    <Tooltip content={<ChartTooltipContent />} />
+                                    <Bar dataKey="revenue" name="الإيراد" fill="var(--color-revenue)" radius={[0, 4, 4, 0]}>
+                                        <LabelList dataKey="revenue" position="right" fontSize={10} formatter={(v: number) => v.toLocaleString()} />
+                                    </Bar>
+                                </RechartsBarChart>
+                            </ChartContainer>
                         </CardContent>
                     </Card>
 
