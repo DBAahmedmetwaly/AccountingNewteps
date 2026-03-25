@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import Barcode from 'react-barcode';
 
@@ -139,6 +138,11 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
 
   const canGenerateBarcode = (value: string) => /^[A-Za-z0-9\-]*$/.test(value);
 
+  // Calculate balances logic
+  const balanceAfter = customerBalance ?? 0;
+  const netDebtFromInvoice = (invoice?.total || 0) - (invoice?.paidAmount || 0);
+  const balanceBefore = balanceAfter - netDebtFromInvoice;
+
   return (
     <div style={receiptStyle} className="bg-white text-black printable-area">
       {showWatermark && !imgError && logoUrl && (
@@ -226,10 +230,16 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
         )}
         
         {!isPurchase && customerBalance !== undefined && (
-            <div style={{...totalsRowStyle, marginTop: '15px', borderTop: '2px double #000', paddingTop: '10px', color: '#000', fontWeight: 'bold', backgroundColor: 'rgba(249, 249, 249, 0.8)', padding: '10px' }}>
-                <span>إجمالي مديونية العميل المتبقية</span>
-                <span style={{color: '#d00'}}>{customerBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م</span>
-            </div>
+            <>
+                <div style={{...totalsRowStyle, marginTop: '15px', borderTop: '1px solid #eee', paddingTop: '5px', color: '#666', fontSize: '13px' }}>
+                    <span>المستحق على العميل سابقاً</span>
+                    <span>{balanceBefore.toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م</span>
+                </div>
+                <div style={{...totalsRowStyle, borderTop: '2px double #000', paddingTop: '10px', color: '#000', fontWeight: 'bold', backgroundColor: 'rgba(249, 249, 249, 0.8)', padding: '10px' }}>
+                    <span>إجمالي مديونية العميل (بعد الفاتورة)</span>
+                    <span style={{color: '#d00'}}>{balanceAfter.toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م</span>
+                </div>
+            </>
         )}
       </div>
 

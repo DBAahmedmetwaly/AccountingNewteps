@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState } from 'react';
@@ -137,6 +136,11 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
   const effectiveCompanyAddress = company?.companyAddress || "العنوان";
   const effectivePartyName = customer?.name || invoice?.customerName || "عميل نقدي";
 
+  // Calculate balances
+  const balanceAfter = customerBalance ?? 0;
+  const netDebtFromInvoice = totalAmount - paidAmount;
+  const balanceBefore = balanceAfter - netDebtFromInvoice;
+
   return (
     <div style={receiptStyle} className="bg-white text-black printable-area">
       {/* Watermark Rendering */}
@@ -207,10 +211,16 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
         <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between' }}><span>المدفوع:</span> <span>{paidAmount.toFixed(2)}</span></p>
         
         {customerBalance !== undefined && (
-            <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between', marginTop: '8px', paddingTop: '8px', borderTop: '2px double #000', fontWeight: 'bold', color: '#d00' }}>
-                <span>إجمالي مديونية العميل:</span>
-                <span>{customerBalance.toFixed(2)} ج.م</span>
-            </p>
+            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '2px double #000' }}>
+                <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#666' }}>
+                    <span>المستحق سابقاً:</span>
+                    <span>{balanceBefore.toFixed(2)}</span>
+                </p>
+                <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', color: '#d00', fontSize: '14px' }}>
+                    <span>إجمالي مديونية العميل:</span>
+                    <span>{balanceAfter.toFixed(2)} ج.م</span>
+                </p>
+            </div>
         )}
       </div>
 
