@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PlusCircle, Loader2, MoreHorizontal, FileText, Undo2, Printer, Eye, Truck, CheckCircle, MessageCircle, Image as ImageIcon, Search } from "lucide-react";
+import { PlusCircle, Loader2, MoreHorizontal, FileText, Undo2, Printer, FileSearch, Eye, Edit, CheckCircle, MessageCircle, Image as ImageIcon, Search } from "lucide-react";
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -42,7 +42,8 @@ import { toPng } from 'html-to-image';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { renderToString } from 'react-dom/server';
 
 interface SaleInvoice {
   id: string;
@@ -62,10 +63,38 @@ interface SaleInvoice {
   isLocked?: boolean;
 }
 
+const InvoiceItemsTable = ({ items }: { items: any[] }) => (
+    <div className="max-h-96 overflow-y-auto mt-4">
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>الصنف</TableHead>
+                    <TableHead>الباركود</TableHead>
+                    <TableHead className="text-center">الكمية</TableHead>
+                    <TableHead className="text-center">سعر الشراء</TableHead>
+                    <TableHead className="text-center">الإجمالي</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {items && items.map((item, idx) => (
+                    <TableRow key={idx}>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell className="font-mono text-xs">{item.code || 'N/A'}</TableCell>
+                        <TableCell className="text-center font-bold">{item.qty}</TableCell>
+                        <TableCell className="text-center">{item.price?.toLocaleString() || '-'}</TableCell>
+                        <TableCell className="text-center font-semibold">{item.total?.toLocaleString() || '-'}</TableCell>
+                    </TableRow>
+                ))}
+            </TableBody>
+        </Table>
+    </div>
+)
+
 export default function SalesInvoicesListPage() {
   const { salesInvoices: invoices, customers, warehouses, inventoryClosings, customerPayments, salesReturns, posSales, posReturns, settings, loading } = useData();
   const router = useRouter();
   const shareRef = useRef<HTMLDivElement>(null);
+  const printFrameRef = useRef<HTMLIFrameElement>(null);
   const { toast } = useToast();
   
   const [filters, setFilters] = useState({
@@ -93,8 +122,10 @@ export default function SalesInvoicesListPage() {
   useEffect(() => {
     const cleanup = () => {
         if (!printModal.open && !isSharing && !itemsModal.open) {
-            document.body.style.pointerEvents = 'auto';
-            document.body.style.overflow = 'auto';
+            if (typeof document !== 'undefined') {
+                document.body.style.pointerEvents = 'auto';
+                document.body.style.overflow = 'auto';
+            }
         }
     };
     cleanup();
@@ -183,7 +214,61 @@ export default function SalesInvoicesListPage() {
   };
 
   const handlePrint = () => {
-    setTimeout(() => window.print(), 100);
+    if (!printModal.invoice || !printFrameRef.current) return;
+
+    const invoice = printModal.invoice;
+    const customer = customers.find(c => c.id === invoice.customerId);
+    const warehouse = warehouses.find(w => w.id === invoice.warehouseId);
+    const balance = calculateCustomerBalance(invoice.customerId);
+
+    const printElement = printModal.type === 'A4' ? (
+        <InvoiceTemplate 
+            invoice={invoice} 
+            company={companySettings} 
+            customer={customer} 
+            customerBalance={balance}
+        />
+    ) : (
+        <PosReceipt 
+            invoice={invoice} 
+            company={companySettings} 
+            design={posReceiptDesign}
+            warehouse={warehouse}
+            customer={customer}
+            customerBalance={balance}
+        />
+    );
+
+    const htmlContent = renderToString(printElement);
+    const printDoc = printFrameRef.current.contentWindow?.document;
+
+    if (printDoc) {
+        printDoc.open();
+        printDoc.write(`
+            <html>
+                <head>
+                    <title>Invoice ${invoice.invoiceNumber}</title>
+                    <style>
+                        body { margin: 0; padding: 0; direction: rtl; }
+                        @media print {
+                            @page { margin: 0; size: auto; }
+                            body { margin: 0; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${htmlContent}
+                    <script>
+                        window.onload = function() {
+                            window.focus();
+                            window.print();
+                        };
+                    </script>
+                </body>
+            </html>
+        `);
+        printDoc.close();
+    }
   };
 
   const handleShareAsImage = async (invoice: SaleInvoice, type: 'A4' | 'Thermal') => {
@@ -233,13 +318,8 @@ export default function SalesInvoicesListPage() {
 
   return (
     <>
-      <PageHeader title="سجل فواتير البيع">
-        <Button size="sm" className="gap-1" onClick={() => router.push('/sales/invoices')}>
-          <PlusCircle className="h-4 w-4" />
-          إضافة فاتورة جديدة
-        </Button>
-      </PageHeader>
-      <main className="flex flex-1 flex-col gap-4 p-2 md:p-6">
+      <PageHeader title="سجل فواتير البيع" />
+      <main className="flex flex-1 flex-col gap-4 p-2 md:p-6 printable-area">
         <Card className="no-print">
             <CardHeader className="p-4"><CardTitle className="text-lg flex items-center gap-2"><Search className="h-4 w-4"/> فلاتر البحث</CardTitle></CardHeader>
             <CardContent className="p-4 pt-0">
@@ -267,7 +347,7 @@ export default function SalesInvoicesListPage() {
         <Card>
           <CardHeader className="p-4 md:p-6">
             <CardTitle className="text-xl">قائمة فواتير المبيعات</CardTitle>
-            <CardDescription>عرض وتتبع فواتير المبيعات مع خيارات الطباعة والمشاركة.</CardDescription>
+            <CardDescription>عرض وتتتبع فواتير المبيعات مع خيارات الطباعة والمشاركة.</CardDescription>
           </CardHeader>
           <CardContent className="p-0 md:p-6 md:pt-0">
             {loading || isSharing ? (
@@ -388,7 +468,6 @@ export default function SalesInvoicesListPage() {
                     <TableHeader>
                         <TableRow>
                             <TableHead>الصنف</TableHead>
-                            <TableHead className="text-center">الباركود</TableHead>
                             <TableHead className="text-center">الكمية</TableHead>
                             <TableHead className="text-center">السعر</TableHead>
                             <TableHead className="text-center">الإجمالي</TableHead>
@@ -398,7 +477,6 @@ export default function SalesInvoicesListPage() {
                         {itemsModal.items.map((item, idx) => (
                             <TableRow key={idx}>
                                 <TableCell className="font-medium">{item.name}</TableCell>
-                                <TableCell className="text-center font-mono text-xs">{item.code || '-'}</TableCell>
                                 <TableCell className="text-center font-bold">{item.qty}</TableCell>
                                 <TableCell className="text-center">{item.price?.toLocaleString() || '-'}</TableCell>
                                 <TableCell className="text-center font-semibold">{item.total?.toLocaleString() || '-'}</TableCell>
@@ -416,35 +494,43 @@ export default function SalesInvoicesListPage() {
                 <DialogTitle>طباعة الفاتورة {printModal.invoice?.invoiceNumber}</DialogTitle>
                 <DialogDescription>معاينة الفاتورة قبل الطباعة.</DialogDescription>
             </DialogHeader>
-            <ScrollArea className="flex-1 bg-white">
-                <div className="printable-area bg-white text-black p-4 flex justify-center">
-                    {printModal.invoice && (
-                        printModal.type === 'A4' ? (
-                            <InvoiceTemplate 
-                                invoice={printModal.invoice} 
-                                company={companySettings} 
-                                customer={customers.find(c => c.id === printModal.invoice!.customerId)} 
-                                customerBalance={calculateCustomerBalance(printModal.invoice!.customerId)}
-                            />
-                        ) : (
-                            <PosReceipt 
-                                invoice={printModal.invoice} 
-                                company={companySettings} 
-                                design={posReceiptDesign}
-                                warehouse={warehouses.find(w => w.id === printModal.invoice!.warehouseId)}
-                                customer={customers.find(c => c.id === printModal.invoice!.customerId)}
-                                customerBalance={calculateCustomerBalance(printModal.invoice!.customerId)}
-                            />
-                        )
-                    )}
-                </div>
-            </ScrollArea>
-            <DialogFooter className="p-4 border-t bg-muted/10 shrink-0 flex gap-2 sm:justify-end">
-                <Button variant="ghost" onClick={() => setPrintModal({ ...printModal, open: false })}>إإغلاق</Button>
-                <Button onClick={handlePrint} className="gap-2"><Printer className="h-4 w-4" />طباعة</Button>
+            <div className="flex-1 overflow-hidden">
+                <ScrollArea className="h-full w-full bg-muted/20">
+                    <div className="p-4 flex justify-center">
+                        <div className="bg-white shadow-2xl overflow-x-auto max-w-full rounded-sm border">
+                            {printModal.invoice && (
+                                printModal.type === 'A4' ? (
+                                    <InvoiceTemplate 
+                                        invoice={printModal.invoice} 
+                                        company={companySettings} 
+                                        customer={customers.find(c => c.id === printModal.invoice!.customerId)} 
+                                        customerBalance={calculateCustomerBalance(printModal.invoice!.customerId)}
+                                    />
+                                ) : (
+                                    <PosReceipt 
+                                        invoice={printModal.invoice} 
+                                        company={companySettings} 
+                                        design={posReceiptDesign}
+                                        warehouse={warehouses.find(w => w.id === printModal.invoice!.warehouseId)}
+                                        customer={customers.find(c => c.id === printModal.invoice!.customerId)}
+                                        customerBalance={calculateCustomerBalance(printModal.invoice!.customerId)}
+                                    />
+                                )
+                            )}
+                        </div>
+                    </div>
+                    <ScrollBar orientation="horizontal" />
+                    <ScrollBar orientation="vertical" />
+                </ScrollArea>
+            </div>
+            <DialogFooter className="p-4 border-t bg-background shrink-0 flex gap-2 sm:justify-end no-print">
+                <Button variant="ghost" onClick={() => setPrintModal({ ...printModal, open: false })}>إغلاق</Button>
+                <Button onClick={handlePrint} className="gap-2"><Printer className="h-4 w-4" />طباعة المستند</Button>
             </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <iframe ref={printFrameRef} style={{ position: 'fixed', width: 0, height: 0, border: 'none', pointerEvents: 'none' }} title="Print Frame"></iframe>
 
       <div style={{ position: 'fixed', top: '200vh', left: 0, zIndex: -100 }}>
           <div ref={shareRef} className="bg-white">
