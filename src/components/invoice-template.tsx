@@ -136,7 +136,10 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
   const effectiveCompanyName = company?.companyName || "اسم شركتك";
   const effectiveCompanyAddress = company?.companyAddress || "عنوان الشركة";
 
-  const canGenerateBarcode = (value: string) => /^[A-Za-z0-9\-]*$/.test(value);
+  const canGenerateBarcode = (value: string) => {
+    if (!value) return false;
+    return /^[\x00-\x7F]*$/.test(value);
+  };
 
   // Calculate balances logic
   const balanceAfter = customerBalance ?? 0;

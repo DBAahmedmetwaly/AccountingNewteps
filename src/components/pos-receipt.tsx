@@ -107,13 +107,20 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
   const items = invoice?.items || invoice?.cart || [];
   const totalAmount = Number(invoice?.total || 0);
   const paidAmount = Number(invoice?.paidAmount ?? totalAmount);
-  const remainingDue = Math.max(0, totalAmount - paidAmount);
   
+  // Helper to check if string contains only characters supported by Barcode 128
+  const canGenerateBarcode = (val: string) => {
+    if (!val) return false;
+    // Check if contains Arabic characters or other non-ASCII
+    return /^[\x00-\x7F]*$/.test(val);
+  };
+
   const BarcodeDisplay = ({ value, design }: { value: string, design: any }) => {
     const ref = React.useRef<SVGSVGElement>(null);
+    const isSupported = canGenerateBarcode(value);
 
     React.useEffect(() => {
-        if (ref.current) {
+        if (ref.current && isSupported) {
             try {
                 JsBarcode(ref.current, value, {
                     format: "CODE128", 
@@ -127,7 +134,15 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
                 console.error("Barcode generation failed:", e);
             }
         }
-    }, [value, design]);
+    }, [value, design, isSupported]);
+
+    if (!isSupported) {
+        return (
+            <div style={{ padding: '5px', border: '1px solid #000', display: 'inline-block', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                {value}
+            </div>
+        );
+    }
 
     return <svg ref={ref} />;
   };
@@ -143,7 +158,6 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
 
   return (
     <div style={receiptStyle} className="bg-white text-black printable-area">
-      {/* Watermark Rendering */}
       {showWatermark && !imgError && logoUrl && (
           <img 
             src={logoUrl} 
