@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -20,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PlusCircle, Loader2, MoreHorizontal, FileText, Undo2, Printer, FileSearch, Eye, Edit, CheckCircle, MessageCircle, Image as ImageIcon, Search } from "lucide-react";
+import { PlusCircle, Loader2, MoreHorizontal, FileText, Undo2, Printer, FileSearch, Eye, Edit, CheckCircle, MessageCircle, Image as ImageIcon, Search, Truck } from "lucide-react";
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -406,7 +405,7 @@ export default function SalesInvoicesListPage() {
                                         <DropdownMenuItem onClick={() => { 
                                             setTimeout(() => setItemsModal({ open: true, items: invoice.items }), 150);
                                         }}>
-                                            <Eye className="ml-2 h-4 w-4 text-blue-500"/>
+                                            <Eye className="ml-2 h-4 w-4 text-blue-500" />
                                             عرض الأصناف
                                         </DropdownMenuItem>
                                         
