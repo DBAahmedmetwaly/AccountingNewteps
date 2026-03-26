@@ -317,7 +317,12 @@ export default function SalesInvoicesListPage() {
 
   return (
     <>
-      <PageHeader title="سجل فواتير البيع" />
+      <PageHeader title="سجل فواتير البيع">
+        <Button size="sm" className="gap-1 no-print" onClick={() => router.push('/sales/invoices')}>
+          <PlusCircle className="h-4 w-4" />
+          إضافة فاتورة جديدة
+        </Button>
+      </PageHeader>
       <main className="flex flex-1 flex-col gap-4 p-2 md:p-6 printable-area">
         <Card className="no-print">
             <CardHeader className="p-4"><CardTitle className="text-lg flex items-center gap-2"><Search className="h-4 w-4"/> فلاتر البحث</CardTitle></CardHeader>
