@@ -107,6 +107,7 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
   const items = invoice?.items || invoice?.cart || [];
   const totalAmount = Number(invoice?.total || 0);
   const paidAmount = Number(invoice?.paidAmount ?? totalAmount);
+  const remainingInInvoice = Math.max(0, totalAmount - paidAmount);
   
   // Helper to check if string contains only characters supported by Barcode 128
   const canGenerateBarcode = (val: string) => {
@@ -213,7 +214,7 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
             <tr key={`${item.id}-${index}`}>
               <td style={tdStyle}>{item.name}</td>
               <td style={{ ...tdStyle, textAlign: 'center' }}>{item.qty}</td>
-              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 'bold' }}>{item.total?.toFixed(2) || '0.00'}</td>
+              <td style={{ ... motherhoodStyle, textAlign: 'right', fontWeight: 'bold' }}>{item.total?.toFixed(2) || '0.00'}</td>
             </tr>
           ))}
         </tbody>
@@ -231,6 +232,13 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
         <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '16px', margin: '6px 0', borderTop: '1px solid #000', paddingTop: '4px' }}><span>الصافي:</span> <span>{totalAmount.toFixed(2)}</span></p>
         <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between' }}><span>المدفوع:</span> <span>{paidAmount.toFixed(2)}</span></p>
         
+        {remainingInInvoice > 0.01 && (
+            <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', color: '#d00', borderTop: '1px dashed #ccc', paddingTop: '4px' }}>
+                <span>باقي الفاتورة (آجل):</span>
+                <span>{remainingInInvoice.toFixed(2)}</span>
+            </p>
+        )}
+
         {customerBalance !== undefined && (
             <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '2px double #000' }}>
                 <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#666' }}>

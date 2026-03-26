@@ -142,8 +142,12 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
   };
 
   // Calculate balances logic
+  const totalAmount = Number(invoice?.total || 0);
+  const paidAmount = Number(invoice?.paidAmount || 0);
+  const remainingInInvoice = Math.max(0, totalAmount - paidAmount);
+  
   const balanceAfter = customerBalance ?? 0;
-  const netDebtFromInvoice = (invoice?.total || 0) - (invoice?.paidAmount || 0);
+  const netDebtFromInvoice = totalAmount - paidAmount;
   const balanceBefore = balanceAfter - netDebtFromInvoice;
 
   return (
@@ -229,6 +233,13 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
             <div style={totalsRowStyle}>
                 <span>{isReturn ? 'المبلغ المردود نقداً' : 'المدفوع'}</span> 
                 <span>{(invoice?.paidAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            </div>
+        )}
+
+        {remainingInInvoice > 0.01 && (
+            <div style={{...totalsRowStyle, color: '#d00', fontWeight: 'bold'}}>
+                <span>المتبقي من الفاتورة (آجل)</span>
+                <span>{remainingInInvoice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
         )}
         
