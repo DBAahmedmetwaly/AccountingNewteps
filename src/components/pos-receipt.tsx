@@ -53,7 +53,7 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
     marginBottom: '10px',
     fontSize: `${design?.fontSizes?.items || 12}px`,
     color: '#000',
-    backgroundColor: 'transparent',
+    backgroundColor: 'transparent', 
     position: 'relative',
     zIndex: 1
   };
@@ -214,7 +214,7 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
             <tr key={`${item.id}-${index}`}>
               <td style={tdStyle}>{item.name}</td>
               <td style={{ ...tdStyle, textAlign: 'center' }}>{item.qty}</td>
-              <td style={{ ... motherhoodStyle, textAlign: 'right', fontWeight: 'bold' }}>{item.total?.toFixed(2) || '0.00'}</td>
+              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 'bold' }}>{item.total?.toFixed(2) || '0.00'}</td>
             </tr>
           ))}
         </tbody>
