@@ -183,6 +183,13 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
         {design?.showPhoneNumber !== false && <p style={pStyle}>{company?.phone || 'رقم الهاتف'}</p>}
         
         <p style={{...pStyle, fontWeight: 'bold', marginTop: '5px', borderTop: '1px dashed #000', paddingTop: '5px'}}>فاتورة مبيعات</p>
+        
+        {design?.showBarcode !== false && barcodeValue && (
+            <div style={{ display: 'flex', justifyContent: 'center', width: '100%', overflow: 'hidden', minHeight: '60px', backgroundColor: 'transparent', margin: '10px 0' }}>
+                <BarcodeDisplay value={barcodeValue} design={design} />
+            </div>
+         )}
+
         {invoice?.isDelivery && <p style={{...pStyle, fontWeight: 'bold', fontSize: '16px', border: '2px solid black', padding: '3px', margin: '8px auto' }}>توصيل (دليفري)</p>}
       </div>
       
@@ -239,11 +246,6 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
       </div>
 
        <div style={footerStyle}>
-         {design?.showBarcode !== false && barcodeValue && (
-            <div style={{ display: 'flex', justifyContent: 'center', width: '100%', overflow: 'hidden', minHeight: '60px', backgroundColor: 'transparent' }}>
-                <BarcodeDisplay value={barcodeValue} design={design} />
-            </div>
-         )}
         <p style={{marginTop: '15px', fontWeight: 'bold'}}>{company?.invoiceFooter || 'شكرًا لتعاملكم معنا!'}</p>
       </div>
     </div>

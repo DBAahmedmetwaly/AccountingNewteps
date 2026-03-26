@@ -129,7 +129,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
     filter: 'grayscale(1)' 
   };
 
-  const invoiceType = isReturn ? 'إشعار دائن (مرتجع مبيعات)' : isPurchase ? 'فاتورة شراء' : 'فاتورة مبيعات ضريبية';
+  const invoiceType = isReturn ? 'إشعار دائن (مرتجع مبيعات)' : isPurchase ? 'فاتورة شراء' : 'فاتورة مبيعات';
   const partyLabel = isPurchase ? 'المورد' : 'العميل';
   
   const effectivePartyName = customer?.name || invoice?.customerName || invoice?.supplierName || "عميل نقدي";
@@ -179,7 +179,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
         </div>
         <div style={{textAlign: 'left'}}>
             <h2 style={{...h1Style, fontSize: '24px', marginBottom: '10px'}}>{invoiceType}</h2>
-            <p style={pStyle}><strong>رقم المستند:</strong> {invoice?.receiptNumber || invoice?.invoiceNumber}</p>
+            <p style={pStyle}><strong>رقم الفاتورة:</strong> {invoice?.receiptNumber || invoice?.invoiceNumber}</p>
             <p style={pStyle}><strong>التاريخ:</strong> {invoice?.date ? new Date(invoice.date).toLocaleDateString('ar-EG') : '-'}</p>
         </div>
       </header>
@@ -247,15 +247,6 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
       </div>
 
        <footer style={footerStyle}>
-         {(invoice?.receiptNumber || invoice?.invoiceNumber) && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', marginBottom: '15px', minHeight: '50px', backgroundColor: 'transparent' }}>
-                {canGenerateBarcode(invoice.receiptNumber || invoice.invoiceNumber) ? (
-                    <Barcode value={invoice.receiptNumber || invoice.invoiceNumber} height={40} width={1.5} fontSize={14} displayValue={false} background="transparent" />
-                ) : (
-                    <p style={{fontFamily: 'monospace', fontSize: '16px', border: '1px solid #000', padding: '5px 15px'}}>{invoice.receiptNumber || invoice.invoiceNumber}</p>
-                )}
-            </div>
-         )}
         <p style={{fontWeight: 'bold', fontSize: '14px'}}>{company?.invoiceFooter || 'شكرًا لتعاملكم معنا!'}</p>
       </footer>
     </div>
