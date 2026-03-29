@@ -1,7 +1,6 @@
 
 "use client";
 
-// استيراد المكونات والأدوات اللازمة
 import React, { useState, useEffect, useMemo } from 'react';
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -16,11 +15,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Loader2, MoreHorizontal, Edit, Trash2, Info, Wallet, AlertTriangle, Filter, Search } from "lucide-react";
+import { PlusCircle, Loader2, MoreHorizontal, Trash2, Wallet, AlertTriangle, Search, Calendar, User, History, ArrowRight } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/auth-context';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useData } from '@/contexts/data-provider';
@@ -28,9 +26,8 @@ import { Combobox } from '@/components/ui/combobox';
 import { dictionary } from '@/lib/dictionary';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useIsMobile } from '@/hooks/use-mobile';
 
-// تعريف واجهات البيانات (Interfaces) لضمان تطابق أنواع البيانات
 interface CustomerPayment {
     id?: string;
     date: string;
@@ -71,6 +68,7 @@ interface SaleInvoice {
   paidAmount?: number;
   warehouseId?: string;
   status?: 'approved' | 'pending';
+  date: string;
 }
 
 const d = dictionary.pages.customerPayments;
@@ -114,25 +112,21 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices, warehouse
 
         let balance = Number(customer.openingBalance) || 0;
         
-        // إضافة فواتير البيع (الجزء غير المسدد)
         salesInvoices.filter(inv => inv.customerId === formData.customerId && inv.status === 'approved')
             .forEach(inv => {
                 balance += (Number(inv.total) - Number(inv.paidAmount || 0));
             });
 
-        // إضافة فواتير الكاشير (الجزء غير المسدد)
         posSales.filter(sale => sale.customerId === formData.customerId)
             .forEach(sale => {
                 balance += (Number(sale.total) - Number(sale.paidAmount || 0));
             });
 
-        // طرح سندات القبض غير المرتبطة بفاتورة (لتجنب الخصم المزدوج)
         customerPayments.filter(p => p.customerId === formData.customerId && !p.invoiceId)
             .forEach(p => {
                 balance -= Number(p.amount);
             });
 
-        // طرح المرتجعات
         salesReturns.filter(r => r.customerId === formData.customerId)
             .forEach(r => {
                 balance -= (Number(r.total) - Number(r.paidAmount || 0));
@@ -167,7 +161,6 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices, warehouse
         }));
     }, [customerInvoicesWithBalance]);
     
-    // منطق فلترة الحسابات: استبعاد عهد المناديب دائماً واختيار خزينة الفرع أو العامة
     useEffect(() => {
         const nonRepAccounts = cashAccounts.filter(acc => !acc.userId && !acc.salesRepId);
         let filtered: CashAccount[] = [];
@@ -190,14 +183,14 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices, warehouse
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.paidToAccountId) return;
+        if (!formData.paidToAccountId || !formData.customerId || formData.amount <= 0) return;
         onSave({ ...formData, amount: Number(formData.amount) });
         setFormData({ date: new Date().toISOString().split('T')[0], amount: 0, customerId: "", paidToAccountId: "", notes: "", invoiceId: "" });
     }
 
     return (
-        <form onSubmit={handleSubmit}>
-            <div className="grid gap-4 py-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid gap-4">
                 <div className="space-y-2">
                     <Label htmlFor="payment-date">{dictionary.general.date}</Label>
                     <Input id="payment-date" type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} required/>
@@ -213,35 +206,26 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices, warehouse
                     />
                     {formData.customerId && (
                         <div className={cn(
-                            "flex items-center gap-3 p-4 rounded-lg border animate-in fade-in slide-in-from-top-1",
+                            "flex items-center gap-3 p-4 rounded-xl border animate-in fade-in slide-in-from-top-2 shadow-sm",
                             currentCustomerBalance > 0 ? "bg-destructive/10 border-destructive/20" : "bg-green-500/10 border-green-500/20"
                         )}>
-                            <Wallet className={cn("h-5 w-5", currentCustomerBalance > 0 ? "text-destructive" : "text-green-600 dark:text-green-400")} />
+                            <div className={cn(
+                                "p-2 rounded-full",
+                                currentCustomerBalance > 0 ? "bg-destructive/20" : "bg-green-500/20"
+                            )}>
+                                <Wallet className={cn("h-5 w-5", currentCustomerBalance > 0 ? "text-destructive" : "text-green-600 dark:text-green-400")} />
+                            </div>
                             <div className="flex-1">
-                                <span className={cn("text-xs font-semibold block mb-1", currentCustomerBalance > 0 ? "text-destructive/80" : "text-green-700 dark:text-green-300")}>
-                                    {currentCustomerBalance >= 0 ? "المستحق على العميل:" : "المستحق للعميل (رصيد دائن):"}
+                                <span className={cn("text-[10px] font-bold block mb-0.5 uppercase tracking-wider", currentCustomerBalance > 0 ? "text-destructive/80" : "text-green-700 dark:text-green-300")}>
+                                    {currentCustomerBalance >= 0 ? "المستحق على العميل:" : "رصيد دائن للعميل:"}
                                 </span>
                                 <div className="flex items-center gap-2">
-                                    <span className={cn("text-lg font-bold", currentCustomerBalance > 0 ? "text-destructive" : "text-green-700 dark:text-green-400")}>
+                                    <span className={cn("text-lg font-black", currentCustomerBalance > 0 ? "text-destructive" : "text-green-700 dark:text-green-400")}>
                                         {Math.abs(currentCustomerBalance).toLocaleString()} ج.م 
                                     </span>
-                                    <Badge variant={currentCustomerBalance > 0 ? "destructive" : "default"} className="text-[10px] py-0 h-5">
-                                        {currentCustomerBalance > 0 ? "مدين" : "له رصيد"}
-                                    </Badge>
                                 </div>
                             </div>
-                            {currentCustomerBalance < 0 && (
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <AlertTriangle className="h-5 w-5 text-amber-500 cursor-help" />
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p className="max-w-[200px] text-xs text-center">تنبيه: هذا المبلغ مستحق للعميل وليس على العميل. يرجى التأكد قبل التحصيل.</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            )}
+                            {currentCustomerBalance < 0 && <AlertTriangle className="h-5 w-5 text-amber-500" />}
                         </div>
                     )}
                 </div>
@@ -256,17 +240,8 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices, warehouse
                         emptyMessage={d.noDueInvoices}
                     />
                 </div>
-                 {selectedInvoiceDetails && (
-                     <div className="-mt-2">
-                        <p className="text-xs text-muted-foreground text-center">
-                            {d.invoiceTotal}: {selectedInvoiceDetails.total.toLocaleString()} | 
-                            {d.paid}: {(selectedInvoiceDetails.paidAmount || 0).toLocaleString()} | 
-                            {d.remaining}: {(selectedInvoiceDetails.total - (selectedInvoiceDetails.paidAmount || 0)).toLocaleString()}
-                        </p>
-                    </div>
-                )}
                 <div className="space-y-2">
-                    <Label htmlFor="paid-to">{d.receivedIn} (خزينة الفرع/العامة)</Label>
+                    <Label htmlFor="paid-to">{d.receivedIn}</Label>
                     <Combobox
                         options={cashAccountOptions}
                         value={formData.paidToAccountId}
@@ -278,27 +253,17 @@ const PaymentForm = ({ onSave, customers, cashAccounts, salesInvoices, warehouse
                 </div>
                  <div className="space-y-2">
                     <Label htmlFor="payment-amount">{dictionary.general.amount}</Label>
-                    <Input id="payment-amount" type="number" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value as any})} placeholder={d.enterPaymentAmount} required/>
+                    <Input id="payment-amount" type="number" value={formData.amount || ''} onChange={e => setFormData({...formData, amount: e.target.value as any})} placeholder="0.00" required className="text-lg font-bold" onFocus={e => e.target.select()}/>
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="payment-notes">{dictionary.general.notes}</Label>
-                    <Textarea id="payment-notes" value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder={`${dictionary.general.notes} (${dictionary.general.optional})`} />
+                    <Textarea id="payment-notes" value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder={dictionary.general.optional} className="h-20" />
                 </div>
             </div>
-             <Alert className="mt-4">
-                <Info className="h-4 w-4" />
-                <AlertTitle>{d.journalEntry}</AlertTitle>
-                <AlertDescription>
-                    {d.journalEntryDescDebit.replace('{account}', cashAccounts.find((c: CashAccount) => c.id === formData.paidToAccountId)?.name || d.cash)} <br/>
-                    {d.journalEntryDescCredit}
-                </AlertDescription>
-            </Alert>
-            <div className="flex justify-end mt-4">
-                <Button type="submit" disabled={!formData.paidToAccountId}>
-                    <PlusCircle className="ml-2 h-4 w-4" />
-                    {d.savePayment}
-                </Button>
-            </div>
+            <Button type="submit" disabled={!formData.paidToAccountId || !formData.customerId || formData.amount <= 0} className="w-full h-12 text-base font-bold">
+                <PlusCircle className="ml-2 h-5 w-5" />
+                {d.savePayment}
+            </Button>
         </form>
     );
 };
@@ -320,7 +285,9 @@ export default function CustomerPaymentsPage() {
 
     const { toast } = useToast();
     const { user } = useAuth();
+    const isMobile = useIsMobile();
 
+    const [searchTerm, setSearchTerm] = useState("");
     const [filters, setFilters] = useState({
         fromDate: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0],
         toDate: new Date().toISOString().split('T')[0]
@@ -338,7 +305,6 @@ export default function CustomerPaymentsPage() {
         try {
             const receiptNumber = `س-ع-${await getNextId('customerPayment')}`;
             
-            // Fix: Include current time to ensure proper chronological order
             const now = new Date();
             const [year, month, day] = data.date.split('-').map(Number);
             const finalDate = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds());
@@ -364,7 +330,42 @@ export default function CustomerPaymentsPage() {
         }
     };
     
+    // Logic to check if this is the absolute latest transaction for the customer
+    const isDeletable = (payment: CustomerPayment) => {
+        if (!payment.id) return false;
+        
+        const customerId = payment.customerId;
+        const paymentDate = new Date(payment.date).getTime();
+
+        // Check other payments
+        const newerPayment = payments.find(p => p.customerId === customerId && p.id !== payment.id && new Date(p.date).getTime() > paymentDate);
+        if (newerPayment) return false;
+
+        // Check invoices
+        const newerInvoice = salesInvoices.find(inv => inv.customerId === customerId && new Date(inv.date).getTime() > paymentDate);
+        if (newerInvoice) return false;
+
+        // Check POS sales
+        const newerPosSale = posSales.find(sale => sale.customerId === customerId && new Date(sale.date).getTime() > paymentDate);
+        if (newerPosSale) return false;
+
+        // Check Returns
+        const newerReturn = [...salesReturns, ...posReturns].find(ret => ret.customerId === customerId && new Date(ret.date).getTime() > paymentDate);
+        if (newerReturn) return false;
+
+        return true;
+    };
+
     const handleDelete = async (payment: CustomerPayment) => {
+        if (!isDeletable(payment)) {
+            toast({ 
+                variant: "destructive", 
+                title: "لا يمكن الحذف", 
+                description: "يوجد عمليات أحدث مسجلة لهذا العميل. يرجى حذف العمليات الأحدث أولاً لضمان دقة الرصيد." 
+            });
+            return;
+        }
+
         try {
              if (payment.invoiceId) {
                 const invoice = salesInvoices.find((inv: SaleInvoice) => inv.id === payment.invoiceId);
@@ -389,9 +390,17 @@ export default function CustomerPaymentsPage() {
             if(to) to.setHours(23,59,59,999);
             if (from && date < from) return false;
             if (to && date > to) return false;
+
+            if (searchTerm) {
+                const custName = getCustomerName(p.customerId).toLowerCase();
+                const receipt = (p.receiptNumber || "").toLowerCase();
+                const searchLower = searchTerm.toLowerCase();
+                return custName.includes(searchLower) || receipt.includes(searchLower);
+            }
+
             return true;
         }).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [payments, filters]);
+    }, [payments, filters, searchTerm, customers]);
 
     const totalAmount = useMemo(() => {
         return filteredPayments.reduce((acc, p) => acc + (p.amount || 0), 0);
@@ -401,129 +410,208 @@ export default function CustomerPaymentsPage() {
   return (
     <>
       <PageHeader title={d.title} />
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
-        <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-5">
-            <Card className="lg:col-span-2">
-            <CardHeader>
-                <CardTitle>{d.addNewPayment}</CardTitle>
-                <CardDescription>
-                {d.addNewPaymentDesc}
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                {loading ? <Loader2 className='animate-spin' /> : (
-                    <PaymentForm 
-                        onSave={handleSave} 
-                        customers={customers} 
-                        cashAccounts={cashAccounts} 
-                        salesInvoices={salesInvoices} 
-                        warehouses={warehouses} 
-                        customerPayments={payments}
-                        salesReturns={salesReturns}
-                        posSales={posSales}
-                        posReturns={posReturns}
-                    />
-                )}
-            </CardContent>
+      <main className="flex flex-1 flex-col gap-4 p-2 md:p-6">
+        <div className="grid gap-6 grid-cols-1 lg:grid-cols-5 items-start">
+            <Card className="lg:col-span-2 shadow-md">
+                <CardHeader className="pb-4">
+                    <CardTitle className="text-lg flex items-center gap-2"><PlusCircle className="text-primary"/>{d.addNewPayment}</CardTitle>
+                    <CardDescription>{d.addNewPaymentDesc}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {loading ? <div className="flex justify-center py-10"><Loader2 className='animate-spin text-primary' /></div> : (
+                        <PaymentForm 
+                            onSave={handleSave} 
+                            customers={customers} 
+                            cashAccounts={cashAccounts} 
+                            salesInvoices={salesInvoices} 
+                            warehouses={warehouses} 
+                            customerPayments={payments}
+                            salesReturns={salesReturns}
+                            posSales={posSales}
+                            posReturns={posReturns}
+                        />
+                    )}
+                </CardContent>
             </Card>
             
-            <Card className="lg:col-span-3">
+            <Card className="lg:col-span-3 shadow-md">
                 <CardHeader>
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <CardTitle>{d.paymentsLog}</CardTitle>
-                        <div className="flex items-center gap-2">
-                            <div className="grid gap-1">
-                                <Label className="text-[10px]">{dictionary.general.from}</Label>
-                                <Input type="date" value={filters.fromDate} onChange={e => setFilters({...filters, fromDate: e.target.value})} className="h-8 text-xs w-32" />
+                    <div className="flex flex-col gap-4">
+                        <div className="flex justify-between items-center">
+                            <CardTitle className="text-lg flex items-center gap-2"><History className="text-primary"/>{d.paymentsLog}</CardTitle>
+                            {!isMobile && <Badge variant="secondary" className="text-xs">{filteredPayments.length} سند</Badge>}
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="relative">
+                                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input 
+                                    placeholder="بحث بالاسم أو رقم السند..." 
+                                    value={searchTerm} 
+                                    onChange={e => setSearchTerm(e.target.value)} 
+                                    className="pr-9 h-9 text-sm"
+                                />
                             </div>
-                            <div className="grid gap-1">
-                                <Label className="text-[10px]">{dictionary.general.to}</Label>
-                                <Input type="date" value={filters.toDate} onChange={e => setFilters({...filters, toDate: e.target.value})} className="h-8 text-xs w-32" />
+                            <div className="flex gap-2">
+                                <div className="flex-1 relative">
+                                    <Input type="date" value={filters.fromDate} onChange={e => setFilters({...filters, fromDate: e.target.value})} className="h-9 text-xs pl-8" />
+                                    <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                </div>
+                                <div className="flex-1 relative">
+                                    <Input type="date" value={filters.toDate} onChange={e => setFilters({...filters, toDate: e.target.value})} className="h-9 text-xs pl-8" />
+                                    <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                </div>
                             </div>
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-0 sm:p-6">
                     {loading ? (
-                        <div className="flex justify-center items-center py-10">
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        <div className="flex justify-center items-center py-20">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
                         </div>
                     ) : (
-                        <div className="w-full overflow-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>{dictionary.general.customer}</TableHead>
-                                        <TableHead>{d.receivedIn}</TableHead>
-                                        <TableHead className="text-center">{dictionary.general.amount}</TableHead>
-                                        <TableHead className="text-center w-[100px]">{dictionary.general.actions}</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {filteredPayments.length > 0 ? (
-                                        filteredPayments.map((payment : CustomerPayment) => (
-                                            <TableRow key={payment.id}>
-                                                <TableCell>
-                                                    <div className="font-medium">{getCustomerName(payment.customerId)}</div>
-                                                    <div className="text-sm text-muted-foreground">{new Date(payment.date).toLocaleDateString('ar-EG')}</div>
-                                                    <div className="text-xs text-muted-foreground">{d.byUser.replace('{name}', payment.createdByName || d.unknownUser)}</div>
-                                                </TableCell>
-                                                <TableCell>{getCashAccountName(payment.paidToAccountId)}</TableCell>
-                                                <TableCell className="text-center font-bold">{payment.amount.toLocaleString()}</TableCell>
-                                                <TableCell className="text-center">
-                                                    <AlertDialog>
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger asChild>
-                                                                <Button aria-haspopup="true" size="icon" variant="ghost">
-                                                                    <MoreHorizontal className="h-4 w-4" />
-                                                                    <span className="sr-only">{d.menu}</span>
+                        <div className="w-full">
+                            {isMobile ? (
+                                <div className="space-y-3 p-3">
+                                    {filteredPayments.length > 0 ? filteredPayments.map((payment: CustomerPayment) => (
+                                        <Card key={payment.id} className="overflow-hidden border-r-4 border-r-primary shadow-sm">
+                                            <CardContent className="p-4">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="space-y-1">
+                                                        <div className="font-bold text-base leading-tight">{getCustomerName(payment.customerId)}</div>
+                                                        <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                                            <Calendar className="h-3 w-3"/>
+                                                            {new Date(payment.date).toLocaleDateString('ar-EG')}
+                                                            <span className="mx-1">•</span>
+                                                            {payment.receiptNumber}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-lg font-black text-primary">{payment.amount.toLocaleString()} <span className="text-[10px]">ج.م</span></div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex justify-between items-center pt-3 border-t">
+                                                    <div className="text-[10px] flex items-center gap-1 text-muted-foreground">
+                                                        <User className="h-3 w-3"/>
+                                                        {payment.createdByName || d.unknownUser}
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge variant="outline" className="text-[10px] h-6">{getCashAccountName(payment.paidToAccountId)}</Badge>
+                                                        <AlertDialog>
+                                                            <AlertDialogTrigger asChild>
+                                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/10">
+                                                                    <Trash2 className="h-4 w-4" />
                                                                 </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end">
-                                                                <DropdownMenuLabel>{dictionary.general.actions}</DropdownMenuLabel>
-                                                                <AlertDialogTrigger asChild>
-                                                                    <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
-                                                                        <Trash2 className="ml-2 h-4 w-4" />
-                                                                        {dictionary.general.delete}
-                                                                    </DropdownMenuItem>
-                                                                </AlertDialogTrigger>
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
-                                                        <AlertDialogContent>
-                                                            <AlertDialogHeader>
-                                                                <AlertDialogTitle>{dictionary.general.confirmDeleteTitle}</AlertDialogTitle>
-                                                                <AlertDialogDescription>
-                                                                {d.deleteConfirmation}
-                                                                </AlertDialogDescription>
-                                                            </AlertDialogHeader>
-                                                            <AlertDialogFooter>
-                                                                <AlertDialogCancel>{dictionary.general.cancel}</AlertDialogCancel>
-                                                                <AlertDialogAction onClick={() => handleDelete(payment)}>{dictionary.general.continue}</AlertDialogAction>
-                                                            </AlertDialogFooter>
-                                                        </AlertDialogContent>
-                                                    </AlertDialog>
-                                                </TableCell>
+                                                            </AlertDialogTrigger>
+                                                            <AlertDialogContent>
+                                                                <AlertDialogHeader>
+                                                                    <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="text-destructive"/> تأكيد الحذف</AlertDialogTitle>
+                                                                    <AlertDialogDescription>
+                                                                        {isDeletable(payment) 
+                                                                            ? "سيتم حذف هذا السند بشكل نهائي. لا يمكن التراجع عن هذا الإجراء." 
+                                                                            : "لا يمكن حذف هذا السند لوجود عمليات أحدث مسجلة لهذا العميل. يرجى حذف العمليات الأحدث أولاً."
+                                                                        }
+                                                                    </AlertDialogDescription>
+                                                                </AlertDialogHeader>
+                                                                <AlertDialogFooter>
+                                                                    <AlertDialogCancel>{dictionary.general.cancel}</AlertDialogCancel>
+                                                                    {isDeletable(payment) && (
+                                                                        <AlertDialogAction onClick={() => handleDelete(payment)} className="bg-destructive hover:bg-destructive/90">حذف السند</AlertDialogAction>
+                                                                    )}
+                                                                </AlertDialogFooter>
+                                                            </AlertDialogContent>
+                                                        </AlertDialog>
+                                                    </div>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    )) : <div className="text-center py-20 text-muted-foreground">لا توجد مقبوضات مطابقة.</div>}
+                                </div>
+                            ) : (
+                                <div className="overflow-auto border rounded-lg">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="bg-muted/50">
+                                                <TableHead>التاريخ والعميل</TableHead>
+                                                <TableHead>حساب الاستلام</TableHead>
+                                                <TableHead className="text-center">{dictionary.general.amount}</TableHead>
+                                                <TableHead className="text-center w-[80px]">{dictionary.general.actions}</TableHead>
                                             </TableRow>
-                                        ))
-                                    ) : (
-                                        <TableRow>
-                                            <TableCell colSpan={4} className="text-center py-10 text-muted-foreground">لا توجد مقبوضات مسجلة.</TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                                {filteredPayments.length > 0 && (
-                                    <TableFooter>
-                                        <TableRow className="bg-muted/50 font-bold">
-                                            <TableCell colSpan={2}>إجمالي المقبوضات للفترة</TableCell>
-                                            <TableCell className="text-center text-primary text-lg">{totalAmount.toLocaleString()} ج.م</TableCell>
-                                            <TableCell></TableCell>
-                                        </TableRow>
-                                    </TableFooter>
-                                )}
-                            </Table>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {filteredPayments.length > 0 ? (
+                                                filteredPayments.map((payment : CustomerPayment) => (
+                                                    <TableRow key={payment.id} className="hover:bg-muted/30">
+                                                        <TableCell>
+                                                            <div className="font-bold">{getCustomerName(payment.customerId)}</div>
+                                                            <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                                                                <Badge variant="outline" className="text-[9px] px-1 h-4 font-mono">{payment.receiptNumber}</Badge>
+                                                                <span>{new Date(payment.date).toLocaleString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="text-sm font-medium">{getCashAccountName(payment.paidToAccountId)}</TableCell>
+                                                        <TableCell className="text-center font-black text-primary text-base">{payment.amount.toLocaleString()}</TableCell>
+                                                        <TableCell className="text-center">
+                                                            <AlertDialog>
+                                                                <DropdownMenu modal={false}>
+                                                                    <DropdownMenuTrigger asChild>
+                                                                        <Button size="icon" variant="ghost" className="h-8 w-8">
+                                                                            <MoreHorizontal className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </DropdownMenuTrigger>
+                                                                    <DropdownMenuContent align="end">
+                                                                        <DropdownMenuLabel>إجراءات السند</DropdownMenuLabel>
+                                                                        <AlertDialogTrigger asChild>
+                                                                            <DropdownMenuItem className="text-destructive font-semibold" onSelect={(e) => e.preventDefault()}>
+                                                                                <Trash2 className="ml-2 h-4 w-4" />
+                                                                                {dictionary.general.delete}
+                                                                            </DropdownMenuItem>
+                                                                        </AlertDialogTrigger>
+                                                                    </DropdownMenuContent>
+                                                                </DropdownMenu>
+                                                                <AlertDialogContent>
+                                                                    <AlertDialogHeader>
+                                                                        <AlertDialogTitle className="flex items-center gap-2">
+                                                                            {isDeletable(payment) ? <Trash2 className="text-destructive"/> : <AlertTriangle className="text-amber-500"/>}
+                                                                            {isDeletable(payment) ? "هل أنت متأكد من الحذف؟" : "تنبيه: لا يمكن الحذف"}
+                                                                        </AlertDialogTitle>
+                                                                        <AlertDialogDescription>
+                                                                            {isDeletable(payment) 
+                                                                                ? "هذا الإجراء سيحذف السند بشكل دائم من الدفاتر المالية وسيعيد المديونية لحساب العميل. لا يمكن التراجع عنه." 
+                                                                                : "عفواً، لا يمكن حذف هذا السند لوجود عمليات (فواتير أو دفعات) مسجلة لهذا العميل بتاريخ أحدث من هذا السند. لضمان سلامة الأرصدة المتراكمة، يجب حذف العمليات الأحدث أولاً."
+                                                                            }
+                                                                        </AlertDialogDescription>
+                                                                    </AlertDialogHeader>
+                                                                    <AlertDialogFooter>
+                                                                        <AlertDialogCancel>{dictionary.general.cancel}</AlertDialogCancel>
+                                                                        {isDeletable(payment) && (
+                                                                            <AlertDialogAction onClick={() => handleDelete(payment)} className="bg-destructive hover:bg-destructive/90">تأكيد الحذف النهائي</AlertDialogAction>
+                                                                        )}
+                                                                    </AlertDialogFooter>
+                                                                </AlertDialogContent>
+                                                            </AlertDialog>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))
+                                            ) : (
+                                                <TableRow>
+                                                    <TableCell colSpan={4} className="text-center py-20 text-muted-foreground italic">لا توجد مقبوضات مسجلة للفترة المحددة.</TableCell>
+                                                </TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            )}
                         </div>
                     )}
                 </CardContent>
+                {filteredPayments.length > 0 && (
+                    <CardFooter className="bg-muted/20 border-t p-4 flex justify-between items-center">
+                        <span className="text-sm font-bold">إجمالي مقبوضات الفترة:</span>
+                        <span className="text-xl font-black text-primary">{totalAmount.toLocaleString()} ج.م</span>
+                    </CardFooter>
+                )}
             </Card>
         </div>
       </main>
