@@ -46,6 +46,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { printService } from "@/lib/print-service";
 
 
 interface PosTerminal {
@@ -74,40 +75,27 @@ const TerminalForm = ({ terminal, onSave, onClose, warehouses, allTerminals, sys
     if (!printerName) return toast({ variant: 'destructive', title: 'خطأ', description: 'الرجاء اختيار طابعة أولاً.' });
     toast({ title: 'جارٍ إرسال الطباعة...', description: `يتم إرسال أمر طباعة تجريبي إلى ${printerName}` });
     try {
-        const res = await fetch('/api/print', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                printer: printerName,
-                options: { width: '80mm' },
-                content: {
-                    title: 'Test Print / طباعة تجريبية',
-                    lines: [
-                        { left: 'Test Successful', right: 'تم الاختبار بنجاح' },
-                        { left: 'Terminal', right: formData.name || 'Unknown' },
-                        { left: 'Date', right: new Date().toLocaleString('ar-EG') }
-                    ],
-                    footer: 'NewCashier POS System'
-                }
-            })
+        await printService.sendToPrinter(printerName, {
+            title: 'Test Print / طباعة تجريبية',
+            lines: [
+                { left: 'Test Successful', right: 'تم الاختبار بنجاح' },
+                { left: 'Terminal', right: formData.name || 'Unknown' },
+                { left: 'Date', right: new Date().toLocaleString('ar-EG') }
+            ],
+            footer: 'NewCashier POS System'
         });
-        if (res.ok) {
-            toast({ title: 'تمت الطباعة بنجاح' });
-        } else {
-            const errorData = await res.json();
-            throw new Error(errorData.error || 'Failed to print');
-        }
+        toast({ title: 'تمت الطباعة بنجاح' });
     } catch (error: any) {
         toast({ 
             variant: 'destructive', 
             title: 'فشل الطباعة', 
-            description: `خطأ: ${error.message || 'تأكد من توصيل الطابعة وتثبيتها في النظام.'}` 
+            description: error.message || 'تأكد من توصيل الطابعة وتثبيتها في النظام.'
         });
     }
   };
 
   const handleTestIpPrint = async (ipAddress: string) => {
-    if (!ipAddress) return toast({ variant: 'destructive', title: 'خطأ', description: 'الرجاء إدخال عنوان IP أولاً.' });
+    if (!ipAddress) return toast({ variant: 'destructive', title: 'خطأ', description: 'الرجاء إدخل عنوان IP أولاً.' });
     toast({ title: 'جارٍ إرسال الطباعة...', description: `يحاول الاتصال بـ ${ipAddress}` });
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -188,7 +176,7 @@ const TerminalForm = ({ terminal, onSave, onClose, warehouses, allTerminals, sys
         <Select value={formData.posPrinterType || 'system'} onValueChange={(v: any) => setFormData({ ...formData, posPrinterType: v })}>
             <SelectTrigger><SelectValue placeholder="اختر نوع الطابعة" /></SelectTrigger>
             <SelectContent>
-                <SelectItem value="system">طابعة النظام</SelectItem>
+                <SelectItem value="system">طابعة النظام (طباعة يدوية)</SelectItem>
                 <SelectItem value="ip">شبكة (IP)</SelectItem>
                 <SelectItem value="browser">المتصفح (Browser)</SelectItem>
             </SelectContent>
@@ -241,7 +229,7 @@ const TerminalForm = ({ terminal, onSave, onClose, warehouses, allTerminals, sys
                 <Select value={formData.kitchenPrinterType || 'system'} onValueChange={(v: any) => setFormData({ ...formData, kitchenPrinterType: v })}>
                     <SelectTrigger><SelectValue placeholder="اختر نوع طابعة المطبخ" /></SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="system">طابعة النظام</SelectItem>
+                        <SelectItem value="system">طابعة النظام (طباعة يدوية)</SelectItem>
                         <SelectItem value="ip">شبكة (IP)</SelectItem>
                         <SelectItem value="browser">المتصفح (Browser)</SelectItem>
                     </SelectContent>
@@ -303,13 +291,8 @@ export default function PosTerminalsPage() {
   
   useEffect(() => {
     const fetchPrinters = async () => {
-      try {
-        const res = await fetch('/api/system-printers');
-        const data = await res.json();
-        if (data?.printers?.length) setSystemPrinters(data.printers);
-      } catch (e) {
-        // ignore
-      }
+      const printers = await printService.getSystemPrinters();
+      if (printers.length) setSystemPrinters(printers);
     };
     fetchPrinters();
   }, []);

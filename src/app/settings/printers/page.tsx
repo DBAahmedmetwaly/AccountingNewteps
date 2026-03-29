@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -32,6 +31,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Combobox } from '@/components/ui/combobox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { printService } from '@/lib/print-service';
 
 
 interface KitchenPrinterConfig {
@@ -171,33 +171,20 @@ const PrinterSelector = ({ type, address, onTypeChange, onAddressChange, onTest,
         if (!printerName) return toast({ variant: 'destructive', title: 'خطأ', description: 'الرجاء اختيار طابعة أولاً.' });
         toast({ title: 'جارٍ إرسال الطباعة...', description: `يتم إرسال أمر طباعة تجريبي إلى ${printerName}` });
         try {
-            const res = await fetch('/api/print', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    printer: printerName,
-                    options: { width: '80mm' },
-                    content: {
-                        title: 'Test Print / طباعة تجريبية',
-                        lines: [
-                            { left: 'Test Successful', right: 'تم الاختبار بنجاح' },
-                            { left: 'Date', right: new Date().toLocaleString('ar-EG') }
-                        ],
-                        footer: 'NewCashier POS System'
-                    }
-                })
+            await printService.sendToPrinter(printerName, {
+                title: 'Test Print / طباعة تجريبية',
+                lines: [
+                    { left: 'Test Successful', right: 'تم الاختبار بنجاح' },
+                    { left: 'Date', right: new Date().toLocaleString('ar-EG') }
+                ],
+                footer: 'NewCashier POS System'
             });
-            if (res.ok) {
-                toast({ title: 'تمت الطباعة بنجاح' });
-            } else {
-                const errorData = await res.json();
-                throw new Error(errorData.error || 'Failed to print');
-            }
+            toast({ title: 'تمت الطباعة بنجاح' });
         } catch (error: any) {
             toast({ 
                 variant: 'destructive', 
                 title: 'فشل الطباعة', 
-                description: `خطأ: ${error.message || 'تأكد من توصيل الطابعة وتثبيتها في النظام.'}` 
+                description: error.message || 'تأكد من توصيل الطابعة وتثبيتها في النظام.'
             });
         }
     };
@@ -317,30 +304,17 @@ const PrinterSettingsSection = ({ settings, onSettingChange, title, allowBluetoo
             
             lines.push({ left: '--------------------------------', right: '' });
 
-            const res = await fetch('/api/print', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    printer: printerName,
-                    options: { width: '80mm' },
-                    content: {
-                        title: 'KITCHEN / PREPARATION',
-                        lines: lines,
-                        footer: 'Kitchen Test Receipt'
-                    }
-                })
+            await printService.sendToPrinter(printerName, {
+                title: 'KITCHEN / PREPARATION',
+                lines: lines,
+                footer: 'Kitchen Test Receipt'
             });
-            if (res.ok) {
-                toast({ title: 'تمت الطباعة بنجاح' });
-            } else {
-                const errorData = await res.json();
-                throw new Error(errorData.error || 'Failed to print');
-            }
+            toast({ title: 'تمت الطباعة بنجاح' });
         } catch (error: any) {
             toast({ 
                 variant: 'destructive', 
                 title: 'فشل الطباعة', 
-                description: `خطأ: ${error.message || 'تأكد من توصيل الطابعة وتثبيتها في النظام.'}` 
+                description: error.message || 'تأكد من توصيل الطابعة وتثبيتها في النظام.'
             });
         }
     };
@@ -500,13 +474,8 @@ export default function PrintersPage() {
     
     useEffect(() => {
         const fetchPrinters = async () => {
-            try {
-                const res = await fetch('/api/system-printers');
-                const data = await res.json();
-                if (data?.printers?.length) setSystemPrinters(data.printers);
-            } catch (e) {
-                // ignore
-            }
+            const printers = await printService.getSystemPrinters();
+            if (printers.length) setSystemPrinters(printers);
         };
         fetchPrinters();
     }, []);
