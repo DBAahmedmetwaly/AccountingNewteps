@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import Barcode from 'react-barcode';
 
@@ -146,9 +147,18 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
   const paidAmount = Number(invoice?.paidAmount || 0);
   const remainingInInvoice = Math.max(0, totalAmount - paidAmount);
   
-  const balanceAfter = customerBalance ?? 0;
-  const netDebtFromInvoice = totalAmount - paidAmount;
-  const balanceBefore = balanceAfter - netDebtFromInvoice;
+  // Logical Fix: Use stored balance if available, otherwise fall back to calculation
+  let balanceBefore = 0;
+  let balanceAfter = 0;
+
+  if (invoice?.customerBalanceBefore !== undefined) {
+      balanceBefore = Number(invoice.customerBalanceBefore);
+      balanceAfter = balanceBefore + remainingInInvoice;
+  } else {
+      // Fallback for legacy data: derive before from current
+      balanceAfter = customerBalance ?? 0;
+      balanceBefore = balanceAfter - remainingInInvoice;
+  }
 
   return (
     <div style={receiptStyle} className="bg-white text-black printable-area">
@@ -238,7 +248,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
 
         {remainingInInvoice > 0.01 && (
             <div style={{...totalsRowStyle, color: '#d00', fontWeight: 'bold'}}>
-                <span>المتبقي من الفاتورة (آجل)</span>
+                <span>باقي الفاتورة (الآجل)</span>
                 <span>{remainingInInvoice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
         )}

@@ -1,3 +1,4 @@
+
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -139,7 +140,7 @@ export default function SalesRepInvoicePage() {
         );
     };
 
-    const calculateCustomerBalance = (cId: string) => {
+    const calculateCustomerBalance = useCallback((cId: string) => {
         const customer = customers.find((c: any) => c.id === cId);
         if (!customer) return 0;
 
@@ -162,16 +163,16 @@ export default function SalesRepInvoicePage() {
 
         salesReturns.filter((r: any) => r.customerId === cId)
             .forEach((r: any) => {
-                balance -= Number(r.total);
+                balance -= (Number(r.total) - Number(r.paidAmount || 0));
             });
         
         posReturns.filter((r: any) => r.customerId === cId)
             .forEach((r: any) => {
-                balance -= Number(r.total);
+                balance -= (Number(r.total) - Number(r.paidAmount || 0));
             });
 
         return balance;
-    };
+    }, [customers, salesInvoices, posSales, customerPayments, salesReturns, posReturns]);
 
     const itemsInRepCustody = useMemo(() => {
         if (!isRep || !user?.id || !allItems.length) return [];
@@ -457,6 +458,7 @@ export default function SalesRepInvoicePage() {
         try {
             const invoiceNumber = `ف-ب-${await getNextId('salesInvoice')}`;
             const customerName = customers.find((c:any) => c.id === customerId)?.name || '';
+            const customerBalanceBefore = calculateCustomerBalance(customerId);
             
             const invoiceItems = items.map(item => {
                 return {
@@ -474,6 +476,7 @@ export default function SalesRepInvoicePage() {
                 tax, total, paidAmount: paidAmount || 0, paidToAccountId: paidAmount > 0 ? repCashAccount?.id : null,
                 notes, isDelivery, deliveryPersonId: isDelivery ? deliveryPersonId : null,
                 deliveryPersonName: isDelivery ? deliveryStaff.find((d:any) => d.id === deliveryPersonId)?.name : null,
+                customerBalanceBefore,
             };
             
             if (location) invoiceData.location = location;
@@ -573,7 +576,7 @@ export default function SalesRepInvoicePage() {
                             </Label>
                         </div>
                         {isDelivery && (
-                            <div className="grid md:grid-cols-2 gap-6 pl-8 rtl:pr-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-8 rtl:pr-8">
                                 <div className="space-y-2">
                                     <Label htmlFor="delivery-person">موظف التوصيل (الطيار)</Label>
                                     <Combobox
@@ -671,7 +674,7 @@ export default function SalesRepInvoicePage() {
                                     <span>الإجمالي الفرعي</span>
                                     <span>ج.م {subtotal.toFixed(2)}</span>
                                 </div>
-                                <div className="flex justify-between items-center">
+                                <div className="flex justify-between items-center text-sm">
                                     <span>الخصم</span>
                                     <Input type="number" value={discount} onFocus={e => e.target.select()} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} className="h-8 max-w-[120px] text-left" placeholder="0.00"/>
                                 </div>
@@ -695,7 +698,7 @@ export default function SalesRepInvoicePage() {
 
                     <div className="space-y-2">
                         <Label htmlFor="notes">ملاحظات</Label>
-                        <Textarea id="notes" placeholder="أضف أي ملاحظات هنا..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+                        <Textarea id="notes" placeholder="أضف أي ملاحظات تظهر في الفاتورة هنا..." value={notes} onChange={(e) => setNotes(e.target.value)} />
                     </div>
                 </>
             )}

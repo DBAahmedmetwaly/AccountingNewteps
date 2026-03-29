@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -824,7 +823,8 @@ export default function PosPage() {
     const allDataContext = useData();
     const { 
       items: allItems, customers, dbAction, itemCategories, itemGroups, itemSubCategories1, itemSubCategories2, posSessions, settings, warehouses: allWarehousesData,
-      salesInvoices, inventory, getNextId, heldInvoices, posTerminals: allTerminals, posReturns, promotions, deliveryStaff, restaurantTables, paymentMethods, sellers, posSales
+      salesInvoices, inventory, getNextId, heldInvoices, posTerminals: allTerminals, posReturns, promotions, deliveryStaff, restaurantTables, paymentMethods, sellers, posSales,
+      customerPayments, salesReturns
      } = allDataContext;
     const { user } = useAuth();
 
@@ -1623,6 +1623,41 @@ export default function PosPage() {
         }
     }, [companySettings, receiptDesign, kitchenReceiptDesign, warehouseForSession, customers, settings, sendToPrinter, toast]);
 
+    const selectedCustomerBalance = useMemo(() => {
+        if (!selectedCustomerId) return 0;
+        const c = customers.find((cust: any) => cust.id === selectedCustomerId);
+        if (!c) return 0;
+
+        let balance = Number(c.openingBalance) || 0;
+        
+        salesInvoices.filter((inv: any) => inv.customerId === selectedCustomerId && inv.status === 'approved')
+            .forEach((inv: any) => {
+                balance += (Number(inv.total) - Number(inv.paidAmount || 0));
+            });
+
+        posSales.filter((sale: any) => sale.customerId === selectedCustomerId)
+            .forEach((sale: any) => {
+                balance += (Number(sale.total) - Number(sale.paidAmount || 0));
+            });
+
+        customerPayments.filter((p: any) => p.customerId === selectedCustomerId && !p.invoiceId)
+            .forEach((p: any) => {
+                balance -= Number(p.amount);
+            });
+
+        salesReturns.filter((r: any) => r.customerId === selectedCustomerId)
+            .forEach((r: any) => {
+                balance -= (Number(r.total) - Number(r.paidAmount || 0));
+            });
+        
+        posReturns.filter((r: any) => r.customerId === selectedCustomerId)
+            .forEach((r: any) => {
+                balance -= (Number(r.total) - Number(r.paidAmount || 0));
+            });
+
+        return balance;
+    }, [selectedCustomerId, customers, salesInvoices, posSales, posReturns, customerPayments, salesReturns]);
+
     const handleFinishSale = async (sellerId?: string) => {
         if (cart.length === 0 || !warehouseForSession) {
             toast({ variant: 'destructive', title: 'خطأ', description: 'السلة فارغة أو لم يتم تحديد المخزن.' });
@@ -1644,7 +1679,7 @@ export default function PosPage() {
         const customer = selectedCustomerId ? customers.find((c: any) => c.id === selectedCustomerId) : null;
         
         if (allowCredit && customer && remainingAmount > 0) {
-             const currentBalance = customer.currentBalance || 0; // Assuming this is pre-calculated
+             const currentBalance = selectedCustomerBalance;
              const creditLimit = customer.creditLimit || 0;
              if (currentBalance + remainingAmount > creditLimit) {
                  toast({ variant: "destructive", title: "تجاوز حد الائتمان", description: `لا يمكن إتمام العملية. الرصيد الحالي ${currentBalance.toLocaleString()} + الفاتورة الحالية ${remainingAmount.toLocaleString()} سيتجاوز حد الائتمان (${creditLimit.toLocaleString()}).` });
@@ -1701,7 +1736,8 @@ export default function PosPage() {
                 isTaxIncluded: isTaxIncluded,
                 taxAmount: taxAmount,
                 taxRate: vatRate / 100,
-                etaSettings: settings?.main?.eInvoice?.branchOverrides?.[warehouseForSession.id] || settings?.main?.eInvoice?.default || null
+                etaSettings: settings?.main?.eInvoice?.branchOverrides?.[warehouseForSession.id] || settings?.main?.eInvoice?.default || null,
+                customerBalanceBefore: selectedCustomerBalance,
             };
     
             const newSaleId = await dbAction(`posSales/${dateString}`, 'add', saleData) as string;
@@ -1735,13 +1771,6 @@ export default function PosPage() {
 
             // Send Notification to Realtime DB (Internal In-App Notification)
             try {
-                // We use direct firebase import or dbAction if flexible enough. 
-                // Since dbAction wraps specific logic, we'll try to use a direct write or a generic action if available.
-                // Assuming dbAction can handle 'notifications' or we import the DB directly.
-                // Let's use dbAction with a new path 'notifications' which might need to be allowed in the data context, 
-                // or easier: just use the direct firebase import if available in this file.
-                // Looking at imports, we don't have 'database' imported directly.
-                // We have 'dbAction'. Let's assume we can add to 'notifications'.
                 await dbAction('notifications', 'add', {
                     title: 'عملية بيع جديدة',
                     body: `تم بيع فاتورة رقم ${invoiceNumber} بقيمة ${total.toLocaleString()}`,

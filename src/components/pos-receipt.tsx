@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -152,10 +153,18 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
   const effectiveCompanyAddress = company?.companyAddress || "العنوان";
   const effectivePartyName = customer?.name || invoice?.customerName || "عميل نقدي";
 
-  // Calculate balances
-  const balanceAfter = customerBalance ?? 0;
-  const netDebtFromInvoice = totalAmount - paidAmount;
-  const balanceBefore = balanceAfter - netDebtFromInvoice;
+  // Calculate balances logic with fixed reference
+  let balanceBefore = 0;
+  let balanceAfter = 0;
+
+  if (invoice?.customerBalanceBefore !== undefined) {
+      balanceBefore = Number(invoice.customerBalanceBefore);
+      balanceAfter = balanceBefore + remainingInInvoice;
+  } else {
+      // Fallback
+      balanceAfter = customerBalance ?? 0;
+      balanceBefore = balanceAfter - remainingInInvoice;
+  }
 
   return (
     <div style={receiptStyle} className="bg-white text-black printable-area">
@@ -234,7 +243,7 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
         
         {remainingInInvoice > 0.01 && (
             <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', color: '#d00', borderTop: '1px dashed #ccc', paddingTop: '4px' }}>
-                <span>باقي الفاتورة (آجل):</span>
+                <span>باقي الفاتورة (الآجل):</span>
                 <span>{remainingInInvoice.toFixed(2)}</span>
             </p>
         )}

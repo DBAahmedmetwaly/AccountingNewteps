@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Trash2, Printer, Save, Loader2, Info, Truck, MapPin, Wallet, UserPlus, Clock } from "lucide-react";
+import { PlusCircle, Trash2, Save, Loader2, Info, Truck, MapPin, Wallet, UserPlus, Clock } from "lucide-react";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useData } from "@/contexts/data-provider";
 import { useToast } from "@/hooks/use-toast";
@@ -391,6 +391,7 @@ export default function SalesInvoicePage() {
                 isDelivery,
                 deliveryPersonId: isDelivery ? deliveryPersonId : null,
                 deliveryPersonName: isDelivery ? deliveryStaff.find((d:any) => d.id === deliveryPersonId)?.name : null,
+                customerBalanceBefore: selectedCustomerBalance, // Store balance at time of issuance
             };
             
             if (location) invoiceData.location = location;
@@ -445,12 +446,12 @@ export default function SalesInvoicePage() {
 
         salesReturns.filter((r: any) => r.customerId === customerId)
             .forEach((r: any) => {
-                balance -= Number(r.total);
+                balance -= (Number(r.total) - Number(r.paidAmount || 0));
             });
         
         posReturns.filter((r: any) => r.customerId === customerId)
             .forEach((r: any) => {
-                balance -= Number(r.total);
+                balance -= (Number(r.total) - Number(r.paidAmount || 0));
             });
 
         return balance;
