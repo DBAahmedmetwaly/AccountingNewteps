@@ -316,6 +316,7 @@ export default function CustomersPage() {
 
         const returns = salesReturns.filter((r: any) => r.customerId === customer.id);
         returns.forEach((ret: any) => { 
+            // Net impact: reduce debt by total, but increase by cash given back
             balance -= (Number(ret.total) - Number(ret.paidAmount || 0)); 
         });
 

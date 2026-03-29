@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -151,6 +152,41 @@ export default function SalesInvoicesListPage() {
   const customerOptions = useMemo(() => ([{value: 'all', label: 'كل العملاء'}, ...customers.map((c:any) => ({ value: c.id, label: c.name }))]), [customers]);
   const warehouseOptions = useMemo(() => ([{value: 'all', label: 'كل الفروع'}, ...warehouses.map((w:any) => ({ value: w.id, label: w.name }))]), [warehouses]);
 
+  const calculateCustomerBalance = (customerId: string) => {
+    const customer = customers.find((c: any) => c.id === customerId);
+    if (!customer) return 0;
+
+    let balance = Number(customer.openingBalance) || 0;
+    
+    invoices.filter((inv: any) => inv.customerId === customerId && inv.status === 'approved')
+        .forEach((inv: any) => {
+            balance += (Number(inv.total) - Number(inv.paidAmount || 0));
+        });
+
+    posSales.filter((sale: any) => sale.customerId === customerId)
+        .forEach((sale: any) => {
+            balance += (Number(sale.total) - Number(sale.paidAmount || 0));
+        });
+
+    customerPayments.filter((p: any) => p.customerId === customerId && !p.invoiceId)
+        .forEach((p: any) => {
+            balance -= Number(p.amount);
+        });
+
+    salesReturns.filter((r: any) => r.customerId === customerId)
+        .forEach((r: any) => {
+            // Net impact: reduce debt by total, but increase by cash given back
+            balance -= (Number(r.total) - Number(r.paidAmount || 0));
+        });
+    
+    posReturns.filter((r: any) => r.customerId === customerId)
+        .forEach((r: any) => {
+            balance -= (Number(r.total) - Number(r.paidAmount || 0));
+        });
+
+    return balance;
+  };
+
   const filteredInvoices = useMemo(() => {
     return invoices
       .map((invoice: any) => {
@@ -177,40 +213,6 @@ export default function SalesInvoicesListPage() {
 
   const companySettings = useMemo(() => settings?.main?.general || {}, [settings]);
   const posReceiptDesign = useMemo(() => settings?.main?.posReceipts?.defaultReceiptDesign || {}, [settings]);
-
-  const calculateCustomerBalance = (customerId: string) => {
-    const customer = customers.find((c: any) => c.id === customerId);
-    if (!customer) return 0;
-
-    let balance = Number(customer.openingBalance) || 0;
-    
-    invoices.filter((inv: any) => inv.customerId === customerId && inv.status === 'approved')
-        .forEach((inv: any) => {
-            balance += (Number(inv.total) - Number(inv.paidAmount || 0));
-        });
-
-    posSales.filter((sale: any) => sale.customerId === customerId)
-        .forEach((sale: any) => {
-            balance += (Number(sale.total) - Number(sale.paidAmount || 0));
-        });
-
-    customerPayments.filter((p: any) => p.customerId === customerId && !p.invoiceId)
-        .forEach((p: any) => {
-            balance -= Number(p.amount);
-        });
-
-    salesReturns.filter((r: any) => r.customerId === customerId)
-        .forEach((r: any) => {
-            balance -= Number(r.total);
-        });
-    
-    posReturns.filter((r: any) => r.customerId === customerId)
-        .forEach((r: any) => {
-            balance -= Number(r.total);
-        });
-
-    return balance;
-  };
 
   const handlePrint = () => {
     if (!printModal.invoice || !printFrameRef.current) return;
@@ -328,19 +330,19 @@ export default function SalesInvoicesListPage() {
             <CardHeader className="p-4"><CardTitle className="text-lg flex items-center gap-2"><Search className="h-4 w-4"/> فلاتر البحث</CardTitle></CardHeader>
             <CardContent className="p-4 pt-0">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                     <div className="space-y-2">
+                    <div className="space-y-2">
                         <Label className="text-xs">العميل</Label>
                         <Combobox options={customerOptions} value={filters.customerId} onValueChange={(v) => handleFilterChange("customerId", v)} placeholder="كل العملاء" emptyMessage="لا يوجد عملاء."/>
                     </div>
-                     <div className="space-y-2">
+                    <div className="space-y-2">
                         <Label className="text-xs">الفرع</Label>
                         <Combobox options={warehouseOptions} value={filters.warehouseId} onValueChange={(v) => handleFilterChange("warehouseId", v)} placeholder="كل الفروع" emptyMessage="لا توجد فروع."/>
                     </div>
-                     <div className="space-y-2">
+                    <div className="space-y-2">
                         <Label className="text-xs">من تاريخ</Label>
                         <Input type="date" value={filters.fromDate} onChange={(e) => handleFilterChange("fromDate", e.target.value)} className="h-9"/>
                     </div>
-                     <div className="space-y-2">
+                    <div className="space-y-2">
                         <Label className="text-xs">إلى تاريخ</Label>
                         <Input type="date" value={filters.toDate} onChange={(e) => handleFilterChange("toDate", e.target.value)} className="h-9" />
                     </div>

@@ -61,7 +61,7 @@ const QuickPaymentDialog = ({ customer, onSave }: { customer: any, onSave: () =>
 
     const cashAccountOptions = useMemo(() => {
         return cashAccounts
-            .filter((acc: any) => !acc.userId && !acc.salesRepId) // استبعاد عهد المناديب
+            .filter((acc: any) => !acc.userId && !acc.salesRepId) // استبعاد المناديب
             .map((acc: any) => {
                 const warehouse = warehouses.find(w => w.id === acc.warehouseId);
                 return { 
