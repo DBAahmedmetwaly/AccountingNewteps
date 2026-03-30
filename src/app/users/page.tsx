@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
@@ -15,6 +14,12 @@ import {
   UserRound,
   Ban,
   ShieldCheck,
+  Search,
+  Calendar,
+  Phone,
+  KeyRound,
+  Warehouse,
+  User as UserIcon
 } from "lucide-react";
 import {
   Card,
@@ -41,6 +46,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/contexts/permissions-context";
@@ -69,6 +75,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { useAuth } from "@/contexts/auth-context";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 interface User {
   id?: string;
@@ -76,7 +84,7 @@ interface User {
   name: string;
   phone?: string;
   loginName?: string;
-  password?: string; // Password can be optional as we might not want to expose it everywhere
+  password?: string; 
   role?: string;
   warehouseIds?: string[];
   isSalesRep?: boolean;
@@ -130,27 +138,22 @@ const UserForm = ({
   });
 
   const warehouseOptions = React.useMemo(() => {
-    // 1. Identify the active license for this user (if any)
     const licenseKey = user?.themeSettings?.licenseKey || currentLicenseKey;
     const currentLicense = licenseKey ? licenses.find((l: any) => l.key === licenseKey) : null;
 
-    // 2. Determine allowed warehouses based on license
     let allowedWarehouses = warehouses;
     let allowAllOption = true;
 
     if (currentLicense) {
         const assignedIds = currentLicense.assignedWarehouseIds || [];
         if (assignedIds.length > 0) {
-            // Specific license: Filter warehouses
             allowedWarehouses = warehouses.filter((w: any) => assignedIds.includes(w.id));
-            allowAllOption = false; // Specific license users shouldn't select "All Branches" (Global)
+            allowAllOption = false; 
         }
     }
 
-    // 3. Build options
     const options = allowedWarehouses.map((w) => ({ value: w.id, label: w.name }));
 
-    // 4. Add "Delegate Warehouse" if user is a rep (to ensure it shows nicely if selected)
     if (user?.isSalesRep) {
         const repWarehouse = warehouses.find(w => w.repId === user.id);
         if (repWarehouse && !allowedWarehouses.find(w => w.id === repWarehouse.id)) {
@@ -163,7 +166,8 @@ const UserForm = ({
     }
 
     return options;
-  }, [warehouses, licenses, user]);
+  }, [warehouses, licenses, user, currentLicenseKey]);
+
   const roleOptions = React.useMemo(
     () => roles.map((r) => ({ value: r, label: r })),
     [roles]
@@ -261,8 +265,8 @@ const UserForm = ({
             />
           </div>
         </div>
-        <div className="flex items-center space-x-4 pt-2">
-          <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-4 pt-2">
+          <div className="flex items-center space-x-2 rtl:space-x-reverse">
             <Checkbox
               id="is-sales-rep"
               checked={formData.isSalesRep}
@@ -272,28 +276,28 @@ const UserForm = ({
               مندوب مبيعات
             </Label>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 rtl:space-x-reverse">
             <Checkbox
               id="is-cashier"
               checked={formData.isCashier}
               onCheckedChange={(checked) => setFormData({ ...formData, isCashier: !!checked })}
             />
             <Label htmlFor="is-cashier" className="cursor-pointer">
-              كاشير (لنقاط البيع)
+              كاشير
             </Label>
           </div>
-           <div className="flex items-center space-x-2">
+           <div className="flex items-center space-x-2 rtl:space-x-reverse">
             <Checkbox
               id="is-delivery"
               checked={formData.isDelivery}
               onCheckedChange={(checked) => setFormData({ ...formData, isDelivery: !!checked })}
             />
             <Label htmlFor="is-delivery" className="cursor-pointer">
-              موظف توصيل (طيار)
+              طيار
             </Label>
           </div>
         </div>
-         <div className="flex items-center justify-end space-x-2 pt-4">
+         <div className="flex items-center justify-end space-x-2 rtl:space-x-reverse pt-4 border-t mt-4">
             <Label htmlFor="is-disabled" className="cursor-pointer text-destructive font-semibold">
                 تعطيل حساب المستخدم
             </Label>
@@ -309,23 +313,23 @@ const UserForm = ({
                  <h4 className="font-medium text-sm">صلاحيات نقاط البيع</h4>
                 <Separator />
                 <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
                         <Checkbox id="canDeleteFromCart" checked={formData.canDeleteFromCart} onCheckedChange={(checked) => setFormData({ ...formData, canDeleteFromCart: !!checked })}/>
                         <Label htmlFor="canDeleteFromCart" className="cursor-pointer">يمكنه حذف صنف من السلة</Label>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
                         <Checkbox id="canProcessReturn" checked={formData.canProcessReturn} onCheckedChange={(checked) => setFormData({ ...formData, canProcessReturn: !!checked })}/>
                         <Label htmlFor="canProcessReturn" className="cursor-pointer">يمكنه إجراء مرتجع</Label>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
                         <Checkbox id="canCancelInvoice" checked={formData.canCancelInvoice} onCheckedChange={(checked) => setFormData({ ...formData, canCancelInvoice: !!checked })}/>
                         <Label htmlFor="canCancelInvoice" className="cursor-pointer">يمكنه إلغاء فاتورة بالكامل</Label>
                     </div>
-                     <div className="flex items-center space-x-2">
+                     <div className="flex items-center space-x-2 rtl:space-x-reverse">
                         <Checkbox id="canBypassScannerForReturn" checked={formData.canBypassScannerForReturn} onCheckedChange={(checked) => setFormData({ ...formData, canBypassScannerForReturn: !!checked })}/>
                         <Label htmlFor="canBypassScannerForReturn" className="cursor-pointer">يمكنه إرجاع فاتورة كاملة (وضع المدير)</Label>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
                         <Checkbox id="canOpenOwnShift" checked={!!formData.canOpenOwnShift} onCheckedChange={(checked) => setFormData({ ...formData, canOpenOwnShift: !!checked })}/>
                         <Label htmlFor="canOpenOwnShift" className="cursor-pointer">يمكنه فتح وردية لنفسه</Label>
                     </div>
@@ -345,6 +349,8 @@ export default function UsersPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { can } = usePermissions();
+  const isMobile = useIsMobile();
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -354,14 +360,12 @@ export default function UsersPage() {
   const filteredUsers = useMemo(() => {
     if (!users) return [];
     
-    // 1. First, filter by license (if current user is not a super-admin)
     let filtered = users;
     if (user?.id !== 'superadmin') {
       const userLicense = user?.themeSettings?.licenseKey;
       filtered = users.filter((u: any) => u.themeSettings?.licenseKey === userLicense);
     }
 
-    // 2. Then filter by search term
     if (!searchTerm) return filtered;
     
     return filtered.filter((u: any) =>
@@ -370,12 +374,6 @@ export default function UsersPage() {
       u.loginName?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [users, user, searchTerm]);
-
-  useEffect(() => {
-    if (!isEditOpen && !isDeleteAlertOpen) {
-        document.body.style.pointerEvents = 'auto';
-    }
-  }, [isEditOpen, isDeleteAlertOpen]);
 
   const moduleName = "settings_users";
   const roleNames = rolesData ? Object.keys(rolesData) : [];
@@ -396,35 +394,24 @@ export default function UsersPage() {
         const isCurrentlyRep = userToUpdate?.isSalesRep || false;
         const willBeRep = userData.isSalesRep || false;
 
-        // --- License Validation Logic ---
-        // 1. Identify active licenses
         const activeLicenses = (licenses || []).filter((l: any) => 
             l.status !== 'expired' && (!l.endDate || new Date(l.endDate) > new Date())
         );
 
         const targetWarehouses = userData.warehouseIds || [];
         
-        // We need to check if adding this user to these warehouses violates any license limits.
-        // Strategy: For each target warehouse, find the controlling license. 
-        // Then check that license's utilization.
-
-        // If target is 'all', we look for a global license.
         if (targetWarehouses.includes('all')) {
              const globalLicense = activeLicenses.find((l: any) => !l.assignedWarehouseIds || l.assignedWarehouseIds.length === 0);
              if (!globalLicense) {
                  return toast({ variant: "destructive", title: "خطأ في الترخيص", description: "لا توجد رخصة عامة (Global) سارية لتغطية خيار 'كل الفروع'." });
              }
              
-             // Count total users in system (active)
              const totalUsers = users.filter((u: any) => !u.isDisabled && u.id !== userData.id).length;
              if (totalUsers + 1 > (globalLicense.maxUsers || 5)) {
                  return toast({ variant: "destructive", title: "تجاوز الحد المسموح", description: `عفواً، تم تجاوز الحد الأقصى للمستخدمين (${globalLicense.maxUsers}) المسموح به في الرخصة العامة.` });
              }
         } else {
-            // Specific warehouses
             for (const warehouseId of targetWarehouses) {
-                // Find license for this warehouse. 
-                // Priority: Specific License > Global License
                 let license = activeLicenses.find((l: any) => l.assignedWarehouseIds?.includes(warehouseId));
                 if (!license) {
                     license = activeLicenses.find((l: any) => !l.assignedWarehouseIds || l.assignedWarehouseIds.length === 0);
@@ -435,23 +422,14 @@ export default function UsersPage() {
                      return toast({ variant: "destructive", title: "خطأ في الترخيص", description: `لا توجد رخصة سارية تغطي الفرع: ${warehouseName}` });
                 }
 
-                // Calculate utilization for this license
-                // Users consume this license if they are assigned to ANY warehouse covered by this license.
-                const coveredWarehouses = license.assignedWarehouseIds || []; // Empty means all
+                const coveredWarehouses = license.assignedWarehouseIds || []; 
                 
                 const usersConsumingLicense = users.filter((u: any) => {
                     if (u.isDisabled) return false;
                     if (u.id === userData.id) return false;
-                    
                     const uWarehouses = u.warehouseIds || [];
-                    
-                    // If license is global, ALL users consume it
                     if (coveredWarehouses.length === 0) return true;
-
-                    // If user has 'all', they consume this license (since they access this branch)
                     if (uWarehouses.includes('all')) return true;
-
-                    // Intersection
                     return uWarehouses.some((id: string) => coveredWarehouses.includes(id));
                 });
 
@@ -461,34 +439,26 @@ export default function UsersPage() {
                 }
             }
         }
-        // --- End License Validation ---
 
-        if (userData.id) { // This is an update
+        if (userData.id) { 
             if (!can("edit", moduleName)) return toast({ variant: "destructive", title: "غير مصرح به" });
 
             const { id, ...dataToUpdate } = userData;
             
-            // Check if Sales Rep status changed
             if (willBeRep && !isCurrentlyRep) {
-                // Toggled ON: Create custody accounts if they don't exist
                 const warehouseName = `عهدة المندوب: ${dataToUpdate.name}`;
                 const newWarehouseId = await dbAction('warehouses', 'add', { name: warehouseName, isRepWarehouse: true, repId: id });
                 await dbAction('cashAccounts', 'add', { name: `عهدة: ${dataToUpdate.name}`, type: 'cash', openingBalance: 0, userId: id });
-                // Merge new warehouse with existing selections
                 const currentIds = dataToUpdate.warehouseIds || [];
                 dataToUpdate.warehouseIds = newWarehouseId ? [...currentIds, newWarehouseId as string] : currentIds;
             } else if (!willBeRep && isCurrentlyRep) {
-                // Toggled OFF: Delete custody accounts
                 const repWarehouse = warehouses.find((w: any) => w.repId === id);
                 if (repWarehouse) await dbAction('warehouses', 'remove', { id: repWarehouse.id });
-                
                 const repCashAccount = cashAccountsData.find((acc: any) => acc.userId === id);
                 if (repCashAccount) await dbAction('cashAccounts', 'remove', { id: repCashAccount.id });
-                
                 dataToUpdate.warehouseIds = [];
             }
 
-            // Ensure Rep Warehouse is preserved if user is a Sales Rep
             if (willBeRep && id) {
                  const repWarehouse = warehouses.find((w: any) => w.repId === id);
                  if (repWarehouse) {
@@ -500,25 +470,21 @@ export default function UsersPage() {
             }
 
             const userRecord: any = { ...dataToUpdate };
-            if (!dataToUpdate.password) {
-                delete userRecord.password;
-            }
+            if (!dataToUpdate.password) delete userRecord.password;
 
             await dbAction("users", "update", { id, data: userRecord });
             toast({ title: "تم تحديث بيانات المستخدم بنجاح" });
 
-        } else { // This is a new user
+        } else { 
             if (!can("add", moduleName)) return toast({ variant: "destructive", title: "غير مصرح به" });
             if (!userData.password || !userData.loginName) return toast({ variant: "destructive", title: "خطأ", description: "اسم الدخول وكلمة المرور مطلوبان." });
             
-            // --- Auto-assign license from creator ---
             const creatorLicenseKey = user?.themeSettings?.licenseKey;
             let userRecord: any = { 
                 ...userData, 
                 uid: `db_${Date.now()}`,
                 themeSettings: userData.themeSettings || (creatorLicenseKey ? { licenseKey: creatorLicenseKey, licenseStatus: 'active' } : undefined)
             };
-            // --- End Auto-assign ---
 
             const newUserId = await dbAction("users", "add", userRecord) as string;
             
@@ -526,8 +492,6 @@ export default function UsersPage() {
                  const warehouseName = `عهدة المندوب: ${userData.name}`;
                  const newWarehouseId = await dbAction('warehouses', 'add', { name: warehouseName, isRepWarehouse: true, repId: newUserId }) as string;
                  await dbAction('cashAccounts', 'add', { name: `عهدة: ${userData.name}`, type: 'cash', openingBalance: 0, userId: newUserId });
-                 
-                 // Update the newly created user with their dedicated warehouse ID (merged with selection)
                  const currentSelected = userData.warehouseIds || [];
                  const newIds = [...currentSelected, newWarehouseId];
                  await dbAction('users', 'update', {id: newUserId, data: { warehouseIds: newIds }});
@@ -537,83 +501,49 @@ export default function UsersPage() {
         }
     } catch (error: any) {
         toast({ variant: "destructive", title: "خطأ في الحفظ", description: "فشل حفظ بيانات المستخدم." });
-        console.error("User save failed:", error);
     }
   };
 
-  const handleDelete = async (user: any) => {
-    if (!can("delete", moduleName) || !user.id)
+  const handleDelete = async (targetUser: any) => {
+    if (!can("delete", moduleName) || !targetUser.id)
       return toast({ variant: "destructive", title: "غير مصرح به" });
 
     try {
-      // 1. Find and delete the rep's warehouse if it exists
-      if (user.isSalesRep) {
-        const repWarehouse = warehouses.find((w: any) => w.repId === user.id);
-        if (repWarehouse) {
-          await dbAction('warehouses', 'remove', { id: repWarehouse.id });
-        }
-        
-        // 2. Find and delete the rep's cash account if it exists
-        const repCashAccount = cashAccountsData.find((acc: any) => acc.userId === user.id);
-        if (repCashAccount) {
-          await dbAction('cashAccounts', 'remove', { id: repCashAccount.id });
-        }
+      if (targetUser.isSalesRep) {
+        const repWarehouse = warehouses.find((w: any) => w.repId === targetUser.id);
+        if (repWarehouse) await dbAction('warehouses', 'remove', { id: repWarehouse.id });
+        const repCashAccount = cashAccountsData.find((acc: any) => acc.userId === targetUser.id);
+        if (repCashAccount) await dbAction('cashAccounts', 'remove', { id: repCashAccount.id });
       }
-
-      // 3. Delete the user record itself
-      await dbAction("users", "remove", { id: user.id });
-      
-      toast({
-        title: "تم الحذف",
-        description: "تم حذف المستخدم وبياناته المرتبطة من قاعدة البيانات.",
-      });
+      await dbAction("users", "remove", { id: targetUser.id });
+      toast({ title: "تم الحذف", description: "تم حذف المستخدم وبياناته المرتبطة." });
     } catch (error) {
       toast({ variant: "destructive", title: "خطأ", description: "فشل حذف المستخدم." });
-      console.error(error);
     }
   };
 
-  const getWarehouseName = (user: any) => {
-    let ids = user.warehouseIds || [];
-
-    // Fallback to license if no ids directly assigned
-    if (ids.length === 0 && user.themeSettings?.licenseKey && licenses) {
-        const license = licenses.find((l: any) => l.key === user.themeSettings.licenseKey);
-        if (license) {
-            ids = license.assignedWarehouseIds || [];
-            // If license has no assigned warehouses, it might be global (all)
-            if (ids.length === 0) return "كل الفروع (ترخيص عام)";
-        }
+  const getWarehouseNames = (u: any) => {
+    let ids = u.warehouseIds || [];
+    if (ids.length === 0 && u.themeSettings?.licenseKey && licenses) {
+        const license = licenses.find((l: any) => l.key === u.themeSettings.licenseKey);
+        if (license) ids = license.assignedWarehouseIds || [];
+        if (ids.length === 0) return "كل الفروع (ترخيص عام)";
     }
-
     if (!ids || ids.length === 0) return 'غير محدد';
     if (ids.includes('all')) return "كل الفروع";
     return ids.map((id: string) => warehouses.find((w: any) => w.id === id)?.name || id).join(', ');
   };
 
-  const getUsedLicense = (user: any) => {
-      if (user.themeSettings?.licenseKey) return user.themeSettings.licenseKey;
+  const getUsedLicenseKey = (u: any) => {
+      if (u.themeSettings?.licenseKey) return u.themeSettings.licenseKey;
       if (!licenses) return '-';
-
-      const userWarehouses = user.warehouseIds || [];
+      const userWarehouses = u.warehouseIds || [];
       if (userWarehouses.length === 0) return '-';
-
       const activeLicenses = licenses.filter((l: any) => l.status !== 'expired');
-
-      // 1. Check for specific license match
-      const specificLicense = activeLicenses.find((l: any) => {
-          const licWarehouses = l.assignedWarehouseIds || [];
-          if (licWarehouses.length === 0) return false; // Skip global
-          return userWarehouses.some((id: string) => licWarehouses.includes(id));
-      });
-      
+      const specificLicense = activeLicenses.find((l: any) => (l.assignedWarehouseIds || []).some((id: string) => userWarehouses.includes(id)));
       if (specificLicense) return specificLicense.key;
-
-      // 2. Check for global license
       const globalLicense = activeLicenses.find((l: any) => !l.assignedWarehouseIds || l.assignedWarehouseIds.length === 0);
-      if (globalLicense) return globalLicense.key;
-
-      return '-';
+      return globalLicense ? globalLicense.key : '-';
   };
 
   return (
@@ -643,118 +573,167 @@ export default function UsersPage() {
           </AddEntityDialog>
         )}
       </PageHeader>
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
-        <Card>
-          <CardHeader>
+      <main className="flex flex-1 flex-col gap-4 p-2 md:p-6">
+        <Card className="shadow-sm">
+          <CardHeader className="pb-4">
             <div className="flex flex-col md:flex-row justify-between gap-4">
               <div>
-                <CardTitle>قائمة المستخدمين</CardTitle>
-                <CardDescription>
-                  عرض وتعديل بيانات المستخدمين وصلاحياتهم.
-                </CardDescription>
+                <CardTitle className="text-xl">قائمة المستخدمين والمناديب</CardTitle>
+                <CardDescription>عرض وتعديل بيانات المستخدمين وصلاحياتهم الفنية والبيعية.</CardDescription>
               </div>
-              <div className="w-full md:w-1/3">
+              <div className="relative w-full md:w-80">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="بحث بالاسم..."
+                  placeholder="بحث بالاسم أو الهاتف..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pr-9 h-10"
                 />
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0 sm:p-6 sm:pt-0">
             {loading ? (
-              <div className="flex justify-center items-center py-10">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <div className="flex justify-center items-center py-20">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : (
-              <div className="w-full overflow-auto border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>اسم المستخدم</TableHead>
-                      <TableHead className="hidden md:table-cell">اسم الدخول</TableHead>
-                      <TableHead className="text-center">مندوب</TableHead>
-                      <TableHead className="text-center">كاشير</TableHead>
-                      <TableHead className="text-center">طيار</TableHead>
-                      <TableHead className="text-center">الوظيفة</TableHead>
-                      <TableHead className="hidden md:table-cell">الفرع</TableHead>
-                      <TableHead className="hidden lg:table-cell text-center">الترخيص</TableHead>
-                      <TableHead className="text-center">الحالة</TableHead>
-                      <TableHead className="text-center w-[100px]">الإجراءات</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredUsers.map((user: any) => {
-                      return (
-                        <TableRow key={user.id}>
-                          <TableCell className="font-medium">{user.name}</TableCell>
-                          <TableCell className="font-mono hidden md:table-cell">{user.loginName}</TableCell>
-                          <TableCell className="text-center">
-                            {user.isSalesRep && (
-                              <CheckCircle className="h-5 w-5 text-green-500 mx-auto" />
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {user.isCashier && (
-                              <CheckCircle className="h-5 w-5 text-green-500 mx-auto" />
-                            )}
-                          </TableCell>
-                           <TableCell className="text-center">
-                            {user.isDelivery && (
-                              <CheckCircle className="h-5 w-5 text-green-500 mx-auto" />
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="outline">{user.role}</Badge>
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            {getWarehouseName(user)}
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell text-center font-mono text-xs">
-                              {getUsedLicense(user)}
-                          </TableCell>
-                           <TableCell className="text-center">
-                            <Badge variant={user.isDisabled ? "destructive" : "default"}>
-                                {user.isDisabled ? 'معطل' : 'نشط'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button aria-haspopup="true" size="icon" variant="ghost">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                  <span className="sr-only">قائمة الإجراءات</span>
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
-                                {can("edit", moduleName) && (
-                                  <DropdownMenuItem onSelect={() => handleEditClick(user)}>
-                                    <Edit className="ml-2 h-4 w-4" />
-                                    تعديل
-                                  </DropdownMenuItem>
-                                )}
-                                {can("delete", moduleName) && (
-                                  <DropdownMenuItem
-                                    className="text-destructive"
-                                    onSelect={(e) => {
-                                        e.preventDefault();
-                                        handleDeleteClick(user);
-                                    }}
-                                  >
-                                    <Trash2 className="ml-2 h-4 w-4" />
-                                    حذف
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
+              <div className="w-full">
+                {isMobile ? (
+                  <div className="space-y-3 p-3">
+                    {filteredUsers.length > 0 ? filteredUsers.map((u: any) => (
+                      <Card key={u.id} className={cn("overflow-hidden border-r-4 shadow-sm", u.isDisabled ? "border-r-destructive opacity-80" : "border-r-primary")}>
+                        <CardContent className="p-4">
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="space-y-1">
+                              <div className="font-bold text-base leading-tight flex items-center gap-2">
+                                {u.name}
+                                {u.isDisabled && <Badge variant="destructive" className="text-[9px] h-4">معطل</Badge>}
+                              </div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-1 font-mono">
+                                <UserRound className="h-3 w-3"/>
+                                {u.loginName}
+                                {u.phone && <><span className="mx-1">•</span><Phone className="h-3 w-3"/>{u.phone}</>}
+                              </div>
+                            </div>
+                            <Badge variant="outline" className="text-[10px]">{u.role}</Badge>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-3 py-3 border-t border-b border-muted">
+                             <div className="space-y-1">
+                                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">الفروع</span>
+                                <p className="text-xs font-medium line-clamp-1 flex items-center gap-1"><Warehouse className="h-3 w-3 shrink-0"/>{getWarehouseNames(u)}</p>
+                             </div>
+                             <div className="space-y-1">
+                                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">الترخيص</span>
+                                <p className="text-[10px] font-mono line-clamp-1 flex items-center gap-1"><KeyRound className="h-3 w-3 shrink-0"/>{getUsedLicenseKey(u)}</p>
+                             </div>
+                          </div>
+
+                          <div className="flex justify-between items-center pt-3">
+                            <div className="flex gap-1">
+                               {u.isSalesRep && <TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="secondary" className="h-5 px-1.5"><UserIcon className="h-3 w-3"/></Badge></TooltipTrigger><TooltipContent>مندوب</TooltipContent></Tooltip></TooltipProvider>}
+                               {u.isCashier && <TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="secondary" className="h-5 px-1.5"><ShieldCheck className="h-3 w-3"/></Badge></TooltipTrigger><TooltipContent>كاشير</TooltipContent></Tooltip></TooltipProvider>}
+                               {u.isDelivery && <TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="secondary" className="h-5 px-1.5"><Truck className="h-3 w-3"/></Badge></TooltipTrigger><TooltipContent>طيار</TooltipContent></Tooltip></TooltipProvider>}
+                            </div>
+                            <div className="flex gap-2">
+                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleEditClick(u)}><Edit className="h-4 w-4"/></Button>
+                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive" onClick={() => handleDeleteClick(u)}><Trash2 className="h-4 w-4"/></Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )) : <div className="text-center py-20 text-muted-foreground italic">لا يوجد مستخدمون يطابقون البحث.</div>}
+                  </div>
+                ) : (
+                  <div className="w-full overflow-auto border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead>اسم المستخدم</TableHead>
+                          <TableHead className="hidden md:table-cell">اسم الدخول</TableHead>
+                          <TableHead className="text-center">مندوب</TableHead>
+                          <TableHead className="text-center">كاشير</TableHead>
+                          <TableHead className="text-center">طيار</TableHead>
+                          <TableHead className="text-center">الوظيفة</TableHead>
+                          <TableHead className="hidden md:table-cell">الفرع</TableHead>
+                          <TableHead className="hidden lg:table-cell text-center">الترخيص</TableHead>
+                          <TableHead className="text-center">الحالة</TableHead>
+                          <TableHead className="text-center w-[100px]">الإجراءات</TableHead>
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredUsers.map((u: any) => {
+                          return (
+                            <TableRow key={u.id} className={cn(u.isDisabled && "bg-muted/30 opacity-70")}>
+                              <TableCell className="font-medium">{u.name}</TableCell>
+                              <TableCell className="font-mono hidden md:table-cell">{u.loginName}</TableCell>
+                              <TableCell className="text-center">
+                                {u.isSalesRep && (
+                                  <CheckCircle className="h-5 w-5 text-green-500 mx-auto" />
+                                )}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {u.isCashier && (
+                                  <CheckCircle className="h-5 w-5 text-green-500 mx-auto" />
+                                )}
+                              </TableCell>
+                               <TableCell className="text-center">
+                                {u.isDelivery && (
+                                  <CheckCircle className="h-5 w-5 text-green-500 mx-auto" />
+                                )}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Badge variant="outline">{u.role}</Badge>
+                              </TableCell>
+                              <TableCell className="hidden md:table-cell">
+                                {getWarehouseNames(u)}
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell text-center font-mono text-[10px]">
+                                  {getUsedLicenseKey(u)}
+                              </TableCell>
+                               <TableCell className="text-center">
+                                <Badge variant={u.isDisabled ? "destructive" : "default"} className="text-[10px] h-5">
+                                    {u.isDisabled ? 'معطل' : 'نشط'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button aria-haspopup="true" size="icon" variant="ghost">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>إجراءات المستخدم</DropdownMenuLabel>
+                                    {can("edit", moduleName) && (
+                                      <DropdownMenuItem onSelect={() => handleEditClick(u)}>
+                                        <Edit className="ml-2 h-4 w-4" />
+                                        تعديل البيانات
+                                      </DropdownMenuItem>
+                                    )}
+                                    {can("delete", moduleName) && (
+                                      <DropdownMenuItem
+                                        className="text-destructive font-semibold"
+                                        onSelect={(e) => {
+                                            e.preventDefault();
+                                            handleDeleteClick(u);
+                                        }}
+                                      >
+                                        <Trash2 className="ml-2 h-4 w-4" />
+                                        حذف نهائي
+                                      </DropdownMenuItem>
+                                    )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -762,12 +741,10 @@ export default function UsersPage() {
       </main>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent 
-            className="sm:max-w-4xl"
-        >
+        <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>تعديل بيانات المستخدم</DialogTitle>
-            <DialogDescription>قم بتحديث بيانات المستخدم هنا.</DialogDescription>
+            <DialogDescription>قم بتحديث تفاصيل الحساب والصلاحيات.</DialogDescription>
           </DialogHeader>
           {editingUser && (
             <UserForm
@@ -787,16 +764,18 @@ export default function UsersPage() {
         <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>هل أنت متأكد تمامًا؟</AlertDialogTitle>
+              <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="text-destructive"/> تأكيد حذف المستخدم</AlertDialogTitle>
               <AlertDialogDescription>
-                هذا الإجراء سيحذف المستخدم بشكل دائم. إذا كان مندوبًا، سيتم حذف مخزن وخزينة عهدته أيضًا. لا يمكن
-                التراجع عن هذا الإجراء.
+                أنت على وشك حذف المستخدم <span className="font-bold">"{userToDelete.name}"</span> بشكل نهائي. 
+                إذا كان هذا المستخدم مندوب مبيعات، سيتم أيضاً حذف مخزن وخزينة عهدته.
+                <br/><br/>
+                <span className="text-destructive font-bold">تحذير: لا يمكن التراجع عن هذا الإجراء.</span>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>إلغاء</AlertDialogCancel>
-              <AlertDialogAction onClick={() => handleDelete(userToDelete)}>
-                متابعة
+              <AlertDialogAction onClick={() => handleDelete(userToDelete)} className="bg-destructive hover:bg-destructive/90">
+                نعم، قم بالحذف الآن
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
