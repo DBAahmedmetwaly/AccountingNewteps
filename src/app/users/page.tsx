@@ -19,7 +19,10 @@ import {
   Phone,
   KeyRound,
   Warehouse,
-  User as UserIcon
+  User as UserIcon,
+  Truck,
+  MapPin,
+  Users
 } from "lucide-react";
 import {
   Card,
@@ -77,6 +80,7 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import { useAuth } from "@/contexts/auth-context";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface User {
   id?: string;
@@ -272,7 +276,7 @@ const UserForm = ({
               checked={formData.isSalesRep}
               onCheckedChange={(checked) => setFormData({ ...formData, isSalesRep: !!checked })}
             />
-            <Label htmlFor="is-sales-rep" className="cursor-pointer">
+            <Label htmlFor="is-sales-rep" className="cursor-pointer font-bold">
               مندوب مبيعات
             </Label>
           </div>
@@ -282,7 +286,7 @@ const UserForm = ({
               checked={formData.isCashier}
               onCheckedChange={(checked) => setFormData({ ...formData, isCashier: !!checked })}
             />
-            <Label htmlFor="is-cashier" className="cursor-pointer">
+            <Label htmlFor="is-cashier" className="cursor-pointer font-bold">
               كاشير
             </Label>
           </div>
@@ -292,13 +296,13 @@ const UserForm = ({
               checked={formData.isDelivery}
               onCheckedChange={(checked) => setFormData({ ...formData, isDelivery: !!checked })}
             />
-            <Label htmlFor="is-delivery" className="cursor-pointer">
-              طيار
+            <Label htmlFor="is-delivery" className="cursor-pointer font-bold">
+              طيار (دليفري)
             </Label>
           </div>
         </div>
          <div className="flex items-center justify-end space-x-2 rtl:space-x-reverse pt-4 border-t mt-4">
-            <Label htmlFor="is-disabled" className="cursor-pointer text-destructive font-semibold">
+            <Label htmlFor="is-disabled" className="cursor-pointer text-destructive font-bold">
                 تعطيل حساب المستخدم
             </Label>
             <Switch
@@ -310,35 +314,38 @@ const UserForm = ({
       </div>
        {formData.isCashier && (
             <div className="space-y-2 pt-4">
-                 <h4 className="font-medium text-sm">صلاحيات نقاط البيع</h4>
+                 <h4 className="font-medium text-sm">صلاحيات نقاط البيع (الكاشير)</h4>
                 <Separator />
-                <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/50">
                     <div className="flex items-center space-x-2 rtl:space-x-reverse">
                         <Checkbox id="canDeleteFromCart" checked={formData.canDeleteFromCart} onCheckedChange={(checked) => setFormData({ ...formData, canDeleteFromCart: !!checked })}/>
-                        <Label htmlFor="canDeleteFromCart" className="cursor-pointer">يمكنه حذف صنف من السلة</Label>
+                        <Label htmlFor="canDeleteFromCart" className="cursor-pointer">حذف صنف من السلة</Label>
                     </div>
                     <div className="flex items-center space-x-2 rtl:space-x-reverse">
                         <Checkbox id="canProcessReturn" checked={formData.canProcessReturn} onCheckedChange={(checked) => setFormData({ ...formData, canProcessReturn: !!checked })}/>
-                        <Label htmlFor="canProcessReturn" className="cursor-pointer">يمكنه إجراء مرتجع</Label>
+                        <Label htmlFor="canProcessReturn" className="cursor-pointer">إجراء عمليات المرتجع</Label>
                     </div>
                     <div className="flex items-center space-x-2 rtl:space-x-reverse">
                         <Checkbox id="canCancelInvoice" checked={formData.canCancelInvoice} onCheckedChange={(checked) => setFormData({ ...formData, canCancelInvoice: !!checked })}/>
-                        <Label htmlFor="canCancelInvoice" className="cursor-pointer">يمكنه إلغاء فاتورة بالكامل</Label>
+                        <Label htmlFor="canCancelInvoice" className="cursor-pointer">إلغاء فاتورة بالكامل</Label>
                     </div>
                      <div className="flex items-center space-x-2 rtl:space-x-reverse">
                         <Checkbox id="canBypassScannerForReturn" checked={formData.canBypassScannerForReturn} onCheckedChange={(checked) => setFormData({ ...formData, canBypassScannerForReturn: !!checked })}/>
-                        <Label htmlFor="canBypassScannerForReturn" className="cursor-pointer">يمكنه إرجاع فاتورة كاملة (وضع المدير)</Label>
+                        <Label htmlFor="canBypassScannerForReturn" className="cursor-pointer">إرجاع فاتورة كاملة (مدير)</Label>
                     </div>
                     <div className="flex items-center space-x-2 rtl:space-x-reverse">
                         <Checkbox id="canOpenOwnShift" checked={!!formData.canOpenOwnShift} onCheckedChange={(checked) => setFormData({ ...formData, canOpenOwnShift: !!checked })}/>
-                        <Label htmlFor="canOpenOwnShift" className="cursor-pointer">يمكنه فتح وردية لنفسه</Label>
+                        <Label htmlFor="canOpenOwnShift" className="cursor-pointer">فتح وردية لنفسه</Label>
                     </div>
                 </div>
             </div>
         )}
 
       <div className="flex justify-end pt-4">
-        <Button onClick={handleSubmit}>حفظ المستخدم</Button>
+        <Button onClick={handleSubmit} className="px-10 h-12 text-lg font-bold">
+            <Save className="ml-2 h-5 w-5" />
+            حفظ البيانات
+        </Button>
       </div>
     </div>
   );
@@ -357,6 +364,13 @@ export default function UsersPage() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
 
+  useEffect(() => {
+    if (!isEditOpen && !isDeleteAlertOpen) {
+        document.body.style.pointerEvents = 'auto';
+        document.body.style.overflow = 'auto';
+    }
+  }, [isEditOpen, isDeleteAlertOpen]);
+
   const filteredUsers = useMemo(() => {
     if (!users) return [];
     
@@ -368,10 +382,11 @@ export default function UsersPage() {
 
     if (!searchTerm) return filtered;
     
+    const lowerSearch = searchTerm.toLowerCase();
     return filtered.filter((u: any) =>
-      u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.phone?.includes(searchTerm) ||
-      u.loginName?.toLowerCase().includes(searchTerm.toLowerCase())
+      u.name.toLowerCase().includes(lowerSearch) ||
+      (u.phone && u.phone.includes(searchTerm)) ||
+      (u.loginName && u.loginName.toLowerCase().includes(lowerSearch))
     );
   }, [users, user, searchTerm]);
 
@@ -403,7 +418,7 @@ export default function UsersPage() {
         if (targetWarehouses.includes('all')) {
              const globalLicense = activeLicenses.find((l: any) => !l.assignedWarehouseIds || l.assignedWarehouseIds.length === 0);
              if (!globalLicense) {
-                 return toast({ variant: "destructive", title: "خطأ في الترخيص", description: "لا توجد رخصة عامة (Global) سارية لتغطية خيار 'كل الفروع'." });
+                 return toast({ variant: "destructive", title: "خطأ في الترخيص", description: "لا توجد رخصة عامة سارية لتغطية خيار 'كل الفروع'." });
              }
              
              const totalUsers = users.filter((u: any) => !u.isDisabled && u.id !== userData.id).length;
@@ -456,7 +471,7 @@ export default function UsersPage() {
                 if (repWarehouse) await dbAction('warehouses', 'remove', { id: repWarehouse.id });
                 const repCashAccount = cashAccountsData.find((acc: any) => acc.userId === id);
                 if (repCashAccount) await dbAction('cashAccounts', 'remove', { id: repCashAccount.id });
-                dataToUpdate.warehouseIds = [];
+                dataToUpdate.warehouseIds = (dataToUpdate.warehouseIds || []).filter(wid => wid !== repWarehouse?.id);
             }
 
             if (willBeRep && id) {
@@ -549,29 +564,36 @@ export default function UsersPage() {
   return (
     <>
       <PageHeader title="إدارة المستخدمين">
-        {can("add", moduleName) && (
-          <AddEntityDialog
-            title="إضافة مستخدم جديد"
-            description="أدخل بيانات المستخدم وصلاحياته."
-            triggerButton={
-              <Button size="sm" className="gap-1">
-                <PlusCircle className="h-4 w-4" />
-                إضافة مستخدم
-              </Button>
-            }
-          >
-            {({ onClose }) => (
-                <UserForm
-                onSave={handleSave}
-                onClose={onClose}
-                warehouses={warehouses}
-                roles={roleNames}
-                licenses={licenses}
-                currentLicenseKey={user?.themeSettings?.licenseKey}
-                />
+        <div className="flex items-center gap-2">
+            <Badge variant="outline" className="h-8 gap-1.5 px-3">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span className="font-bold">{filteredUsers.length}</span>
+                <span className="text-muted-foreground">مستخدم</span>
+            </Badge>
+            {can("add", moduleName) && (
+            <AddEntityDialog
+                title="إضافة مستخدم جديد"
+                description="أدخل بيانات المستخدم وصلاحياته."
+                triggerButton={
+                <Button size="sm" className="gap-1 font-bold">
+                    <PlusCircle className="h-4 w-4" />
+                    إضافة مستخدم
+                </Button>
+                }
+            >
+                {({ onClose }) => (
+                    <UserForm
+                    onSave={handleSave}
+                    onClose={onClose}
+                    warehouses={warehouses}
+                    roles={roleNames}
+                    licenses={licenses}
+                    currentLicenseKey={user?.themeSettings?.licenseKey}
+                    />
+                )}
+            </AddEntityDialog>
             )}
-          </AddEntityDialog>
-        )}
+        </div>
       </PageHeader>
       <main className="flex flex-1 flex-col gap-4 p-2 md:p-6">
         <Card className="shadow-sm">
@@ -579,15 +601,15 @@ export default function UsersPage() {
             <div className="flex flex-col md:flex-row justify-between gap-4">
               <div>
                 <CardTitle className="text-xl">قائمة المستخدمين والمناديب</CardTitle>
-                <CardDescription>عرض وتعديل بيانات المستخدمين وصلاحياتهم الفنية والبيعية.</CardDescription>
+                <CardDescription>إدارة بيانات المستخدمين وصلاحياتهم التقنية والبيعية.</CardDescription>
               </div>
               <div className="relative w-full md:w-80">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="بحث بالاسم أو الهاتف..."
+                  placeholder="بحث بالاسم أو الهاتف أو اسم الدخول..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pr-9 h-10"
+                  className="pr-9 h-10 border-primary/20 focus:ring-primary"
                 />
               </div>
             </div>
@@ -616,7 +638,7 @@ export default function UsersPage() {
                                 {u.phone && <><span className="mx-1">•</span><Phone className="h-3 w-3"/>{u.phone}</>}
                               </div>
                             </div>
-                            <Badge variant="outline" className="text-[10px]">{u.role}</Badge>
+                            <Badge variant="outline" className="text-[10px] font-bold">{u.role}</Badge>
                           </div>
                           
                           <div className="grid grid-cols-2 gap-3 py-3 border-t border-b border-muted">
@@ -632,13 +654,13 @@ export default function UsersPage() {
 
                           <div className="flex justify-between items-center pt-3">
                             <div className="flex gap-1">
-                               {u.isSalesRep && <TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="secondary" className="h-5 px-1.5"><UserIcon className="h-3 w-3"/></Badge></TooltipTrigger><TooltipContent>مندوب</TooltipContent></Tooltip></TooltipProvider>}
-                               {u.isCashier && <TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="secondary" className="h-5 px-1.5"><ShieldCheck className="h-3 w-3"/></Badge></TooltipTrigger><TooltipContent>كاشير</TooltipContent></Tooltip></TooltipProvider>}
-                               {u.isDelivery && <TooltipProvider><Tooltip><TooltipTrigger asChild><Badge variant="secondary" className="h-5 px-1.5"><Truck className="h-3 w-3"/></Badge></TooltipTrigger><TooltipContent>طيار</TooltipContent></Tooltip></TooltipProvider>}
+                               {u.isSalesRep && <Badge variant="secondary" className="h-6 gap-1 px-2 border-green-500/20 bg-green-500/10 text-green-700 dark:text-green-400"><UserIcon className="h-3 w-3"/> مندوب</Badge>}
+                               {u.isCashier && <Badge variant="secondary" className="h-6 gap-1 px-2 border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-400"><ShieldCheck className="h-3 w-3"/> كاشير</Badge>}
+                               {u.isDelivery && <Badge variant="secondary" className="h-6 gap-1 px-2 border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400"><Truck className="h-3 w-3"/> طيار</Badge>}
                             </div>
                             <div className="flex gap-2">
-                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleEditClick(u)}><Edit className="h-4 w-4"/></Button>
-                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive" onClick={() => handleDeleteClick(u)}><Trash2 className="h-4 w-4"/></Button>
+                                <Button size="sm" variant="ghost" className="h-9 w-9 p-0 bg-muted/50 hover:bg-primary/10 hover:text-primary" onClick={() => handleEditClick(u)}><Edit className="h-4 w-4"/></Button>
+                                <Button size="sm" variant="ghost" className="h-9 w-9 p-0 bg-destructive/5 text-destructive hover:bg-destructive/10" onClick={() => handleDeleteClick(u)}><Trash2 className="h-4 w-4"/></Button>
                             </div>
                           </div>
                         </CardContent>
@@ -656,7 +678,7 @@ export default function UsersPage() {
                           <TableHead className="text-center">كاشير</TableHead>
                           <TableHead className="text-center">طيار</TableHead>
                           <TableHead className="text-center">الوظيفة</TableHead>
-                          <TableHead className="hidden md:table-cell">الفرع</TableHead>
+                          <TableHead className="hidden md:table-cell">الفروع</TableHead>
                           <TableHead className="hidden lg:table-cell text-center">الترخيص</TableHead>
                           <TableHead className="text-center">الحالة</TableHead>
                           <TableHead className="text-center w-[100px]">الإجراءات</TableHead>
@@ -666,7 +688,7 @@ export default function UsersPage() {
                         {filteredUsers.map((u: any) => {
                           return (
                             <TableRow key={u.id} className={cn(u.isDisabled && "bg-muted/30 opacity-70")}>
-                              <TableCell className="font-medium">{u.name}</TableCell>
+                              <TableCell className="font-bold">{u.name}</TableCell>
                               <TableCell className="font-mono hidden md:table-cell">{u.loginName}</TableCell>
                               <TableCell className="text-center">
                                 {u.isSalesRep && (
@@ -675,30 +697,30 @@ export default function UsersPage() {
                               </TableCell>
                               <TableCell className="text-center">
                                 {u.isCashier && (
-                                  <CheckCircle className="h-5 w-5 text-green-500 mx-auto" />
+                                  <CheckCircle className="h-5 w-5 text-blue-500 mx-auto" />
                                 )}
                               </TableCell>
                                <TableCell className="text-center">
                                 {u.isDelivery && (
-                                  <CheckCircle className="h-5 w-5 text-green-500 mx-auto" />
+                                  <Truck className="h-5 w-5 text-amber-500 mx-auto" />
                                 )}
                               </TableCell>
                               <TableCell className="text-center">
-                                <Badge variant="outline">{u.role}</Badge>
+                                <Badge variant="outline" className="font-bold">{u.role}</Badge>
                               </TableCell>
-                              <TableCell className="hidden md:table-cell">
+                              <TableCell className="hidden md:table-cell text-xs max-w-[200px] truncate">
                                 {getWarehouseNames(u)}
                               </TableCell>
-                              <TableCell className="hidden lg:table-cell text-center font-mono text-[10px]">
+                              <TableCell className="hidden lg:table-cell text-center font-mono text-[10px] text-muted-foreground">
                                   {getUsedLicenseKey(u)}
                               </TableCell>
                                <TableCell className="text-center">
-                                <Badge variant={u.isDisabled ? "destructive" : "default"} className="text-[10px] h-5">
+                                <Badge variant={u.isDisabled ? "destructive" : "default"} className="text-[10px] font-bold">
                                     {u.isDisabled ? 'معطل' : 'نشط'}
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-center">
-                                <DropdownMenu>
+                                <DropdownMenu modal={false}>
                                   <DropdownMenuTrigger asChild>
                                     <Button aria-haspopup="true" size="icon" variant="ghost">
                                       <MoreHorizontal className="h-4 w-4" />
@@ -712,17 +734,23 @@ export default function UsersPage() {
                                         تعديل البيانات
                                       </DropdownMenuItem>
                                     )}
+                                    <DropdownMenuItem onClick={() => router.push(`/sales/monitor-visits?salesRepId=${u.id}`)}>
+                                        <MapPin className="ml-2 h-4 w-4" /> تتبع الزيارات
+                                    </DropdownMenuItem>
                                     {can("delete", moduleName) && (
-                                      <DropdownMenuItem
-                                        className="text-destructive font-semibold"
-                                        onSelect={(e) => {
-                                            e.preventDefault();
-                                            handleDeleteClick(u);
-                                        }}
-                                      >
-                                        <Trash2 className="ml-2 h-4 w-4" />
-                                        حذف نهائي
-                                      </DropdownMenuItem>
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            className="text-destructive font-bold"
+                                            onSelect={(e) => {
+                                                e.preventDefault();
+                                                handleDeleteClick(u);
+                                            }}
+                                        >
+                                            <Trash2 className="ml-2 h-4 w-4" />
+                                            حذف نهائي
+                                        </DropdownMenuItem>
+                                      </>
                                     )}
                                   </DropdownMenuContent>
                                 </DropdownMenu>
@@ -744,7 +772,7 @@ export default function UsersPage() {
         <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>تعديل بيانات المستخدم</DialogTitle>
-            <DialogDescription>قم بتحديث تفاصيل الحساب والصلاحيات.</DialogDescription>
+            <DialogDescription>تحديث تفاصيل الحساب والصلاحيات الفنية والبيعية.</DialogDescription>
           </DialogHeader>
           {editingUser && (
             <UserForm
