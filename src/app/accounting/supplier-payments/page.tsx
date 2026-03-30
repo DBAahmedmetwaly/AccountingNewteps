@@ -26,6 +26,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { dictionary } from '@/lib/dictionary';
 
 interface SupplierPayment {
     id?: string;
@@ -515,7 +516,7 @@ export default function SupplierPaymentsPage() {
                                                                     </AlertDialogDescription>
                                                                 </AlertDialogHeader>
                                                                 <AlertDialogFooter>
-                                                                    <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                                                    <AlertDialogCancel>{dictionary.general.cancel}</AlertDialogCancel>
                                                                     {isDeletable(payment) && (
                                                                         <AlertDialogAction onClick={() => handleDelete(payment)} className="bg-destructive hover:bg-destructive/90">حذف السند</AlertDialogAction>
                                                                     )}
@@ -535,8 +536,8 @@ export default function SupplierPaymentsPage() {
                                             <TableRow className="bg-muted/50">
                                                 <TableHead>التاريخ والمورد</TableHead>
                                                 <TableHead>حساب الصرف</TableHead>
-                                                <TableHead className="text-center">المبلغ</TableHead>
-                                                <TableHead className="text-center w-[80px]">إجراءات</TableHead>
+                                                <TableHead className="text-center">{dictionary.general.amount}</TableHead>
+                                                <TableHead className="text-center w-[80px]">{dictionary.general.actions}</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -565,7 +566,7 @@ export default function SupplierPaymentsPage() {
                                                                         <AlertDialogTrigger asChild>
                                                                             <DropdownMenuItem className="text-destructive font-semibold" onSelect={(e) => e.preventDefault()}>
                                                                                 <Trash2 className="ml-2 h-4 w-4" />
-                                                                                حذف السند
+                                                                                {dictionary.general.delete}
                                                                             </DropdownMenuItem>
                                                                         </AlertDialogTrigger>
                                                                     </DropdownMenuContent>
