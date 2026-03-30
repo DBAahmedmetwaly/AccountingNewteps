@@ -52,6 +52,7 @@ interface CashAccount {
     warehouseId?: string;
     userId?: string;
     salesRepId?: string;
+    openingBalance?: number;
     currentBalance?: number;
 }
 
@@ -226,7 +227,7 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices, suppli
                 </div>
                  <div className="space-y-2">
                     <Label>المبلغ المدفوع</Label>
-                    <Input type="number" value={formData.amount || ''} onChange={e => setFormData({...formData, amount: e.target.value as any})} placeholder="0.00" required className="text-lg font-bold" onFocus={e => e.target.select()}/>
+                    <Input id="payment-amount" type="number" value={formData.amount || ''} onChange={e => setFormData({...formData, amount: e.target.value as any})} placeholder="0.00" required className="text-lg font-bold" onFocus={e => e.target.select()}/>
                 </div>
                 <div className="space-y-2">
                     <Label>ملاحظات</Label>
@@ -268,7 +269,7 @@ export default function SupplierPaymentsPage() {
 
     const cashAccounts: CashAccount[] = useMemo(() => {
         if (loading) return [];
-        return rawCashAccounts.map((account: CashAccount) => {
+        return rawCashAccounts.map((account: any) => {
             let balance = Number(account.openingBalance) || 0;
             customerPayments.filter((p:any) => p.paidToAccountId === account.id).forEach((p:any) => balance += p.amount);
             salesInvoices.filter((s:any) => s.status === 'approved' && s.paidToAccountId === account.id).forEach((s: any) => {
@@ -583,7 +584,7 @@ export default function SupplierPaymentsPage() {
                                                                         </AlertDialogDescription>
                                                                     </AlertDialogHeader>
                                                                     <AlertDialogFooter>
-                                                                        <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                                                        <AlertDialogCancel>{dictionary.general.cancel}</AlertDialogCancel>
                                                                         {isDeletable(payment) && (
                                                                             <AlertDialogAction onClick={() => handleDelete(payment)} className="bg-destructive hover:bg-destructive/90">تأكيد الحذف النهائي</AlertDialogAction>
                                                                         )}
