@@ -1,10 +1,9 @@
-
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, List, Wallet, AlertTriangle, Info, CheckCircle, Save, Search, History, ShoppingBag, Tag, Barcode } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, List, Wallet, AlertTriangle, Info, CheckCircle, Save, Search, History, ShoppingBag, Tag, Barcode, X } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -61,6 +60,7 @@ interface Customer {
 const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: () => void }) => {
     const { salesInvoices, posSales, items: allItemsData } = useData();
     const isMobile = useIsMobile();
+    const [itemSearch, setItemSearch] = useState('');
     
     const customerPurchases = useMemo(() => {
         const history: any[] = [];
@@ -85,8 +85,17 @@ const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: 
         return history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [customer.id, salesInvoices, posSales, allItemsData]);
 
+    const filteredPurchases = useMemo(() => {
+        if (!itemSearch.trim()) return customerPurchases;
+        const term = itemSearch.toLowerCase().trim();
+        return customerPurchases.filter(p => 
+            p.itemName.toLowerCase().includes(term) || 
+            p.code.toLowerCase().includes(term)
+        );
+    }, [customerPurchases, itemSearch]);
+
     const totals = useMemo(() => {
-        return customerPurchases.reduce((acc, curr) => {
+        return filteredPurchases.reduce((acc, curr) => {
             const costTotal = (curr.cost || 0) * curr.qty;
             const profitTotal = curr.total - costTotal;
             return {
@@ -96,7 +105,7 @@ const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: 
                 profit: acc.profit + profitTotal
             };
         }, { qty: 0, revenue: 0, cost: 0, profit: 0 });
-    }, [customerPurchases]);
+    }, [filteredPurchases]);
 
     const summarizedHistory = useMemo(() => {
         const summary = new Map<string, any>();
@@ -123,13 +132,45 @@ const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: 
         return Array.from(summary.values());
     }, [customerPurchases]);
 
+    const filteredSummarized = useMemo(() => {
+        if (!itemSearch.trim()) return summarizedHistory;
+        const term = itemSearch.toLowerCase().trim();
+        return summarizedHistory.filter(p => 
+            p.name.toLowerCase().includes(term) || 
+            p.code.toLowerCase().includes(term)
+        );
+    }, [summarizedHistory, itemSearch]);
+
     return (
         <DialogContent className="max-w-6xl h-[95vh] flex flex-col p-0 overflow-hidden">
             <DialogHeader className="p-4 pb-2 border-b bg-muted/30">
-                <DialogTitle className="flex items-center gap-2 text-lg md:text-xl">
-                    <ShoppingBag className="text-primary h-5 w-5 md:h-6 md:w-6"/> سجل المشتريات: {customer.name}
-                </DialogTitle>
-                <DialogDescription className="text-xs">تتبع الأصناف والأسعار والربحية لهذا العميل.</DialogDescription>
+                <div className="flex justify-between items-start gap-4">
+                    <div className="flex-1">
+                        <DialogTitle className="flex items-center gap-2 text-lg md:text-xl">
+                            <ShoppingBag className="text-primary h-5 w-5 md:h-6 md:w-6"/> سجل المشتريات: {customer.name}
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">تتبع الأصناف والأسعار والربحية لهذا العميل.</DialogDescription>
+                    </div>
+                    <div className="relative w-full max-w-[200px] md:max-w-xs">
+                        <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input 
+                            placeholder="بحث عن صنف..." 
+                            value={itemSearch} 
+                            onChange={e => setItemSearch(e.target.value)}
+                            className="h-8 pr-7 text-xs bg-background"
+                        />
+                        {itemSearch && (
+                            <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="absolute left-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                                onClick={() => setItemSearch('')}
+                            >
+                                <X className="h-3 w-3" />
+                            </Button>
+                        )}
+                    </div>
+                </div>
             </DialogHeader>
             
             <div className="flex-1 overflow-hidden flex flex-col">
@@ -145,7 +186,7 @@ const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: 
                         <ScrollArea className="h-full px-4">
                             {isMobile ? (
                                 <div className="space-y-2 pb-4">
-                                    {customerPurchases.map((item, idx) => (
+                                    {filteredPurchases.map((item, idx) => (
                                         <div key={idx} className="p-3 bg-card border rounded-lg shadow-sm border-r-4 border-r-primary">
                                             <div className="flex justify-between items-start gap-2 mb-1">
                                                 <div className="font-bold text-sm leading-tight flex-1">{item.itemName}</div>
@@ -160,7 +201,7 @@ const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: 
                                             </div>
                                         </div>
                                     ))}
-                                    {customerPurchases.length === 0 && <p className="text-center py-10 text-muted-foreground text-sm">لا توجد حركات.</p>}
+                                    {filteredPurchases.length === 0 && <p className="text-center py-10 text-muted-foreground text-sm">لا توجد حركات مطابقة.</p>}
                                 </div>
                             ) : (
                                 <div className="border rounded-lg mb-4">
@@ -178,7 +219,7 @@ const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: 
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {customerPurchases.length > 0 ? customerPurchases.map((item, idx) => (
+                                            {filteredPurchases.length > 0 ? filteredPurchases.map((item, idx) => (
                                                 <TableRow key={idx}>
                                                     <TableCell className="text-xs">{new Date(item.date).toLocaleDateString('ar-EG')}</TableCell>
                                                     <TableCell className="font-mono text-xs">{item.invoiceNumber}</TableCell>
@@ -203,7 +244,7 @@ const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: 
                         <ScrollArea className="h-full px-4">
                             {isMobile ? (
                                 <div className="space-y-2 pb-4">
-                                    {summarizedHistory.map((item, idx) => {
+                                    {filteredSummarized.map((item, idx) => {
                                         const profit = item.totalValue - item.totalCost;
                                         return (
                                             <div key={idx} className="p-3 bg-card border rounded-lg shadow-sm border-r-4 border-r-green-500">
@@ -222,7 +263,7 @@ const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: 
                                             </div>
                                         );
                                     })}
-                                    {summarizedHistory.length === 0 && <p className="text-center py-10 text-muted-foreground text-sm">لا توجد بيانات.</p>}
+                                    {filteredSummarized.length === 0 && <p className="text-center py-10 text-muted-foreground text-sm">لا توجد بيانات مطابقة.</p>}
                                 </div>
                             ) : (
                                 <div className="border rounded-lg mb-4">
@@ -239,7 +280,7 @@ const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: 
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {summarizedHistory.map((item, idx) => {
+                                            {filteredSummarized.map((item, idx) => {
                                                 const profit = item.totalValue - item.totalCost;
                                                 return (
                                                     <TableRow key={idx}>
@@ -265,19 +306,19 @@ const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: 
             </div>
 
             <div className="p-3 bg-muted border-t grid grid-cols-2 md:grid-cols-4 gap-2">
-                <div className="p-2 bg-background rounded border flex flex-col items-center">
+                <div className="p-2 bg-background rounded border flex flex-col items-center shadow-sm">
                     <span className="text-[9px] uppercase font-bold text-muted-foreground">إجمالي القطع</span>
                     <span className="text-base font-black text-blue-600">{totals.qty.toLocaleString()}</span>
                 </div>
-                <div className="p-2 bg-background rounded border flex flex-col items-center">
+                <div className="p-2 bg-background rounded border flex flex-col items-center shadow-sm">
                     <span className="text-[9px] uppercase font-bold text-muted-foreground">إجمالي التكلفة</span>
                     <span className="text-base font-black text-amber-600">{totals.cost.toLocaleString()}</span>
                 </div>
-                <div className="p-2 bg-background rounded border flex flex-col items-center">
+                <div className="p-2 bg-background rounded border flex flex-col items-center shadow-sm">
                     <span className="text-[9px] uppercase font-bold text-muted-foreground">صافي الإيراد</span>
                     <span className="text-base font-black text-primary">{totals.revenue.toLocaleString()}</span>
                 </div>
-                <div className="p-2 bg-background rounded border flex flex-col items-center ring-1 ring-primary/20">
+                <div className="p-2 bg-background rounded border flex flex-col items-center ring-1 ring-primary/20 shadow-sm">
                     <span className="text-[9px] uppercase font-bold text-muted-foreground">إجمالي الربح</span>
                     <span className={cn("text-base font-black", totals.profit >= 0 ? "text-green-600" : "text-destructive")}>
                         {totals.profit.toLocaleString()}
