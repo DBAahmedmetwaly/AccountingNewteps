@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Trash2, Printer, Save, Loader2, Info, Truck, MapPin, MessageCircle, Image as ImageIcon } from "lucide-react";
+import { PlusCircle, Trash2, Printer, Save, Loader2, Info, Truck, MapPin, MessageCircle, Image as ImageIcon, History } from "lucide-react";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useData } from "@/contexts/data-provider";
 import { useToast } from "@/hooks/use-toast";
@@ -272,6 +272,24 @@ export default function SalesRepInvoicePage() {
         }));
     };
     
+    const lastPriceForCustomer = useMemo(() => {
+        if (!customerId || !newItem.id) return null;
+        const allSales = [...salesInvoices.filter(s => s.status === 'approved'), ...posSales];
+        const customerSales = allSales.filter(s => s.customerId === customerId);
+        
+        let lastPrice = null;
+        customerSales.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        for (const sale of customerSales) {
+            const itemInSale = sale.items.find((i: any) => i.id === newItem.id);
+            if (itemInSale) {
+                lastPrice = itemInSale.price;
+                break;
+            }
+        }
+        return lastPrice;
+    }, [customerId, newItem.id, salesInvoices, posSales]);
+
     const handleAddItem = () => {
         if (!newItem.id || newItem.qty <= 0 || newItem.price < 0) return;
         
@@ -624,14 +642,22 @@ export default function SalesRepInvoicePage() {
                             ))}
                             <TableRow className="no-print bg-muted/20">
                                 <TableCell className="p-2" colSpan={2}>
-                                     <Combobox
-                                        options={itemsForCombobox}
-                                        value={newItem.id}
-                                        onValueChange={handleItemSelect}
-                                        placeholder={"اختر صنفًا من عهدتك..."}
-                                        emptyMessage="لا توجد أصناف."
-                                        className="w-full"
-                                    />
+                                     <div className="space-y-1">
+                                        <Combobox
+                                            options={itemsForCombobox}
+                                            value={newItem.id}
+                                            onValueChange={handleItemSelect}
+                                            placeholder={"اختر صنفًا من عهدتك..."}
+                                            emptyMessage="لا توجد أصناف."
+                                            className="w-full"
+                                        />
+                                        {lastPriceForCustomer !== null && (
+                                            <div className="flex items-center gap-1 text-[10px] text-primary font-bold animate-in fade-in slide-in-from-top-1">
+                                                <History className="h-3 w-3" />
+                                                <span>آخر سعر بيع لهذا العميل: {lastPriceForCustomer.toLocaleString()} ج.م</span>
+                                            </div>
+                                        )}
+                                     </div>
                                 </TableCell>
                                 <TableCell className="p-2 w-40">
                                      <Combobox
@@ -697,7 +723,7 @@ export default function SalesRepInvoicePage() {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="notes">ملاحظات</Label>
+                        <Label htmlFor="notes">ملاحظات الفاتورة</Label>
                         <Textarea id="notes" placeholder="أضف أي ملاحظات تظهر في الفاتورة هنا..." value={notes} onChange={(e) => setNotes(e.target.value)} />
                     </div>
                 </>

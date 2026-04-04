@@ -7,7 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trash2, ShoppingCart, XCircle, Printer, Grip, Dot, Search, Ban, PanelLeft, Boxes, SquareCheck, ListRestart, FileClock, Eye, Loader2, Undo2, PlusCircle, UserPlus, LogOut, Percent, Truck, ArrowLeft, Banknote, Landmark, Wallet, Phone, CircleDollarSign, FileText, CreditCard, UserRound, User as UserIcon, PlayCircle } from "lucide-react";
+import { Trash2, ShoppingCart, XCircle, Printer, Grip, Dot, Search, Ban, PanelLeft, Boxes, SquareCheck, ListRestart, FileClock, Eye, Loader2, Undo2, PlusCircle, UserPlus, LogOut, Percent, Truck, ArrowLeft, Banknote, Landmark, Wallet, Phone, CircleDollarSign, FileText, CreditCard, UserRound, User as UserIcon, PlayCircle, History } from "lucide-react";
 import { useData } from "@/contexts/data-provider";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/contexts/auth-context';
@@ -308,7 +308,7 @@ const StockQueryDialog = ({ onOpenChange, ...allDataContext }: { onOpenChange: (
             const currentStock = calculateStockForItemInWarehouse(itemMaster.id, warehouse.id, allDataContext);
             
             if (currentStock > 0) {
-                results.push({ warehouseName: warehouse.name, stock: currentStock, price: itemMaster.price || 0 });
+                results.push({ warehouseName: warehouseName, stock: currentStock, price: itemMaster.price || 0 });
             }
         });
         
@@ -392,7 +392,7 @@ const NewCustomerForm = ({ onSave, onClose, allCustomers }: { onSave: (customer:
             toast({
                 variant: "destructive",
                 title: "بيانات ناقصة",
-                description: "يرجى إدخال اسم العميل ورقم الهاتف.",
+                description: "يرجى إدخل اسم العميل ورقم الهاتف.",
             });
             return;
         }
@@ -1988,6 +1988,26 @@ export default function PosPage() {
         }
     }, [selectedCustomer]);
 
+    const lastPriceForCustomer = useMemo(() => {
+        // This is tricky in POS because multiple items can be in focus.
+        // We'll return null here and handle it per line item if needed, 
+        // but for now, we'll keep it consistent with the invoices page by not showing a global badge.
+        return null;
+    }, []);
+
+    const getItemLastPrice = useCallback((itemId: string) => {
+        if (!selectedCustomerId) return null;
+        const allSales = [...salesInvoices.filter(s => s.status === 'approved'), ...posSales];
+        const customerSales = allSales.filter(s => s.customerId === selectedCustomerId);
+        customerSales.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        for (const sale of customerSales) {
+            const itemInSale = sale.items.find((i: any) => i.id === itemId);
+            if (itemInSale) return itemInSale.price;
+        }
+        return null;
+    }, [selectedCustomerId, salesInvoices, posSales]);
+
 
     if (!user?.isCashier) {
         return (
@@ -2174,11 +2194,23 @@ export default function PosPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {cart.map(item => (
+                                    {cart.map(item => {
+                                        const lastPrice = getItemLastPrice(item.id);
+                                        return (
                                         <TableRow key={item.uniqueId}>
                                             <TableCell className='py-2'>
-                                                {item.name}
-                                                {item.discountApplied > 0 && <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold mr-2 bg-green-100 text-green-700"><Percent className="h-3 w-3 -ml-1"/> خصم</span>}
+                                                <div className="flex flex-col">
+                                                    <span>{item.name}</span>
+                                                    <div className="flex items-center gap-1">
+                                                        {item.discountApplied > 0 && <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 text-green-700"><Percent className="h-2 w-2 mr-0.5"/> خصم</span>}
+                                                        {lastPrice !== null && (
+                                                            <div className="flex items-center gap-0.5 text-[9px] text-primary font-bold">
+                                                                <History className="h-2 w-2" />
+                                                                <span>آخر سعر: {lastPrice.toLocaleString()}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </TableCell>
                                             {posSettings.cartColumns?.showBarcode && <TableCell className='py-2 text-xs text-muted-foreground font-mono'>{item.code}</TableCell>}
                                             {posSettings.cartColumns?.showPrice && <TableCell className='py-2 text-center'>{item.price.toFixed(roundingPrecision)}</TableCell>}
@@ -2192,7 +2224,7 @@ export default function PosPage() {
                                                 )}
                                             </TableCell>
                                         </TableRow>
-                                    ))}
+                                    )})}
                                     {cart.length === 0 && (
                                         <TableRow><TableCell colSpan={posSettings.cartColumns?.showBarcode && posSettings.cartColumns?.showPrice ? 6 : 4} className="text-center text-muted-foreground h-24">السلة فارغة</TableCell></TableRow>
                                     )}

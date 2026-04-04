@@ -4,7 +4,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, List, Wallet, AlertTriangle, Info, CheckCircle, Save, Search } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, List, Wallet, AlertTriangle, Info, CheckCircle, Save, Search, History, ShoppingBag } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -37,12 +37,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Switch } from "@/components/ui/switch";
 import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { Combobox } from "@/components/ui/combobox";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/auth-context";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Customer {
   id?: string;
@@ -53,6 +54,142 @@ interface Customer {
   address?: string;
   allowCredit?: boolean;
 }
+
+const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: () => void }) => {
+    const { salesInvoices, posSales } = useData();
+    
+    const customerPurchases = useMemo(() => {
+        const history: any[] = [];
+        const allSales = [...salesInvoices.filter(s => s.status === 'approved'), ...posSales];
+        
+        allSales.filter(s => s.customerId === customer.id).forEach(sale => {
+            sale.items.forEach((item: any) => {
+                history.push({
+                    date: sale.date,
+                    invoiceNumber: sale.invoiceNumber,
+                    itemId: item.id,
+                    itemName: item.name,
+                    qty: item.qty,
+                    price: item.price,
+                    cost: item.cost || 0,
+                    total: item.total
+                });
+            });
+        });
+        return history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [customer.id, salesInvoices, posSales]);
+
+    const summarizedHistory = useMemo(() => {
+        const summary = new Map<string, any>();
+        customerPurchases.forEach(item => {
+            const current = summary.get(item.itemId) || { 
+                name: item.itemName, 
+                totalQty: 0, 
+                totalValue: 0, 
+                totalCost: 0,
+                lastPrice: 0,
+                lastDate: ''
+            };
+            current.totalQty += item.qty;
+            current.totalValue += item.total;
+            current.totalCost += (item.cost * item.qty);
+            
+            // Because customerPurchases is sorted by date desc, the first one we encounter is the latest
+            if (!current.lastDate) {
+                current.lastPrice = item.price;
+                current.lastDate = item.date;
+            }
+            summary.set(item.itemId, current);
+        });
+        return Array.from(summary.values());
+    }, [customerPurchases]);
+
+    return (
+        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
+            <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                    <ShoppingBag className="text-primary"/> سجل مشتريات الأصناف: {customer.name}
+                </DialogTitle>
+                <DialogDescription>عرض تفصيلي وتجميعي لجميع الأصناف التي اشتراها العميل بأسعار البيع والتكلفة.</DialogDescription>
+            </DialogHeader>
+            
+            <Tabs defaultValue="detailed" className="flex-1 overflow-hidden flex flex-col">
+                <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <TabsTrigger value="detailed">سجل العمليات (ترتيب زمني)</TabsTrigger>
+                    <TabsTrigger value="summary">تجميع حسب الأصناف</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="detailed" className="flex-1 overflow-hidden">
+                    <ScrollArea className="h-full border rounded-md">
+                        <Table>
+                            <TableHeader className="sticky top-0 bg-background z-10">
+                                <TableRow>
+                                    <TableHead>التاريخ</TableHead>
+                                    <TableHead>رقم الفاتورة</TableHead>
+                                    <TableHead>الصنف</TableHead>
+                                    <TableHead className="text-center">الكمية</TableHead>
+                                    <TableHead className="text-center">سعر البيع</TableHead>
+                                    <TableHead className="text-center">سعر التكلفة</TableHead>
+                                    <TableHead className="text-center">الإجمالي</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {customerPurchases.length > 0 ? customerPurchases.map((item, idx) => (
+                                    <TableRow key={idx}>
+                                        <TableCell className="text-xs">{new Date(item.date).toLocaleDateString('ar-EG')}</TableCell>
+                                        <TableCell className="font-mono text-xs">{item.invoiceNumber}</TableCell>
+                                        <TableCell className="font-bold">{item.itemName}</TableCell>
+                                        <TableCell className="text-center font-bold text-blue-600">{item.qty}</TableCell>
+                                        <TableCell className="text-center">{item.price.toLocaleString()}</TableCell>
+                                        <TableCell className="text-center text-muted-foreground italic">{item.cost.toLocaleString()}</TableCell>
+                                        <TableCell className="text-center font-bold">{item.total.toLocaleString()}</TableCell>
+                                    </TableRow>
+                                )) : (
+                                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">لا توجد مشتريات مسجلة.</TableCell></TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </ScrollArea>
+                </TabsContent>
+
+                <TabsContent value="summary" className="flex-1 overflow-hidden">
+                    <ScrollArea className="h-full border rounded-md">
+                        <Table>
+                            <TableHeader className="sticky top-0 bg-background z-10">
+                                <TableRow>
+                                    <TableHead>الصنف</TableHead>
+                                    <TableHead className="text-center">إجمالي الكمية</TableHead>
+                                    <TableHead className="text-center">آخر سعر بيع</TableHead>
+                                    <TableHead className="text-center">متوسط السعر</TableHead>
+                                    <TableHead className="text-center">إجمالي الربح</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {summarizedHistory.map((item, idx) => {
+                                    const profit = item.totalValue - item.totalCost;
+                                    return (
+                                        <TableRow key={idx}>
+                                            <TableCell className="font-bold">{item.name}</TableCell>
+                                            <TableCell className="text-center font-bold">{item.totalQty}</TableCell>
+                                            <TableCell className="text-center text-primary font-black">{item.lastPrice.toLocaleString()}</TableCell>
+                                            <TableCell className="text-center">{(item.totalValue / item.totalQty).toFixed(2)}</TableCell>
+                                            <TableCell className={cn("text-center font-bold", profit >= 0 ? "text-green-600" : "text-destructive")}>
+                                                {profit.toLocaleString()}
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </ScrollArea>
+                </TabsContent>
+            </Tabs>
+            <DialogFooter className="mt-4">
+                <Button variant="outline" onClick={onClose}>إغلاق</Button>
+            </DialogFooter>
+        </DialogContent>
+    );
+};
 
 const QuickPaymentDialog = ({ customer, onClose }: { customer: any, onClose: () => void }) => {
     const { cashAccounts, dbAction, getNextId, warehouses } = useData();
@@ -276,15 +413,18 @@ export default function CustomersPage() {
   const [paymentCustomer, setPaymentCustomer] = useState<any>(null);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
 
+  const [historyCustomer, setHistoryCustomer] = useState<any>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
   const [userToDelete, setUserToDelete] = useState<Customer | null>(null);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
 
   useEffect(() => {
-    if (!isEditOpen && !isPaymentOpen && !isDeleteAlertOpen) {
+    if (!isEditOpen && !isPaymentOpen && !isDeleteAlertOpen && !isHistoryOpen) {
         document.body.style.pointerEvents = 'auto';
         document.body.style.overflow = 'auto';
     }
-  }, [isEditOpen, isPaymentOpen, isDeleteAlertOpen]);
+  }, [isEditOpen, isPaymentOpen, isDeleteAlertOpen, isHistoryOpen]);
 
   const checkHasInvoices = (id: string) => {
     const hasSalesInvoices = (salesInvoices || []).some((inv: any) => inv.customerId === id);
@@ -316,7 +456,6 @@ export default function CustomersPage() {
 
         const returns = salesReturns.filter((r: any) => r.customerId === customer.id);
         returns.forEach((ret: any) => { 
-            // Net impact: reduce debt by total, but increase by cash given back
             balance -= (Number(ret.total) - Number(ret.paidAmount || 0)); 
         });
 
@@ -356,6 +495,11 @@ export default function CustomersPage() {
   const handlePaymentClick = (customer: any) => {
       setPaymentCustomer(customer);
       setTimeout(() => setIsPaymentOpen(true), 150);
+  };
+
+  const handleHistoryClick = (customer: any) => {
+      setHistoryCustomer(customer);
+      setTimeout(() => setIsHistoryOpen(true), 150);
   };
 
   const handleDelete = (id: string) => {
@@ -445,8 +589,11 @@ export default function CustomersPage() {
                                                     <DropdownMenuItem onSelect={() => handlePaymentClick(customer)}>
                                                         <PlusCircle className="ml-2 h-4 w-4 text-green-600" /> تسجيل دفعة
                                                     </DropdownMenuItem>
+                                                    <DropdownMenuItem onSelect={() => handleHistoryClick(customer)}>
+                                                        <History className="ml-2 h-4 w-4 text-blue-600" /> سجل مشتريات الأصناف
+                                                    </DropdownMenuItem>
                                                     <DropdownMenuItem onSelect={() => router.push(`/reports/customer-statement?customerId=${customer.id}`)}>
-                                                        <List className="ml-2 h-4 w-4" /> كشف حساب
+                                                        <List className="ml-2 h-4 w-4" /> كشف حساب مالي
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem onSelect={() => handleEditClick(customer)}>
@@ -517,6 +664,10 @@ export default function CustomersPage() {
             />
           )}
         </DialogContent>
+      </Dialog>
+
+      <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+          {historyCustomer && <PurchaseHistoryDialog customer={historyCustomer} onClose={() => setIsHistoryOpen(false)} />}
       </Dialog>
     </>
   );

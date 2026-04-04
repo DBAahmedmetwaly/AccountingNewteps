@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Trash2, Save, Loader2, Info, Truck, MapPin, Wallet, UserPlus, Clock } from "lucide-react";
+import { PlusCircle, Trash2, Save, Loader2, Info, Truck, MapPin, Wallet, UserPlus, Clock, History } from "lucide-react";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useData } from "@/contexts/data-provider";
 import { useToast } from "@/hooks/use-toast";
@@ -295,6 +295,25 @@ export default function SalesInvoicePage() {
     const handleRemoveItem = (uniqueId: string) => {
         setItems(items.filter((item) => item.uniqueId !== uniqueId));
     };
+
+    const lastPriceForCustomer = useMemo(() => {
+        if (!customerId || !newItem.id) return null;
+        const allSales = [...salesInvoices.filter(s => s.status === 'approved'), ...posSales];
+        const customerSales = allSales.filter(s => s.customerId === customerId);
+        
+        // Find the latest sale containing this item
+        let lastPrice = null;
+        customerSales.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        for (const sale of customerSales) {
+            const itemInSale = sale.items.find((i: any) => i.id === newItem.id);
+            if (itemInSale) {
+                lastPrice = itemInSale.price;
+                break;
+            }
+        }
+        return lastPrice;
+    }, [customerId, newItem.id, salesInvoices, posSales]);
 
     const handleItemSelect = (itemId: string) => {
         const selectedItem = availableItemsForWarehouse.find((i: Item) => i.id === itemId);
@@ -641,14 +660,22 @@ export default function SalesInvoicePage() {
                             ))}
                             <TableRow className="no-print bg-muted/20">
                                 <TableCell className="p-2">
-                                     <Combobox
-                                        options={itemsForCombobox}
-                                        value={newItem.id}
-                                        onValueChange={handleItemSelect}
-                                        placeholder={"ابحث عن صنف..."}
-                                        emptyMessage="لم يتم العثور على الصنف."
-                                        className="w-full"
-                                    />
+                                     <div className="space-y-1">
+                                        <Combobox
+                                            options={itemsForCombobox}
+                                            value={newItem.id}
+                                            onValueChange={handleItemSelect}
+                                            placeholder={"ابحث عن صنف..."}
+                                            emptyMessage="لم يتم العثور على الصنف."
+                                            className="w-full"
+                                        />
+                                        {lastPriceForCustomer !== null && (
+                                            <div className="flex items-center gap-1 text-[10px] text-primary font-bold animate-in fade-in slide-in-from-top-1">
+                                                <History className="h-3 w-3" />
+                                                <span>آخر سعر بيع لهذا العميل: {lastPriceForCustomer.toLocaleString()} ج.م</span>
+                                            </div>
+                                        )}
+                                     </div>
                                 </TableCell>
                                 <TableCell className="p-2">
                                     <Input value={newItem.code} readOnly className="h-9 font-mono text-xs bg-muted" placeholder="الباركود"/>
