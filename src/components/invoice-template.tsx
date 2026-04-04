@@ -145,19 +145,19 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
   // Calculate balances logic
   const totalAmount = Number(invoice?.total || 0);
   const paidAmount = Number(invoice?.paidAmount || 0);
-  const remainingInInvoice = Math.max(0, totalAmount - paidAmount);
+  const netInvoiceImpact = totalAmount - paidAmount;
+  const remainingInInvoice = Math.max(0, netInvoiceImpact);
   
-  // Logical Fix: Use stored balance if available, otherwise fall back to calculation
   let balanceBefore = 0;
   let balanceAfter = 0;
 
   if (invoice?.customerBalanceBefore !== undefined) {
       balanceBefore = Number(invoice.customerBalanceBefore);
-      balanceAfter = balanceBefore + remainingInInvoice;
+      balanceAfter = balanceBefore + netInvoiceImpact;
   } else {
       // Fallback for legacy data: derive before from current
       balanceAfter = customerBalance ?? 0;
-      balanceBefore = balanceAfter - remainingInInvoice;
+      balanceBefore = balanceAfter - netInvoiceImpact;
   }
 
   return (

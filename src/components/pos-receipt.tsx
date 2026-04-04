@@ -108,7 +108,8 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
   const items = invoice?.items || invoice?.cart || [];
   const totalAmount = Number(invoice?.total || 0);
   const paidAmount = Number(invoice?.paidAmount ?? totalAmount);
-  const remainingInInvoice = Math.max(0, totalAmount - paidAmount);
+  const netInvoiceImpact = totalAmount - paidAmount;
+  const remainingInInvoice = Math.max(0, netInvoiceImpact);
   
   // Helper to check if string contains only characters supported by Barcode 128
   const canGenerateBarcode = (val: string) => {
@@ -159,11 +160,11 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
 
   if (invoice?.customerBalanceBefore !== undefined) {
       balanceBefore = Number(invoice.customerBalanceBefore);
-      balanceAfter = balanceBefore + remainingInInvoice;
+      balanceAfter = balanceBefore + netInvoiceImpact;
   } else {
       // Fallback
       balanceAfter = customerBalance ?? 0;
-      balanceBefore = balanceAfter - remainingInInvoice;
+      balanceBefore = balanceAfter - netInvoiceImpact;
   }
 
   return (
