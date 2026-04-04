@@ -19,6 +19,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { calculateStockForItemInWarehouse } from '@/lib/inventory-utils';
+import { Badge } from "@/components/ui/badge";
 
 
 interface InvoiceItem {
@@ -745,7 +746,7 @@ export default function PurchaseInvoicePage() {
                                 </div>
                             )}
                             <div className="flex justify-between text-sm"><span>قيمة الضريبة</span><span>ج.م {tax.toFixed(2)}</span></div>
-                            <div className="flex justify-between font-bold text-base border-t pt-2 mt-2"><span>الإجمالي الكلي</span><span>ج.م {total.toFixed(2)}</span></div>
+                            <div className="flex justify-between font-bold text-base border-t pt-2 mt-2 text-primary"><span>الإجمالي الكلي</span><span>ج.م {total.toFixed(2)}</span></div>
                         </div>
                         <div className="space-y-2 border-t pt-4">
                             <div className="flex justify-between items-center"><Label htmlFor="paidAmount" className="font-semibold text-lg">المبلغ المسدد الآن</Label><Input id="paidAmount" type="number" value={paidAmount} onFocus={e => e.target.select()} onChange={e => setPaidAmount(parseFloat(e.target.value) || 0)} className="h-10 max-w-[150px] text-left text-lg font-bold border-primary/50" placeholder="0.00"/></div>
