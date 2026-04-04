@@ -4,13 +4,14 @@
 import React, { useState, useMemo, useEffect } from "react";
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, List, Wallet, AlertTriangle, Info, CheckCircle, Save, Search, History, ShoppingBag } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, List, Wallet, AlertTriangle, Info, CheckCircle, Save, Search, History, ShoppingBag, Tag, Barcode } from "lucide-react";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { AddEntityDialog } from "@/components/add-entity-dialog";
 import { Label } from "@/components/ui/label";
@@ -23,6 +24,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from "@/components/ui/table";
 import {
   DropdownMenu,
@@ -44,6 +46,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/auth-context";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface Customer {
   id?: string;
@@ -56,7 +59,8 @@ interface Customer {
 }
 
 const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: () => void }) => {
-    const { salesInvoices, posSales } = useData();
+    const { salesInvoices, posSales, items: allItemsData } = useData();
+    const isMobile = useIsMobile();
     
     const customerPurchases = useMemo(() => {
         const history: any[] = [];
@@ -64,26 +68,42 @@ const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: 
         
         allSales.filter(s => s.customerId === customer.id).forEach(sale => {
             sale.items.forEach((item: any) => {
+                const master = allItemsData.find((i: any) => i.id === item.id);
                 history.push({
                     date: sale.date,
                     invoiceNumber: sale.invoiceNumber,
                     itemId: item.id,
                     itemName: item.name,
+                    code: item.code || master?.code || 'N/A',
                     qty: item.qty,
                     price: item.price,
-                    cost: item.cost || 0,
+                    cost: item.cost || master?.cost || 0,
                     total: item.total
                 });
             });
         });
         return history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [customer.id, salesInvoices, posSales]);
+    }, [customer.id, salesInvoices, posSales, allItemsData]);
+
+    const totals = useMemo(() => {
+        return customerPurchases.reduce((acc, curr) => {
+            const costTotal = (curr.cost || 0) * curr.qty;
+            const profitTotal = curr.total - costTotal;
+            return {
+                qty: acc.qty + curr.qty,
+                revenue: acc.revenue + curr.total,
+                cost: acc.cost + costTotal,
+                profit: acc.profit + profitTotal
+            };
+        }, { qty: 0, revenue: 0, cost: 0, profit: 0 });
+    }, [customerPurchases]);
 
     const summarizedHistory = useMemo(() => {
         const summary = new Map<string, any>();
         customerPurchases.forEach(item => {
             const current = summary.get(item.itemId) || { 
                 name: item.itemName, 
+                code: item.code,
                 totalQty: 0, 
                 totalValue: 0, 
                 totalCost: 0,
@@ -94,7 +114,6 @@ const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: 
             current.totalValue += item.total;
             current.totalCost += (item.cost * item.qty);
             
-            // Because customerPurchases is sorted by date desc, the first one we encounter is the latest
             if (!current.lastDate) {
                 current.lastPrice = item.price;
                 current.lastDate = item.date;
@@ -105,87 +124,163 @@ const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: 
     }, [customerPurchases]);
 
     return (
-        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
-            <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                    <ShoppingBag className="text-primary"/> سجل مشتريات الأصناف: {customer.name}
+        <DialogContent className="max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
+            <DialogHeader className="p-6 pb-2">
+                <DialogTitle className="flex items-center gap-2 text-xl">
+                    <ShoppingBag className="text-primary h-6 w-6"/> سجل مشتريات العميل: {customer.name}
                 </DialogTitle>
-                <DialogDescription>عرض تفصيلي وتجميعي لجميع الأصناف التي اشتراها العميل بأسعار البيع والتكلفة.</DialogDescription>
+                <DialogDescription>تتبع كافة الأصناف والأسعار والربحية لهذا العميل.</DialogDescription>
             </DialogHeader>
             
-            <Tabs defaultValue="detailed" className="flex-1 overflow-hidden flex flex-col">
-                <TabsList className="grid w-full grid-cols-2 mb-4">
-                    <TabsTrigger value="detailed">سجل العمليات (ترتيب زمني)</TabsTrigger>
-                    <TabsTrigger value="summary">تجميع حسب الأصناف</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="detailed" className="flex-1 overflow-hidden">
-                    <ScrollArea className="h-full border rounded-md">
-                        <Table>
-                            <TableHeader className="sticky top-0 bg-background z-10">
-                                <TableRow>
-                                    <TableHead>التاريخ</TableHead>
-                                    <TableHead>رقم الفاتورة</TableHead>
-                                    <TableHead>الصنف</TableHead>
-                                    <TableHead className="text-center">الكمية</TableHead>
-                                    <TableHead className="text-center">سعر البيع</TableHead>
-                                    <TableHead className="text-center">سعر التكلفة</TableHead>
-                                    <TableHead className="text-center">الإجمالي</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {customerPurchases.length > 0 ? customerPurchases.map((item, idx) => (
-                                    <TableRow key={idx}>
-                                        <TableCell className="text-xs">{new Date(item.date).toLocaleDateString('ar-EG')}</TableCell>
-                                        <TableCell className="font-mono text-xs">{item.invoiceNumber}</TableCell>
-                                        <TableCell className="font-bold">{item.itemName}</TableCell>
-                                        <TableCell className="text-center font-bold text-blue-600">{item.qty}</TableCell>
-                                        <TableCell className="text-center">{item.price.toLocaleString()}</TableCell>
-                                        <TableCell className="text-center text-muted-foreground italic">{item.cost.toLocaleString()}</TableCell>
-                                        <TableCell className="text-center font-bold">{item.total.toLocaleString()}</TableCell>
-                                    </TableRow>
-                                )) : (
-                                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">لا توجد مشتريات مسجلة.</TableCell></TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </ScrollArea>
-                </TabsContent>
-
-                <TabsContent value="summary" className="flex-1 overflow-hidden">
-                    <ScrollArea className="h-full border rounded-md">
-                        <Table>
-                            <TableHeader className="sticky top-0 bg-background z-10">
-                                <TableRow>
-                                    <TableHead>الصنف</TableHead>
-                                    <TableHead className="text-center">إجمالي الكمية</TableHead>
-                                    <TableHead className="text-center">آخر سعر بيع</TableHead>
-                                    <TableHead className="text-center">متوسط السعر</TableHead>
-                                    <TableHead className="text-center">إجمالي الربح</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {summarizedHistory.map((item, idx) => {
-                                    const profit = item.totalValue - item.totalCost;
-                                    return (
-                                        <TableRow key={idx}>
-                                            <TableCell className="font-bold">{item.name}</TableCell>
-                                            <TableCell className="text-center font-bold">{item.totalQty}</TableCell>
-                                            <TableCell className="text-center text-primary font-black">{item.lastPrice.toLocaleString()}</TableCell>
-                                            <TableCell className="text-center">{(item.totalValue / item.totalQty).toFixed(2)}</TableCell>
-                                            <TableCell className={cn("text-center font-bold", profit >= 0 ? "text-green-600" : "text-destructive")}>
-                                                {profit.toLocaleString()}
-                                            </TableCell>
+            <div className="flex-1 overflow-hidden flex flex-col px-6">
+                <Tabs defaultValue="detailed" className="flex-1 overflow-hidden flex flex-col">
+                    <TabsList className="grid w-full grid-cols-2 mb-4">
+                        <TabsTrigger value="detailed">سجل العمليات التفصيلي</TabsTrigger>
+                        <TabsTrigger value="summary">تجميع حسب الأصناف</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="detailed" className="flex-1 overflow-hidden">
+                        <ScrollArea className="h-full border rounded-xl bg-muted/10">
+                            {isMobile ? (
+                                <div className="p-3 space-y-3">
+                                    {customerPurchases.map((item, idx) => (
+                                        <Card key={idx} className="shadow-sm border-r-4 border-r-primary">
+                                            <CardContent className="p-4 space-y-2">
+                                                <div className="flex justify-between items-start">
+                                                    <div className="font-bold text-lg">{item.itemName}</div>
+                                                    <Badge variant="secondary">{item.qty} قطعة</Badge>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
+                                                    <Barcode className="h-3 w-3"/> {item.code}
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2 pt-2 border-t text-sm">
+                                                    <div><span className="text-muted-foreground">التاريخ:</span> {new Date(item.date).toLocaleDateString('ar-EG')}</div>
+                                                    <div><span className="text-muted-foreground">الفاتورة:</span> {item.invoiceNumber}</div>
+                                                    <div><span className="text-muted-foreground">سعر البيع:</span> {item.price.toLocaleString()}</div>
+                                                    <div><span className="text-muted-foreground">الإجمالي:</span> <span className="font-bold">{item.total.toLocaleString()}</span></div>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+                            ) : (
+                                <Table>
+                                    <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
+                                        <TableRow>
+                                            <TableHead>التاريخ</TableHead>
+                                            <TableHead>رقم الفاتورة</TableHead>
+                                            <TableHead>الصنف</TableHead>
+                                            <TableHead>الباركود</TableHead>
+                                            <TableHead className="text-center">الكمية</TableHead>
+                                            <TableHead className="text-center">سعر البيع</TableHead>
+                                            <TableHead className="text-center">سعر التكلفة</TableHead>
+                                            <TableHead className="text-center">الإجمالي</TableHead>
                                         </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
-                    </ScrollArea>
-                </TabsContent>
-            </Tabs>
-            <DialogFooter className="mt-4">
-                <Button variant="outline" onClick={onClose}>إغلاق</Button>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {customerPurchases.length > 0 ? customerPurchases.map((item, idx) => (
+                                            <TableRow key={idx}>
+                                                <TableCell className="text-xs">{new Date(item.date).toLocaleDateString('ar-EG')}</TableCell>
+                                                <TableCell className="font-mono text-xs">{item.invoiceNumber}</TableCell>
+                                                <TableCell className="font-bold">{item.itemName}</TableCell>
+                                                <TableCell className="font-mono text-xs text-muted-foreground">{item.code}</TableCell>
+                                                <TableCell className="text-center font-bold text-blue-600">{item.qty}</TableCell>
+                                                <TableCell className="text-center">{item.price.toLocaleString()}</TableCell>
+                                                <TableCell className="text-center text-muted-foreground italic">{item.cost.toLocaleString()}</TableCell>
+                                                <TableCell className="text-center font-black">{item.total.toLocaleString()}</TableCell>
+                                            </TableRow>
+                                        )) : (
+                                            <TableRow><TableCell colSpan={8} className="text-center py-20 text-muted-foreground">لا توجد مشتريات مسجلة.</TableCell></TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </ScrollArea>
+                    </TabsContent>
+
+                    <TabsContent value="summary" className="flex-1 overflow-hidden">
+                        <ScrollArea className="h-full border rounded-xl bg-muted/10">
+                            {isMobile ? (
+                                <div className="p-3 space-y-3">
+                                    {summarizedHistory.map((item, idx) => {
+                                        const profit = item.totalValue - item.totalCost;
+                                        return (
+                                            <Card key={idx} className="shadow-sm border-r-4 border-r-green-500">
+                                                <CardContent className="p-4 space-y-2">
+                                                    <div className="font-bold text-lg">{item.name}</div>
+                                                    <div className="text-xs text-muted-foreground font-mono">{item.code}</div>
+                                                    <div className="grid grid-cols-2 gap-2 text-sm pt-2 border-t">
+                                                        <div><span className="text-muted-foreground">إجمالي الكمية:</span> {item.totalQty}</div>
+                                                        <div><span className="text-muted-foreground">آخر سعر:</span> {item.lastPrice.toLocaleString()}</div>
+                                                        <div><span className="text-muted-foreground">صافي الإيراد:</span> {item.totalValue.toLocaleString()}</div>
+                                                        <div><span className="text-muted-foreground">إجمالي الربح:</span> <span className={cn("font-bold", profit >= 0 ? "text-green-600" : "text-destructive")}>{profit.toLocaleString()}</span></div>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <Table>
+                                    <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
+                                        <TableRow>
+                                            <TableHead>الصنف</TableHead>
+                                            <TableHead>الباركود</TableHead>
+                                            <TableHead className="text-center">إجمالي الكمية</TableHead>
+                                            <TableHead className="text-center">آخر سعر بيع</TableHead>
+                                            <TableHead className="text-center">إجمالي الإيراد</TableHead>
+                                            <TableHead className="text-center">إجمالي التكلفة</TableHead>
+                                            <TableHead className="text-center">إجمالي الربح</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {summarizedHistory.map((item, idx) => {
+                                            const profit = item.totalValue - item.totalCost;
+                                            return (
+                                                <TableRow key={idx}>
+                                                    <TableCell className="font-bold">{item.name}</TableCell>
+                                                    <TableCell className="font-mono text-xs">{item.code}</TableCell>
+                                                    <TableCell className="text-center font-bold">{item.totalQty}</TableCell>
+                                                    <TableCell className="text-center text-primary font-black">{item.lastPrice.toLocaleString()}</TableCell>
+                                                    <TableCell className="text-center font-bold">{item.totalValue.toLocaleString()}</TableCell>
+                                                    <TableCell className="text-center text-muted-foreground italic">{item.totalCost.toLocaleString()}</TableCell>
+                                                    <TableCell className={cn("text-center font-bold text-lg", profit >= 0 ? "text-green-600" : "text-destructive")}>
+                                                        {profit.toLocaleString()}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </ScrollArea>
+                    </TabsContent>
+                </Tabs>
+            </div>
+
+            <div className="p-6 bg-muted/30 border-t grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-3 bg-background rounded-lg border flex flex-col items-center">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground mb-1">إجمالي القطع</span>
+                    <span className="text-xl font-black text-blue-600">{totals.qty.toLocaleString()}</span>
+                </div>
+                <div className="p-3 bg-background rounded-lg border flex flex-col items-center">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground mb-1">إجمالي التكلفة</span>
+                    <span className="text-xl font-black text-amber-600">{totals.cost.toLocaleString()}</span>
+                </div>
+                <div className="p-3 bg-background rounded-lg border flex flex-col items-center">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground mb-1">صافي الإيرادات</span>
+                    <span className="text-xl font-black text-primary">{totals.revenue.toLocaleString()}</span>
+                </div>
+                <div className="p-3 bg-background rounded-lg border flex flex-col items-center ring-2 ring-primary/20">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground mb-1">إجمالي الأرباح</span>
+                    <span className={cn("text-xl font-black", totals.profit >= 0 ? "text-green-600" : "text-destructive")}>
+                        {totals.profit.toLocaleString()}
+                    </span>
+                </div>
+            </div>
+
+            <DialogFooter className="p-4 border-t bg-background">
+                <Button variant="outline" onClick={onClose} className="w-full md:w-auto">إغلاق السجل</Button>
             </DialogFooter>
         </DialogContent>
     );
