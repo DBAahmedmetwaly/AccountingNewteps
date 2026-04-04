@@ -1,3 +1,4 @@
+
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -245,12 +246,24 @@ export default function PurchaseInvoicePage() {
   
    const warehouseOptions = useMemo(() => [...warehouses, ...inventoryZones].map((w: any) => ({ value: w.id, label: w.name })), [warehouses, inventoryZones]);
 
+   const availableItemsForWarehouse = useMemo(() => {
+        const activeItems = allItems.filter((i: any) => !i.isDisabled); // Removed raw material filter
+        if (!warehouseId || warehouseId === "all") {
+            return activeItems.map((item: any) => ({ ...item, stock: 0 }));
+        }
+        
+        return activeItems.map((item: any) => ({
+            ...item,
+            stock: calculateStockForItemInWarehouse(item.id, warehouseId, allDataContext)
+        }));
+    }, [warehouseId, allItems, allDataContext]);
+
    const itemsForCombobox = useMemo(() => {
-    return allItems.map((item: Item) => ({ 
+    return availableItemsForWarehouse.map((item: Item) => ({ 
       value: item.id, 
       label: `${item.name} (${item.code || 'N/A'})` 
     }));
-  }, [allItems]);
+  }, [availableItemsForWarehouse]);
 
    const accountBalances = useMemo(() => {
         const balances = new Map<string, number>();
@@ -341,7 +354,7 @@ export default function PurchaseInvoicePage() {
         return;
     }
     
-    const selectedItem = allItems.find((i: Item) => i.id === newItem.id);
+    const selectedItem = availableItemsForWarehouse.find((i: Item) => i.id === newItem.id);
     if(!selectedItem) return;
     
     const selectedUnitInfo = availableUnits.find(u => u.value === selectedUnit);
@@ -510,7 +523,8 @@ export default function PurchaseInvoicePage() {
     }
   }
   
-  const handleItemSelect = (itemId: string) => {
+  const handleItemSelect = useCallback((itemId: string) => {
+    if (!itemId) return;
     const selectedItem = availableItemsForWarehouse.find((i: Item) => i.id === itemId);
     if (selectedItem) {
         const baseUnitOption: SecondaryUnitOption = { 
@@ -542,7 +556,7 @@ export default function PurchaseInvoicePage() {
             expiryDate: ""
         });
     }
-};
+  }, [availableItemsForWarehouse]);
     
      const handleUnitChange = (unitName: string) => {
         setSelectedUnit(unitName);
@@ -669,13 +683,16 @@ export default function PurchaseInvoicePage() {
                         ))}
                         <TableRow className="no-print bg-muted/20">
                             <TableCell className="p-2">
-                                 <Combobox
-                                    options={itemsForCombobox}
-                                    value={newItem.id}
-                                    onValueChange={handleItemSelect}
-                                    placeholder="اختر صنفًا..."
-                                    emptyMessage="لا توجد أصناف."
-                                />
+                                 <div className="space-y-1">
+                                    <Combobox
+                                        options={itemsForCombobox}
+                                        value={newItem.id}
+                                        onValueChange={handleItemSelect}
+                                        placeholder={"اختر صنفًا..."}
+                                        emptyMessage="لا توجد أصناف."
+                                        className="w-full"
+                                    />
+                                 </div>
                             </TableCell>
                              <TableCell className="p-2 font-mono text-xs">{newItem.code}</TableCell>
                             <TableCell className="p-2 w-40">
