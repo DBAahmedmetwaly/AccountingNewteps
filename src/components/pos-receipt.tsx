@@ -107,23 +107,15 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
   const barcodeValue = invoice?.invoiceNumber || 'N/A';
   const items = invoice?.items || invoice?.cart || [];
   const totalAmount = Number(invoice?.total || 0);
-  const paidAmount = Number(invoice?.paidAmount ?? totalAmount);
+  const paidAmount = Number(invoice?.paidAmount ?? 0);
   const netInvoiceImpact = totalAmount - paidAmount;
   const remainingInInvoice = Math.max(0, netInvoiceImpact);
   
-  // Helper to check if string contains only characters supported by Barcode 128
-  const canGenerateBarcode = (val: string) => {
-    if (!val) return false;
-    // Check if contains Arabic characters or other non-ASCII
-    return /^[\x00-\x7F]*$/.test(val);
-  };
-
   const BarcodeDisplay = ({ value, design }: { value: string, design: any }) => {
     const ref = React.useRef<SVGSVGElement>(null);
-    const isSupported = canGenerateBarcode(value);
 
     React.useEffect(() => {
-        if (ref.current && isSupported) {
+        if (ref.current) {
             try {
                 JsBarcode(ref.current, value, {
                     format: "CODE128", 
@@ -137,15 +129,7 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
                 console.error("Barcode generation failed:", e);
             }
         }
-    }, [value, design, isSupported]);
-
-    if (!isSupported) {
-        return (
-            <div style={{ padding: '5px', border: '1px solid #000', display: 'inline-block', fontFamily: 'monospace', fontWeight: 'bold' }}>
-                {value}
-            </div>
-        );
-    }
+    }, [value, design]);
 
     return <svg ref={ref} />;
   };
@@ -154,7 +138,6 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
   const effectiveCompanyAddress = company?.companyAddress || "العنوان";
   const effectivePartyName = customer?.name || invoice?.customerName || "عميل نقدي";
 
-  // Calculate balances logic with fixed reference
   let balanceBefore = 0;
   let balanceAfter = 0;
 
@@ -162,7 +145,6 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
       balanceBefore = Number(invoice.customerBalanceBefore);
       balanceAfter = balanceBefore + netInvoiceImpact;
   } else {
-      // Fallback
       balanceAfter = customerBalance ?? 0;
       balanceBefore = balanceAfter - netInvoiceImpact;
   }
@@ -200,8 +182,6 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
                 <BarcodeDisplay value={barcodeValue} design={design} />
             </div>
          )}
-
-        {invoice?.isDelivery && <p style={{...pStyle, fontWeight: 'bold', fontSize: '16px', border: '2px solid black', padding: '3px', margin: '8px auto' }}>توصيل (دليفري)</p>}
       </div>
       
       <div style={{ borderBottom: '1px dashed #000', paddingBottom: '8px', marginBottom: '8px', fontSize: `${design?.fontSizes?.header || 13}px`, position: 'relative', zIndex: 1 }}>
@@ -233,18 +213,14 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
       <div style={totalsStyle}>
         <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between' }}><span>الإجمالي:</span> <span>{(invoice?.subtotal || 0).toFixed(2)}</span></p>
         {design?.showDiscount !== false && invoice?.discount > 0 && <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between' }}><span>الخصم:</span> <span style={{color: '#d00'}}>- {invoice.discount.toFixed(2)}</span></p>}
-        {invoice?.taxAmount > 0 && (
-          <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between' }}>
-            <span>الضريبة:</span> 
-            <span>{invoice.taxAmount.toFixed(2)}</span>
-          </p>
-        )}
+        
         <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '16px', margin: '6px 0', borderTop: '1px solid #000', paddingTop: '4px' }}><span>الصافي:</span> <span>{totalAmount.toFixed(2)}</span></p>
+        
         <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between' }}><span>المدفوع:</span> <span>{paidAmount.toFixed(2)}</span></p>
         
         {remainingInInvoice > 0.01 && (
             <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', color: '#d00', borderTop: '1px dashed #ccc', paddingTop: '4px' }}>
-                <span>باقي الفاتورة (الآجل):</span>
+                <span>باقي الفاتورة:</span>
                 <span>{remainingInInvoice.toFixed(2)}</span>
             </p>
         )}
@@ -255,9 +231,9 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
                     <span>المستحق سابقاً:</span>
                     <span>{balanceBefore.toFixed(2)}</span>
                 </p>
-                <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', color: '#d00', fontSize: '14px' }}>
-                    <span>إجمالي مديونية العميل:</span>
-                    <span>{balanceAfter.toFixed(2)} ج.م</span>
+                <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', color: balanceAfter > 0 ? '#d00' : '#080', fontSize: '14px' }}>
+                    <span>الرصيد النهائي للعميل:</span>
+                    <span>{Math.abs(balanceAfter).toFixed(2)} ج.م {balanceAfter < 0 ? '(له)' : '(عليه)'}</span>
                 </p>
             </div>
         )}

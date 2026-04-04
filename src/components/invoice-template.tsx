@@ -139,15 +139,15 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
 
   // Calculate balances logic
   const totalAmount = Number(invoice?.total || 0);
-  const paidAmount = Number(invoice?.paidAmount || 0);
+  const paidAmount = Number(invoice?.paidAmount ?? 0);
   const netInvoiceImpact = totalAmount - paidAmount;
   const remainingInInvoice = Math.max(0, netInvoiceImpact);
   
   let balanceBefore = 0;
   let balanceAfter = 0;
 
-  if (invoice?.customerBalanceBefore !== undefined) {
-      balanceBefore = Number(invoice.customerBalanceBefore);
+  if (invoice?.customerBalanceBefore !== undefined || invoice?.supplierBalanceBefore !== undefined) {
+      balanceBefore = Number(invoice.customerBalanceBefore ?? invoice.supplierBalanceBefore ?? 0);
       balanceAfter = balanceBefore + netInvoiceImpact;
   } else {
       // Fallback for legacy data
@@ -234,12 +234,10 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
             <span>{(invoice?.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م</span>
         </div>
         
-        {(invoice?.paidAmount > 0) && (
-            <div style={totalsRowStyle}>
-                <span>{isReturn ? 'المبلغ المردود نقداً' : 'المدفوع'}</span> 
-                <span>{(invoice?.paidAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-            </div>
-        )}
+        <div style={totalsRowStyle}>
+            <span>{isReturn ? 'المبلغ المردود نقداً' : 'المبلغ المدفوع'}</span> 
+            <span style={{ fontWeight: 'bold' }}>{(invoice?.paidAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+        </div>
 
         {remainingInInvoice > 0.01 && (
             <div style={{...totalsRowStyle, color: '#d00', fontWeight: 'bold'}}>
@@ -248,18 +246,14 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
             </div>
         )}
         
-        {customerBalance !== undefined && (
-            <>
-                <div style={{...totalsRowStyle, marginTop: '15px', borderTop: '1px solid #eee', paddingTop: '5px', color: '#666', fontSize: '13px' }}>
-                    <span>{isPurchase ? 'المستحق للمورد سابقاً' : 'المستحق على العميل سابقاً'}</span>
-                    <span>{balanceBefore.toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م</span>
-                </div>
-                <div style={{...totalsRowStyle, borderTop: '2px double #000', paddingTop: '10px', color: '#000', fontWeight: 'bold', backgroundColor: 'rgba(249, 249, 249, 0.8)', padding: '10px' }}>
-                    <span>{isPurchase ? 'إجمالي مديونية المورد (بعد الفاتورة)' : 'إجمالي مديونية العميل (بعد الفاتورة)'}</span>
-                    <span style={{color: '#d00'}}>{balanceAfter.toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م</span>
-                </div>
-            </>
-        )}
+        <div style={{...totalsRowStyle, marginTop: '15px', borderTop: '1px solid #eee', paddingTop: '5px', color: '#666', fontSize: '13px' }}>
+            <span>{isPurchase ? 'المستحق للمورد سابقاً' : 'المستحق على العميل سابقاً'}</span>
+            <span>{Math.abs(balanceBefore).toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م {balanceBefore < 0 ? '(له)' : '(عليه)'}</span>
+        </div>
+        <div style={{...totalsRowStyle, borderTop: '2px double #000', paddingTop: '10px', color: '#000', fontWeight: 'bold', backgroundColor: 'rgba(249, 249, 249, 0.8)', padding: '10px' }}>
+            <span>{isPurchase ? 'إجمالي مستحقات المورد (الرصيد النهائي)' : 'إجمالي مستحقات العميل (الرصيد النهائي)'}</span>
+            <span style={{color: balanceAfter > 0 ? '#d00' : '#080'}}>{Math.abs(balanceAfter).toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م {balanceAfter < 0 ? '(له)' : '(عليه)'}</span>
+        </div>
       </div>
 
        <footer style={footerStyle}>
