@@ -774,7 +774,7 @@ export default function UsersPage() {
 
       <Dialog open={isEditOpen} onOpenChange={(open) => {
           setIsEditOpen(open);
-          if (!open) setEditingItem(null);
+          if (!open) setEditingUser(null);
       }}>
         <DialogContent className="sm:max-w-4xl">
           <DialogHeader>

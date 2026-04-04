@@ -30,6 +30,7 @@ import { KitchenReceipt } from '@/components/kitchen-receipt';
 import { Component as ComponentIcon } from 'lucide-react';
 import { calculateStockForItemInWarehouse } from '@/lib/inventory-utils';
 
+const isWeightUnit = (unit?: string) => ['kilo', 'gram', 'meter', 'كيلو', 'جرام', 'متر'].includes(unit?.toLowerCase() || '');
 
 const DEFAULT_POS_SETTINGS = {
     receiptWidth: 72,
@@ -400,7 +401,7 @@ const NewCustomerForm = ({ onSave, onClose, allCustomers }: { onSave: (customer:
             toast({
                 variant: "destructive",
                 title: "رقم هاتف مكرر",
-                description: "هذا الرقم مسجل لعميل آخر. يرجى إدخال رقم مختلف.",
+                description: "هذا الرقم مسجل لعميل آخر. يرجى إدخل رقم مختلف.",
             });
             return;
         }
@@ -1499,7 +1500,7 @@ export default function PosPage() {
                     body: JSON.stringify({ printer: posPrinterAddress, content: { title, lines, footer: `رقم: ${saleData.invoiceNumber || ''}` } })
                 });
                 const data = await res.json();
-                if (!res.ok) throw new Error(data?.error || 'فشل إرسال أمر الطباعة');
+                if (!res.ok) throw new Error(data?.error || 'فشل إرسال أمر طباعة');
                 toast({ title: 'تمت الطباعة بنجاح', description: `تمت الطباعة على ${posPrinterAddress}` });
             } catch (e: any) {
                 toast({ variant: 'destructive', title: 'خطأ الطباعة المباشرة', description: e?.message || 'تعذر الطباعة على طابعة النظام المحددة.' });
