@@ -296,12 +296,11 @@ export default function SalesInvoicePage() {
         setItems(items.filter((item) => item.uniqueId !== uniqueId));
     };
 
-    const lastPriceForCustomer = useMemo(() => {
+    const lastPriceForCustomer = useMemo<number | null>(() => {
         if (!customerId || !newItem.id) return null;
         const allSales = [...salesInvoices.filter(s => s.status === 'approved'), ...posSales];
         const customerSales = allSales.filter(s => s.customerId === customerId);
         
-        // Find the latest sale containing this item
         let lastPrice = null;
         customerSales.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         
@@ -351,7 +350,7 @@ export default function SalesInvoicePage() {
              setNewItem(prev => ({
                  ...prev, 
                  price: unit.price || (item.price || 0) * unit.factor,
-                 code: unit.barcode || item.code || '' // Update code from unit or fallback to item
+                 code: unit.barcode || item.code || '' 
              }));
         }
     }
@@ -410,7 +409,7 @@ export default function SalesInvoicePage() {
                 isDelivery,
                 deliveryPersonId: isDelivery ? deliveryPersonId : null,
                 deliveryPersonName: isDelivery ? deliveryStaff.find((d:any) => d.id === deliveryPersonId)?.name : null,
-                customerBalanceBefore: selectedCustomerBalance, // Store balance at time of issuance
+                customerBalanceBefore: selectedCustomerBalance, 
             };
             
             if (location) invoiceData.location = location;
@@ -672,7 +671,7 @@ export default function SalesInvoicePage() {
                                         {lastPriceForCustomer !== null && (
                                             <div className="flex items-center gap-1 text-[10px] text-primary font-bold animate-in fade-in slide-in-from-top-1">
                                                 <History className="h-3 w-3" />
-                                                <span>آخر سعر بيع لهذا العميل: {lastPriceForCustomer.toLocaleString()} ج.م</span>
+                                                <span>آخر سعر بيع لهذا العميل: {Number(lastPriceForCustomer).toLocaleString()} ج.م</span>
                                             </div>
                                         )}
                                      </div>

@@ -272,7 +272,7 @@ export default function SalesRepInvoicePage() {
         }));
     };
     
-    const lastPriceForCustomer = useMemo(() => {
+    const lastPriceForCustomer = useMemo<number | null>(() => {
         if (!customerId || !newItem.id) return null;
         const allSales = [...salesInvoices.filter(s => s.status === 'approved'), ...posSales];
         const customerSales = allSales.filter(s => s.customerId === customerId);
@@ -390,7 +390,7 @@ export default function SalesRepInvoicePage() {
         setIsLoadingShare(true);
         setInvoiceToShare(invoiceData);
     
-        await new Promise(resolve => setTimeout(resolve, 300)); // Increased delay for stability
+        await new Promise(resolve => setTimeout(resolve, 300)); 
     
         if (invoiceRef.current === null) {
             console.error('Invoice ref is not available.');
@@ -403,7 +403,7 @@ export default function SalesRepInvoicePage() {
             const dataUrl = await toPng(invoiceRef.current, { 
                 cacheBust: true, 
                 quality: 0.95,
-                backgroundColor: '#ffffff' // Force white background for transparency
+                backgroundColor: '#ffffff'
             });
             const blob = await (await fetch(dataUrl)).blob();
             const file = new File([blob], `${invoiceData.invoiceNumber}.png`, { type: blob.type });
@@ -634,7 +634,7 @@ export default function SalesRepInvoicePage() {
                                 <TableCell><Input type="number" value={item.price} onChange={(e) => handleUpdateItem(item.uniqueId, 'price', Number(e.target.value))} className="text-center h-8" /></TableCell>
                                 <TableCell className="text-center">ج.م {item.total.toFixed(2)}</TableCell>
                                 <TableCell className="text-center no-print">
-                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.uniqueId)}>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleRemoveItem(item.uniqueId)}>
                                     <Trash2 className="h-4 w-4 text-destructive" />
                                     </Button>
                                 </TableCell>
@@ -654,7 +654,7 @@ export default function SalesRepInvoicePage() {
                                         {lastPriceForCustomer !== null && (
                                             <div className="flex items-center gap-1 text-[10px] text-primary font-bold animate-in fade-in slide-in-from-top-1">
                                                 <History className="h-3 w-3" />
-                                                <span>آخر سعر بيع لهذا العميل: {lastPriceForCustomer.toLocaleString()} ج.م</span>
+                                                <span>آخر سعر بيع لهذا العميل: {Number(lastPriceForCustomer).toLocaleString()} ج.م</span>
                                             </div>
                                         )}
                                      </div>

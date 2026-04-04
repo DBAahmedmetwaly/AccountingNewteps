@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
@@ -82,6 +83,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useRouter } from "next/navigation";
 
 interface User {
   id?: string;
@@ -358,6 +360,7 @@ export default function UsersPage() {
   const { toast } = useToast();
   const { can } = usePermissions();
   const isMobile = useIsMobile();
+  const router = useRouter();
   
   const [searchTerm, setSearchTerm] = useState("");
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -769,7 +772,10 @@ export default function UsersPage() {
         </Card>
       </main>
 
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+      <Dialog open={isEditOpen} onOpenChange={(open) => {
+          setIsEditOpen(open);
+          if (!open) setEditingItem(null);
+      }}>
         <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>تعديل بيانات المستخدم</DialogTitle>

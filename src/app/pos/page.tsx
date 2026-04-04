@@ -82,26 +82,26 @@ const DEFAULT_PRINTER_SETTINGS = {
 };
 
 interface PosItem {
-  id: string; // The database ID of the item
+  id: string; 
   code: string;
   name: string;
   qty: number;
-  price: number; // Current price after discounts
+  price: number; 
   cost: number;
   total: number;
-  originalPrice: number; // Price before any promotion
-  discountApplied: number; // Total discount amount applied to this line item
-  uniqueId: string; // A unique ID for the list key
-  promoApplied?: string | null; // ID of the promotion applied
-  categoryId?: string; // To check for kitchen printing
-  unit: string; // The unit being sold (e.g., 'piece', 'carton')
-  conversionFactor: number; // How many base units this unit represents
+  originalPrice: number; 
+  discountApplied: number; 
+  uniqueId: string; 
+  promoApplied?: string | null; 
+  categoryId?: string; 
+  unit: string; 
+  conversionFactor: number; 
 }
 
 interface ItemCategory {
   id: string;
   name: string;
-  color?: string; // Add color property
+  color?: string; 
   showOnPos?: boolean;
 }
 
@@ -128,11 +128,10 @@ interface Customer {
   currentBalance?: number;
 }
 
-// New Payment type
 interface Payment {
   method: string;
   amount: number;
-  id: string; // to have a unique key for the list
+  id: string; 
 }
 
 const paymentMethodIcons: Record<string, React.ReactNode> = {
@@ -308,7 +307,7 @@ const StockQueryDialog = ({ onOpenChange, ...allDataContext }: { onOpenChange: (
             const currentStock = calculateStockForItemInWarehouse(itemMaster.id, warehouse.id, allDataContext);
             
             if (currentStock > 0) {
-                results.push({ warehouseName: warehouseName, stock: currentStock, price: itemMaster.price || 0 });
+                results.push({ warehouseName: warehouse.name, stock: currentStock, price: itemMaster.price || 0 });
             }
         });
         
@@ -349,9 +348,8 @@ const StockQueryDialog = ({ onOpenChange, ...allDataContext }: { onOpenChange: (
 
 
 
-// ... (rest of the interfaces are the same)
 const DeliveryPersonDialog = ({ onSelect, onOpenChange }: { onSelect: (id: string) => void, onOpenChange: (open: boolean) => void }) => {
-    const { deliveryStaff } = useData(); // Use deliveryStaff from useData
+    const { deliveryStaff } = useData(); 
 
     const handleSelect = (id: string) => {
         onSelect(id);
@@ -441,7 +439,6 @@ const NewCustomerForm = ({ onSave, onClose, allCustomers }: { onSave: (customer:
 const HeldInvoicesDialog = ({ onRetrieve, onClose }: { onRetrieve: (invoice: HeldInvoice) => void, onClose: () => void }) => {
     const { heldInvoices, dbAction, loading } = useData();
 
-    // Filter out invoices that are tied to a table
     const nonTableInvoices = useMemo(() => {
         return heldInvoices.filter((inv: HeldInvoice) => !inv.tableId);
     }, [heldInvoices]);
@@ -523,7 +520,6 @@ const ManualEntryDialog = ({ item, onConfirm, onClose, rounding, defaultFocus }:
     const priceInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        // We use a small timeout to ensure the element is fully rendered and ready to be focused.
         setTimeout(() => {
             if (defaultFocus === 'weight' && weightInputRef.current) {
                 weightInputRef.current.focus();
@@ -547,7 +543,7 @@ const ManualEntryDialog = ({ item, onConfirm, onClose, rounding, defaultFocus }:
         setPrice(newPrice);
         if (itemPricePerUnit > 0) {
             const newWeight = newPrice / itemPricePerUnit;
-            setWeight(Number(newWeight.toFixed(rounding + 1))); // Keep more precision for weight
+            setWeight(Number(newWeight.toFixed(rounding + 1))); 
         }
     };
     
@@ -590,7 +586,6 @@ const ManualEntryDialog = ({ item, onConfirm, onClose, rounding, defaultFocus }:
     );
 };
 
-// New Dialog for secondary units
 const SecondaryUnitDialog = ({ item, onSelectUnit, onClose }: { item: any, onSelectUnit: (unit: any, qty: number) => void, onClose: () => void }) => {
     const [selectedUnit, setSelectedUnit] = useState<any | null>(null);
     const [quantity, setQuantity] = useState(1);
@@ -802,23 +797,6 @@ const SelfShiftOpeningDialog = ({ onConfirm, onClose, warehouses, terminals, act
 }
 
 
-function calculateEan13CheckDigit(barcodeWithoutCheckDigit: string) {
-    if (barcodeWithoutCheckDigit.length !== 12) return '0';
-    let sumEven = 0, sumOdd = 0;
-    barcodeWithoutCheckDigit.split('').forEach((char, index) => {
-        const digit = parseInt(char, 10);
-        if ((index + 1) % 2 === 0) {
-            sumEven += digit;
-        } else {
-            sumOdd += digit;
-        }
-    });
-    const totalSum = sumOdd + (sumEven * 3);
-    const remainder = totalSum % 10;
-    const checkDigit = (remainder === 0) ? 0 : 10 - remainder;
-    return String(checkDigit);
-}
-
 export default function PosPage() {
     const allDataContext = useData();
     const { 
@@ -854,11 +832,6 @@ export default function PosPage() {
     const allowNegativeStock = useMemo(() => financialSettings.allowNegativeStock, [financialSettings]);
     const roundingPrecision = useMemo(() => financialSettings.roundingDecimals || 2, [financialSettings]);
     const scaleBarcodePrefix = useMemo(() => financialSettings.scaleBarcodePrefix || '21', [financialSettings]);
-    const isWeightUnit = (u?: string) => {
-        if (!u) return false;
-        const s = u.toLowerCase();
-        return ['weight', 'kg', 'kilo', 'gram', 'g', 'كيلو', 'كيلوجرام', 'جرام'].includes(s);
-    };
     
     const openWorkDay = useMemo(() => posSessions.find((s: any) => !s.isClosed), [posSessions]);
     const activeCashierSession = useMemo(() => {
@@ -880,11 +853,9 @@ export default function PosPage() {
     const hasOpenCashierSession = !!activeCashierSession;
     const { currentInvoiceNumber, generateInvoiceNumber } = usePosInvoiceCounter(openWorkDay?.id, activeCashierSession?.posTerminalId, terminalForSession?.code, warehouseForSession?.code);
     
-    // Printer and Receipt settings with fallback logic
     const receiptDesign = useMemo(() => {
         const allReceiptSettings = settings?.main?.posReceipts || {};
         const branchId = warehouseForSession?.id;
-        // Start with fallback default, merge saved default, then merge branch override
         return { 
             ...DEFAULT_POS_SETTINGS, 
             ...(allReceiptSettings.defaultReceiptDesign || {}), 
@@ -916,7 +887,7 @@ export default function PosPage() {
     
     const [cart, setCart] = useState<PosItem[]>([]);
     const [discount, setDiscount] = useState(0);
-    const [payments, setPayments] = useState<Payment[]>([]); // New state for payments
+    const [payments, setPayments] = useState<Payment[]>([]); 
     const [activeGroupId, setActiveGroupId] = useState<string | 'all'>('all');
     const [activeGroupType, setActiveGroupType] = useState<'category' | 'group' | 'all'>('all');
     const [searchTerm, setSearchTerm] = useState('');
@@ -951,13 +922,11 @@ export default function PosPage() {
     const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
-    // Table specific state
     const tableId = useMemo(() => searchParams.get('tableId'), [searchParams]);
     const tableData = useMemo(() => restaurantTables.find((t: any) => t.id === tableId), [tableId, restaurantTables]);
     const [showBackButton, setShowBackButton] = useState(false);
     const [currentHeldInvoiceId, setCurrentHeldInvoiceId] = useState<string | null>(null);
     
-    // Memoized derived states
     const subtotal = useMemo(() => cart.reduce((acc, item) => acc + item.originalPrice * item.qty, 0), [cart]);
     const promoDiscount = useMemo(() => cart.reduce((acc, item) => acc + item.discountApplied, 0), [cart]);
     
@@ -1329,7 +1298,6 @@ export default function PosPage() {
         const code = barcodeInputRef.current?.value.trim().replace(/\s/g, '');
         if (!code) return;
     
-        // 1. Search in secondary unit barcodes
         for (const item of availableItemsWithStock) {
             if (item.secondaryUnits && item.secondaryUnits.length > 0) {
                 const matchedUnit = item.secondaryUnits.find((u: any) => u.barcode === code);
@@ -1341,7 +1309,6 @@ export default function PosPage() {
             }
         }
     
-        // 2. Exact match on main barcode
         let itemToAdd = availableItemsWithStock.find((item: any) => item.code === code);
         if (itemToAdd) {
             addItemToCart(itemToAdd, 1);
@@ -1349,7 +1316,6 @@ export default function PosPage() {
             return;
         }
     
-        // 3. EAN-13 Scale Barcode Logic
         if (code.length === 13 && code.startsWith(scaleBarcodePrefix)) {
             const itemCodePart = code.substring(scaleBarcodePrefix.length, scaleBarcodePrefix.length + 5);
             
@@ -1383,7 +1349,6 @@ export default function PosPage() {
             }
         }
     
-        // If no match found
         toast({ variant: 'destructive', title: 'خطأ', description: `الصنف بالكود ${code} غير موجود.` });
         if (barcodeInputRef.current) barcodeInputRef.current.value = "";
     };
@@ -1409,7 +1374,7 @@ export default function PosPage() {
              if (item.secondaryUnits && item.secondaryUnits.length > 0) {
                 setItemForSecondaryUnit(item);
              }
-        }, 500); // 500ms for long press
+        }, 500); 
     };
 
     const handlePressEnd = () => {
@@ -1535,7 +1500,7 @@ export default function PosPage() {
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data?.error || 'فشل إرسال أمر الطباعة');
-                toast({ title: 'تمت الطباعة', description: `تمت الطباعة على ${posPrinterAddress}` });
+                toast({ title: 'تمت الطباعة بنجاح', description: `تمت الطباعة على ${posPrinterAddress}` });
             } catch (e: any) {
                 toast({ variant: 'destructive', title: 'خطأ الطباعة المباشرة', description: e?.message || 'تعذر الطباعة على طابعة النظام المحددة.' });
                 const posReceiptFallback = (
@@ -1562,7 +1527,6 @@ export default function PosPage() {
             await sendToPrinter(posReceiptComponent, 'pos');
         }
         
-        // Kitchen printer logic
         const kitchenPrinters = printerSettings.kitchenPrinters || [];
         const effectiveKitchenPrinters: any[] = kitchenPrinters.length > 0 ? kitchenPrinters : 
             (printerSettings.useKitchenPrinter && printerSettings.kitchenPrinterAddress ? [{
@@ -1686,7 +1650,7 @@ export default function PosPage() {
                  return;
              }
         } else if (remainingAmount > 0.01 && !allowCredit && !isDelivery && !tableId) {
-             if (!tableId) { // Only enforce full payment if it's not a table order
+             if (!tableId) { 
                 toast({ variant: "destructive", title: "المبلغ المدفوع غير كافٍ", description: "يجب دفع المبلغ بالكامل أو تفعيل خيار البيع الآجل لعميل مسموح له." });
                 return;
             }
@@ -1694,7 +1658,7 @@ export default function PosPage() {
 
         setIsSaving(true);
         try {
-            const invoiceNumber = await generateInvoiceNumber(user?.id); // Pass user ID
+            const invoiceNumber = await generateInvoiceNumber(user?.id); 
             if (!invoiceNumber) {
                 toast({ variant: 'destructive', title: 'خطأ', description: 'فشل إنشاء رقم فاتورة. تحقق من جلسة الكاشير.' });
                 setIsSaving(false);
@@ -1704,7 +1668,7 @@ export default function PosPage() {
             const invoiceCounter = parseInt(invoiceNumber.split('-')[0] || '0', 10);
             
             const date = new Date();
-            const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD
+            const dateString = date.toISOString().split('T')[0]; 
     
             const saleData: any = {
                 invoiceNumber: invoiceNumber,
@@ -1743,7 +1707,6 @@ export default function PosPage() {
             const newSaleId = await dbAction(`posSales/${dateString}`, 'add', saleData) as string;
             if (!newSaleId) throw new Error("Failed to save POS sale");
             
-            // Deduct components for manufactured items
             for (const cartItem of cart) {
                 const masterItem = allItems.find((i:any) => i.id === cartItem.id);
                 if (masterItem?.itemType === 'manufactured' && masterItem.components) {
@@ -1769,7 +1732,6 @@ export default function PosPage() {
                 description: `تم حفظ الفاتورة ${invoiceNumber}`,
             });
 
-            // Send Notification to Realtime DB (Internal In-App Notification)
             try {
                 await dbAction('notifications', 'add', {
                     title: 'عملية بيع جديدة',
@@ -1790,7 +1752,6 @@ export default function PosPage() {
                 await handlePrintReceipt({...saleData, id: newSaleId});
             }
             
-            // After saving, if it was a table order, clear the held invoice and update table status
             if (tableId) {
                 if (currentHeldInvoiceId) {
                     await dbAction('heldInvoices', 'remove', { id: currentHeldInvoiceId });
@@ -1989,9 +1950,6 @@ export default function PosPage() {
     }, [selectedCustomer]);
 
     const lastPriceForCustomer = useMemo(() => {
-        // This is tricky in POS because multiple items can be in focus.
-        // We'll return null here and handle it per line item if needed, 
-        // but for now, we'll keep it consistent with the invoices page by not showing a global badge.
         return null;
     }, []);
 
