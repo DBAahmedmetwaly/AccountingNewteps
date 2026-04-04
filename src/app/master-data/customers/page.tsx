@@ -124,163 +124,169 @@ const PurchaseHistoryDialog = ({ customer, onClose }: { customer: any, onClose: 
     }, [customerPurchases]);
 
     return (
-        <DialogContent className="max-w-6xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
-            <DialogHeader className="p-6 pb-2">
-                <DialogTitle className="flex items-center gap-2 text-xl">
-                    <ShoppingBag className="text-primary h-6 w-6"/> سجل مشتريات العميل: {customer.name}
+        <DialogContent className="max-w-6xl h-[95vh] flex flex-col p-0 overflow-hidden">
+            <DialogHeader className="p-4 pb-2 border-b bg-muted/30">
+                <DialogTitle className="flex items-center gap-2 text-lg md:text-xl">
+                    <ShoppingBag className="text-primary h-5 w-5 md:h-6 md:w-6"/> سجل المشتريات: {customer.name}
                 </DialogTitle>
-                <DialogDescription>تتبع كافة الأصناف والأسعار والربحية لهذا العميل.</DialogDescription>
+                <DialogDescription className="text-xs">تتبع الأصناف والأسعار والربحية لهذا العميل.</DialogDescription>
             </DialogHeader>
             
-            <div className="flex-1 overflow-hidden flex flex-col px-6">
+            <div className="flex-1 overflow-hidden flex flex-col">
                 <Tabs defaultValue="detailed" className="flex-1 overflow-hidden flex flex-col">
-                    <TabsList className="grid w-full grid-cols-2 mb-4">
-                        <TabsTrigger value="detailed">سجل العمليات التفصيلي</TabsTrigger>
-                        <TabsTrigger value="summary">تجميع حسب الأصناف</TabsTrigger>
-                    </TabsList>
+                    <div className="px-4 pt-2">
+                        <TabsList className="grid w-full grid-cols-2 mb-2">
+                            <TabsTrigger value="detailed">عرض تفصيلي</TabsTrigger>
+                            <TabsTrigger value="summary">حسب الأصناف</TabsTrigger>
+                        </TabsList>
+                    </div>
                     
                     <TabsContent value="detailed" className="flex-1 overflow-hidden">
-                        <ScrollArea className="h-full border rounded-xl bg-muted/10">
+                        <ScrollArea className="h-full px-4">
                             {isMobile ? (
-                                <div className="p-3 space-y-3">
+                                <div className="space-y-2 pb-4">
                                     {customerPurchases.map((item, idx) => (
-                                        <Card key={idx} className="shadow-sm border-r-4 border-r-primary">
-                                            <CardContent className="p-4 space-y-2">
-                                                <div className="flex justify-between items-start">
-                                                    <div className="font-bold text-lg">{item.itemName}</div>
-                                                    <Badge variant="secondary">{item.qty} قطعة</Badge>
-                                                </div>
-                                                <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
-                                                    <Barcode className="h-3 w-3"/> {item.code}
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-2 pt-2 border-t text-sm">
-                                                    <div><span className="text-muted-foreground">التاريخ:</span> {new Date(item.date).toLocaleDateString('ar-EG')}</div>
-                                                    <div><span className="text-muted-foreground">الفاتورة:</span> {item.invoiceNumber}</div>
-                                                    <div><span className="text-muted-foreground">سعر البيع:</span> {item.price.toLocaleString()}</div>
-                                                    <div><span className="text-muted-foreground">الإجمالي:</span> <span className="font-bold">{item.total.toLocaleString()}</span></div>
-                                                </div>
-                                            </CardContent>
-                                        </Card>
+                                        <div key={idx} className="p-3 bg-card border rounded-lg shadow-sm border-r-4 border-r-primary">
+                                            <div className="flex justify-between items-start gap-2 mb-1">
+                                                <div className="font-bold text-sm leading-tight flex-1">{item.itemName}</div>
+                                                <Badge variant="secondary" className="text-[10px] h-5">{item.qty} ق</Badge>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono mb-2">
+                                                <Barcode className="h-3 w-3"/> {item.code}
+                                            </div>
+                                            <div className="flex justify-between items-center text-[11px] pt-2 border-t">
+                                                <div className="text-muted-foreground">{new Date(item.date).toLocaleDateString('ar-EG')} • {item.invoiceNumber}</div>
+                                                <div className="font-bold text-primary">{item.total.toLocaleString()} ج.م</div>
+                                            </div>
+                                        </div>
                                     ))}
+                                    {customerPurchases.length === 0 && <p className="text-center py-10 text-muted-foreground text-sm">لا توجد حركات.</p>}
                                 </div>
                             ) : (
-                                <Table>
-                                    <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
-                                        <TableRow>
-                                            <TableHead>التاريخ</TableHead>
-                                            <TableHead>رقم الفاتورة</TableHead>
-                                            <TableHead>الصنف</TableHead>
-                                            <TableHead>الباركود</TableHead>
-                                            <TableHead className="text-center">الكمية</TableHead>
-                                            <TableHead className="text-center">سعر البيع</TableHead>
-                                            <TableHead className="text-center">سعر التكلفة</TableHead>
-                                            <TableHead className="text-center">الإجمالي</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {customerPurchases.length > 0 ? customerPurchases.map((item, idx) => (
-                                            <TableRow key={idx}>
-                                                <TableCell className="text-xs">{new Date(item.date).toLocaleDateString('ar-EG')}</TableCell>
-                                                <TableCell className="font-mono text-xs">{item.invoiceNumber}</TableCell>
-                                                <TableCell className="font-bold">{item.itemName}</TableCell>
-                                                <TableCell className="font-mono text-xs text-muted-foreground">{item.code}</TableCell>
-                                                <TableCell className="text-center font-bold text-blue-600">{item.qty}</TableCell>
-                                                <TableCell className="text-center">{item.price.toLocaleString()}</TableCell>
-                                                <TableCell className="text-center text-muted-foreground italic">{item.cost.toLocaleString()}</TableCell>
-                                                <TableCell className="text-center font-black">{item.total.toLocaleString()}</TableCell>
+                                <div className="border rounded-lg mb-4">
+                                    <Table>
+                                        <TableHeader className="sticky top-0 bg-background z-10">
+                                            <TableRow>
+                                                <TableHead>التاريخ</TableHead>
+                                                <TableHead>الفاتورة</TableHead>
+                                                <TableHead>الصنف</TableHead>
+                                                <TableHead>الباركود</TableHead>
+                                                <TableHead className="text-center">الكمية</TableHead>
+                                                <TableHead className="text-center">البيع</TableHead>
+                                                <TableHead className="text-center">التكلفة</TableHead>
+                                                <TableHead className="text-center">الإجمالي</TableHead>
                                             </TableRow>
-                                        )) : (
-                                            <TableRow><TableCell colSpan={8} className="text-center py-20 text-muted-foreground">لا توجد مشتريات مسجلة.</TableCell></TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {customerPurchases.length > 0 ? customerPurchases.map((item, idx) => (
+                                                <TableRow key={idx}>
+                                                    <TableCell className="text-xs">{new Date(item.date).toLocaleDateString('ar-EG')}</TableCell>
+                                                    <TableCell className="font-mono text-xs">{item.invoiceNumber}</TableCell>
+                                                    <TableCell className="font-bold">{item.itemName}</TableCell>
+                                                    <TableCell className="font-mono text-xs text-muted-foreground">{item.code}</TableCell>
+                                                    <TableCell className="text-center font-bold text-blue-600">{item.qty}</TableCell>
+                                                    <TableCell className="text-center">{item.price.toLocaleString()}</TableCell>
+                                                    <TableCell className="text-center text-muted-foreground italic">{item.cost.toLocaleString()}</TableCell>
+                                                    <TableCell className="text-center font-black">{item.total.toLocaleString()}</TableCell>
+                                                </TableRow>
+                                            )) : (
+                                                <TableRow><TableCell colSpan={8} className="text-center py-20 text-muted-foreground">لا توجد مشتريات مسجلة.</TableCell></TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
                             )}
                         </ScrollArea>
                     </TabsContent>
 
                     <TabsContent value="summary" className="flex-1 overflow-hidden">
-                        <ScrollArea className="h-full border rounded-xl bg-muted/10">
+                        <ScrollArea className="h-full px-4">
                             {isMobile ? (
-                                <div className="p-3 space-y-3">
+                                <div className="space-y-2 pb-4">
                                     {summarizedHistory.map((item, idx) => {
                                         const profit = item.totalValue - item.totalCost;
                                         return (
-                                            <Card key={idx} className="shadow-sm border-r-4 border-r-green-500">
-                                                <CardContent className="p-4 space-y-2">
-                                                    <div className="font-bold text-lg">{item.name}</div>
-                                                    <div className="text-xs text-muted-foreground font-mono">{item.code}</div>
-                                                    <div className="grid grid-cols-2 gap-2 text-sm pt-2 border-t">
-                                                        <div><span className="text-muted-foreground">إجمالي الكمية:</span> {item.totalQty}</div>
-                                                        <div><span className="text-muted-foreground">آخر سعر:</span> {item.lastPrice.toLocaleString()}</div>
-                                                        <div><span className="text-muted-foreground">صافي الإيراد:</span> {item.totalValue.toLocaleString()}</div>
-                                                        <div><span className="text-muted-foreground">إجمالي الربح:</span> <span className={cn("font-bold", profit >= 0 ? "text-green-600" : "text-destructive")}>{profit.toLocaleString()}</span></div>
+                                            <div key={idx} className="p-3 bg-card border rounded-lg shadow-sm border-r-4 border-r-green-500">
+                                                <div className="flex justify-between items-start gap-2 mb-1">
+                                                    <div className="font-bold text-sm leading-tight flex-1">{item.name}</div>
+                                                    <Badge className="text-[10px] h-5">{item.totalQty} ق</Badge>
+                                                </div>
+                                                <div className="text-[10px] text-muted-foreground font-mono mb-2">{item.code}</div>
+                                                <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] pt-2 border-t">
+                                                    <div><span className="text-muted-foreground">آخر سعر:</span> {item.lastPrice.toLocaleString()}</div>
+                                                    <div className="text-left"><span className="text-muted-foreground">الإيراد:</span> {item.totalValue.toLocaleString()}</div>
+                                                    <div className={cn("col-span-2 text-left font-bold", profit >= 0 ? "text-green-600" : "text-destructive")}>
+                                                        الربح: {profit.toLocaleString()} ج.م
                                                     </div>
-                                                </CardContent>
-                                            </Card>
+                                                </div>
+                                            </div>
                                         );
                                     })}
+                                    {summarizedHistory.length === 0 && <p className="text-center py-10 text-muted-foreground text-sm">لا توجد بيانات.</p>}
                                 </div>
                             ) : (
-                                <Table>
-                                    <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
-                                        <TableRow>
-                                            <TableHead>الصنف</TableHead>
-                                            <TableHead>الباركود</TableHead>
-                                            <TableHead className="text-center">إجمالي الكمية</TableHead>
-                                            <TableHead className="text-center">آخر سعر بيع</TableHead>
-                                            <TableHead className="text-center">إجمالي الإيراد</TableHead>
-                                            <TableHead className="text-center">إجمالي التكلفة</TableHead>
-                                            <TableHead className="text-center">إجمالي الربح</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {summarizedHistory.map((item, idx) => {
-                                            const profit = item.totalValue - item.totalCost;
-                                            return (
-                                                <TableRow key={idx}>
-                                                    <TableCell className="font-bold">{item.name}</TableCell>
-                                                    <TableCell className="font-mono text-xs">{item.code}</TableCell>
-                                                    <TableCell className="text-center font-bold">{item.totalQty}</TableCell>
-                                                    <TableCell className="text-center text-primary font-black">{item.lastPrice.toLocaleString()}</TableCell>
-                                                    <TableCell className="text-center font-bold">{item.totalValue.toLocaleString()}</TableCell>
-                                                    <TableCell className="text-center text-muted-foreground italic">{item.totalCost.toLocaleString()}</TableCell>
-                                                    <TableCell className={cn("text-center font-bold text-lg", profit >= 0 ? "text-green-600" : "text-destructive")}>
-                                                        {profit.toLocaleString()}
-                                                    </TableCell>
-                                                </TableRow>
-                                            );
-                                        })}
-                                    </TableBody>
-                                </Table>
+                                <div className="border rounded-lg mb-4">
+                                    <Table>
+                                        <TableHeader className="sticky top-0 bg-background z-10">
+                                            <TableRow>
+                                                <TableHead>الصنف</TableHead>
+                                                <TableHead>الباركود</TableHead>
+                                                <TableHead className="text-center">إجمالي الكمية</TableHead>
+                                                <TableHead className="text-center">آخر سعر بيع</TableHead>
+                                                <TableHead className="text-center">إجمالي الإيراد</TableHead>
+                                                <TableHead className="text-center">إجمالي التكلفة</TableHead>
+                                                <TableHead className="text-center">إجمالي الربح</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {summarizedHistory.map((item, idx) => {
+                                                const profit = item.totalValue - item.totalCost;
+                                                return (
+                                                    <TableRow key={idx}>
+                                                        <TableCell className="font-bold">{item.name}</TableCell>
+                                                        <TableCell className="font-mono text-xs">{item.code}</TableCell>
+                                                        <TableCell className="text-center font-bold">{item.totalQty}</TableCell>
+                                                        <TableCell className="text-center text-primary font-black">{item.lastPrice.toLocaleString()}</TableCell>
+                                                        <TableCell className="text-center font-bold">{item.totalValue.toLocaleString()}</TableCell>
+                                                        <TableCell className="text-center text-muted-foreground italic">{item.totalCost.toLocaleString()}</TableCell>
+                                                        <TableCell className={cn("text-center font-bold text-lg", profit >= 0 ? "text-green-600" : "text-destructive")}>
+                                                            {profit.toLocaleString()}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                        </TableBody>
+                                    </Table>
+                                </div>
                             )}
                         </ScrollArea>
                     </TabsContent>
                 </Tabs>
             </div>
 
-            <div className="p-6 bg-muted/30 border-t grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-3 bg-background rounded-lg border flex flex-col items-center">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground mb-1">إجمالي القطع</span>
-                    <span className="text-xl font-black text-blue-600">{totals.qty.toLocaleString()}</span>
+            <div className="p-3 bg-muted border-t grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="p-2 bg-background rounded border flex flex-col items-center">
+                    <span className="text-[9px] uppercase font-bold text-muted-foreground">إجمالي القطع</span>
+                    <span className="text-base font-black text-blue-600">{totals.qty.toLocaleString()}</span>
                 </div>
-                <div className="p-3 bg-background rounded-lg border flex flex-col items-center">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground mb-1">إجمالي التكلفة</span>
-                    <span className="text-xl font-black text-amber-600">{totals.cost.toLocaleString()}</span>
+                <div className="p-2 bg-background rounded border flex flex-col items-center">
+                    <span className="text-[9px] uppercase font-bold text-muted-foreground">إجمالي التكلفة</span>
+                    <span className="text-base font-black text-amber-600">{totals.cost.toLocaleString()}</span>
                 </div>
-                <div className="p-3 bg-background rounded-lg border flex flex-col items-center">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground mb-1">صافي الإيرادات</span>
-                    <span className="text-xl font-black text-primary">{totals.revenue.toLocaleString()}</span>
+                <div className="p-2 bg-background rounded border flex flex-col items-center">
+                    <span className="text-[9px] uppercase font-bold text-muted-foreground">صافي الإيراد</span>
+                    <span className="text-base font-black text-primary">{totals.revenue.toLocaleString()}</span>
                 </div>
-                <div className="p-3 bg-background rounded-lg border flex flex-col items-center ring-2 ring-primary/20">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground mb-1">إجمالي الأرباح</span>
-                    <span className={cn("text-xl font-black", totals.profit >= 0 ? "text-green-600" : "text-destructive")}>
+                <div className="p-2 bg-background rounded border flex flex-col items-center ring-1 ring-primary/20">
+                    <span className="text-[9px] uppercase font-bold text-muted-foreground">إجمالي الربح</span>
+                    <span className={cn("text-base font-black", totals.profit >= 0 ? "text-green-600" : "text-destructive")}>
                         {totals.profit.toLocaleString()}
                     </span>
                 </div>
             </div>
 
-            <DialogFooter className="p-4 border-t bg-background">
-                <Button variant="outline" onClick={onClose} className="w-full md:w-auto">إغلاق السجل</Button>
+            <DialogFooter className="p-3 border-t bg-background">
+                <Button variant="outline" onClick={onClose} className="w-full text-xs h-9">إغلاق السجل</Button>
             </DialogFooter>
         </DialogContent>
     );
