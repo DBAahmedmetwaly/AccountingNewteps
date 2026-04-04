@@ -10,6 +10,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import {
   Table,
@@ -80,7 +81,7 @@ const InvoiceItemsTable = ({ items }: { items: any[] }) => (
 )
 
 export default function PurchaseInvoicesListPage() {
-  const { purchaseInvoices: invoices, suppliers, warehouses, inventoryClosings, stockInRecords, settings, loading } = useData();
+  const { purchaseInvoices: invoices, suppliers, warehouses, inventoryClosings, stockInRecords, supplierPayments, purchaseReturns, settings, loading } = useData();
   const router = useRouter();
 
   const [filters, setFilters] = useState({
@@ -115,12 +116,37 @@ export default function PurchaseInvoicesListPage() {
   const supplierOptions = useMemo(() => ([{value: 'all', label: 'كل الموردين'}, ...suppliers.map((s:any) => ({ value: s.id, label: s.name }))]), [suppliers]);
   const warehouseOptions = useMemo(() => ([{value: 'all', label: 'كل الفروع'}, ...warehouses.map((w:any) => ({ value: w.id, label: w.name }))]), [warehouses]);
 
+  const calculateSupplierBalance = (sId: string) => {
+    if (!sId) return 0;
+    const supplier = suppliers.find((s: any) => s.id === sId);
+    if (!supplier) return 0;
+
+    let balance = Number(supplier.openingBalance) || 0;
+    
+    invoices.filter((inv: any) => inv.supplierId === sId)
+        .forEach((inv: any) => {
+            balance += (Number(inv.total) - Number(inv.paidAmount || 0));
+        });
+
+    supplierPayments.filter((p: any) => p.supplierId === sId && !p.invoiceId)
+        .forEach((p: any) => {
+            balance -= Number(p.amount);
+        });
+
+    purchaseReturns.filter((r: any) => r.supplierId === sId)
+        .forEach((r: any) => {
+            balance -= (Number(r.total) - Number(r.paidAmount || 0));
+        });
+
+    return balance;
+  };
+
   const lastClosingDates = useMemo(() => {
     const dates = new Map<string, Date>();
     warehouses.forEach((wh: any) => {
         const closings = inventoryClosings.filter((c: any) => c.warehouseId === wh.id);
         if (closings.length > 0) {
-            const lastDate = new Date(Math.max(...closings.map(c => new Date(c.closingDate).getTime())));
+            const lastDate = new Date(Math.max(...closings.map((c: any) => new Date(c.closingDate).getTime())));
             dates.set(wh.id, lastDate);
         }
     });
@@ -170,7 +196,7 @@ export default function PurchaseInvoicesListPage() {
 *التاريخ:* ${new Date(invoice.date).toLocaleDateString('ar-EG')}
 *الإجمالي:* ${invoice.total.toLocaleString()} ج.م
 ------------------------------------
-تم الاستلام في: ${warehouses.find(w => w.id === invoice.warehouseId)?.name || 'المستودع'}
+تم الاستلام في: ${warehouses.find((w: any) => w.id === invoice.warehouseId)?.name || 'المستودع'}
     `;
     const encodedText = encodeURIComponent(text.trim());
     window.open(`https://wa.me/?text=${encodedText}`);
@@ -178,7 +204,12 @@ export default function PurchaseInvoicesListPage() {
 
   return (
     <>
-      <PageHeader title="سجل فواتير الشراء" />
+      <PageHeader title="سجل فواتير الشراء">
+        <Button size="sm" className="gap-1 no-print" onClick={() => router.push('/purchases/invoices')}>
+          <PlusCircle className="h-4 w-4" />
+          فاتورة جديدة
+        </Button>
+      </PageHeader>
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6 printable-area">
         <Card className="no-print">
             <CardHeader>
@@ -278,7 +309,7 @@ export default function PurchaseInvoicesListPage() {
                                 <TableCell className="text-center no-print">
                                     <DropdownMenu modal={false}>
                                         <DropdownMenuTrigger asChild>
-                                            <Button aria-haspopup="true" size="icon" variant="ghost">
+                                            <Button aria-haspopup="true" size="icon" variant="ghost" className="h-8 w-8">
                                                 <MoreHorizontal className="h-4 w-4" />
                                             </Button>
                                         </DropdownMenuTrigger>
@@ -353,8 +384,9 @@ export default function PurchaseInvoicesListPage() {
                         <InvoiceTemplate 
                             invoice={selectedInvoice} 
                             company={companySettings} 
-                            customer={suppliers.find(s => s.id === selectedInvoice.supplierId)} 
+                            customer={suppliers.find((s: any) => s.id === selectedInvoice.supplierId)} 
                             isPurchase={true} 
+                            customerBalance={calculateSupplierBalance(selectedInvoice.supplierId)}
                         />
                     )}
                 </div>
@@ -363,7 +395,7 @@ export default function PurchaseInvoicesListPage() {
                 <Button onClick={() => selectedInvoice && handleShare(selectedInvoice)} variant="outline" className="bg-green-500 text-white hover:bg-green-600 hover:text-white">
                     <MessageCircle className="ml-2 h-4 w-4" /> واتساب
                 </Button>
-                <Button onClick={handlePrint}><Printer className="ml-2 h-4 w-4" />طباعة</Button>
+                <Button onClick={() => window.print()}><Printer className="ml-2 h-4 w-4" />طباعة</Button>
             </DialogFooter>
         </DialogContent>
       </Dialog>

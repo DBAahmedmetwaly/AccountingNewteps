@@ -7,7 +7,7 @@ interface InvoiceTemplateProps {
   company: any; 
   customer?: any; 
   isPurchase?: boolean; 
-  isReturn?: boolean; // New prop for sales returns
+  isReturn?: boolean; 
   customerBalance?: number; 
 }
 
@@ -137,11 +137,6 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
   const effectiveCompanyName = company?.companyName || "اسم شركتك";
   const effectiveCompanyAddress = company?.companyAddress || "عنوان الشركة";
 
-  const canGenerateBarcode = (value: string) => {
-    if (!value) return false;
-    return /^[\x00-\x7F]*$/.test(value);
-  };
-
   // Calculate balances logic
   const totalAmount = Number(invoice?.total || 0);
   const paidAmount = Number(invoice?.paidAmount || 0);
@@ -155,7 +150,7 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
       balanceBefore = Number(invoice.customerBalanceBefore);
       balanceAfter = balanceBefore + netInvoiceImpact;
   } else {
-      // Fallback for legacy data: derive before from current
+      // Fallback for legacy data
       balanceAfter = customerBalance ?? 0;
       balanceBefore = balanceAfter - netInvoiceImpact;
   }
@@ -253,14 +248,14 @@ export const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compa
             </div>
         )}
         
-        {!isPurchase && customerBalance !== undefined && (
+        {customerBalance !== undefined && (
             <>
                 <div style={{...totalsRowStyle, marginTop: '15px', borderTop: '1px solid #eee', paddingTop: '5px', color: '#666', fontSize: '13px' }}>
-                    <span>المستحق على العميل سابقاً</span>
+                    <span>{isPurchase ? 'المستحق للمورد سابقاً' : 'المستحق على العميل سابقاً'}</span>
                     <span>{balanceBefore.toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م</span>
                 </div>
                 <div style={{...totalsRowStyle, borderTop: '2px double #000', paddingTop: '10px', color: '#000', fontWeight: 'bold', backgroundColor: 'rgba(249, 249, 249, 0.8)', padding: '10px' }}>
-                    <span>إجمالي مديونية العميل (بعد الفاتورة)</span>
+                    <span>{isPurchase ? 'إجمالي مديونية المورد (بعد الفاتورة)' : 'إجمالي مديونية العميل (بعد الفاتورة)'}</span>
                     <span style={{color: '#d00'}}>{balanceAfter.toLocaleString(undefined, { minimumFractionDigits: 2 })} ج.م</span>
                 </div>
             </>

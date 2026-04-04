@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { PlusCircle, Trash2, Save, Loader2, Info } from "lucide-react";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useData } from "@/contexts/data-provider";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -29,7 +29,7 @@ interface InvoiceItem {
   cost: number;
   sellingPrice: number;
   total: number;
-  unit: string;
+  unit: string; 
   code?: string;
   expiryDate?: string;
   uniqueId: string; 
@@ -166,6 +166,7 @@ export default function PurchaseInvoicePage() {
     supplierPayments,
     employeeAdvances,
     profitDistributions,
+    purchaseReturns,
     settings,
   } = allDataContext;
 
@@ -201,13 +202,46 @@ export default function PurchaseInvoicePage() {
     }
   }, [searchParams, purchaseOrders, allItems]);
 
+  const selectedSupplierBalance = useMemo(() => {
+    if (!supplierId) return 0;
+    const supplier = suppliers.find((s: Supplier) => s.id === supplierId);
+    if (!supplier) return 0;
+
+    let balance = Number(supplier.openingBalance) || 0;
+    
+    purchaseInvoices.filter((inv: any) => inv.supplierId === supplierId)
+        .forEach((inv: any) => {
+            balance += (Number(inv.total) - Number(inv.paidAmount || 0));
+        });
+
+    supplierPayments.filter((p: any) => p.supplierId === supplierId && !p.invoiceId)
+        .forEach((p: any) => {
+            balance -= Number(p.amount);
+        });
+
+    purchaseReturns.filter((r: any) => r.supplierId === supplierId)
+        .forEach((r: any) => {
+            balance -= (Number(r.total) - Number(r.paidAmount || 0));
+        });
+
+    return balance;
+  }, [supplierId, suppliers, purchaseInvoices, supplierPayments, purchaseReturns]);
+
 
   const suppliersForCombobox = React.useMemo(() => {
-    return suppliers.map((s: Supplier) => ({ 
-        value: s.id, 
-        label: `${s.name} (المستحقات: ${((s.openingBalance || 0) + (purchaseInvoices.filter((p:any) => p.supplierId === s.id).reduce((acc:number, p:any) => acc + (p.total - (p.paidAmount || 0)), 0)) - (supplierPayments.filter((p:any) => p.supplierId === s.id).reduce((acc:number, p:any) => acc + p.amount, 0))).toLocaleString()} ج.م)` 
-    }));
-  }, [suppliers, purchaseInvoices, supplierPayments]);
+    return suppliers.map((s: Supplier) => {
+        // Calculate dynamic balance for the list label
+        let balance = Number(s.openingBalance) || 0;
+        purchaseInvoices.filter((p:any) => p.supplierId === s.id).forEach((p:any) => balance += (p.total - (p.paidAmount || 0)));
+        supplierPayments.filter((p:any) => p.supplierId === s.id && !p.invoiceId).forEach((p:any) => balance -= p.amount);
+        purchaseReturns.filter((r:any) => r.supplierId === s.id).forEach((r:any) => balance -= (r.total - (r.paidAmount || 0)));
+
+        return { 
+            value: s.id, 
+            label: `${s.name} (المستحقات: ${balance.toLocaleString()} ج.م)` 
+        };
+    });
+  }, [suppliers, purchaseInvoices, supplierPayments, purchaseReturns]);
   
    const warehouseOptions = useMemo(() => [...warehouses, ...inventoryZones].map((w: any) => ({ value: w.id, label: w.name })), [warehouses, inventoryZones]);
 
@@ -275,11 +309,11 @@ export default function PurchaseInvoicePage() {
     if (applyTax) {
          if (isTaxIncluded) {
              const finalAmount = Math.max(0, newSubtotal - discount);
-             newTax = finalAmount - (finalAmount / 1.14);
+             newTax = finalAmount - (finalAmount / (1 + (settings?.main?.financial?.vatRate || 14) / 100));
              newTotal = finalAmount;
          } else {
              const taxableBase = Math.max(0, newSubtotal - discount);
-             newTax = taxableBase * 0.14;
+             newTax = taxableBase * ((settings?.main?.financial?.vatRate || 14) / 100);
              newTotal = taxableBase + newTax;
          }
     } else {
@@ -291,7 +325,7 @@ export default function PurchaseInvoicePage() {
     setTax(newTax);
     setTotal(newTotal);
     setPaidAmount(newTotal);
-  }, [items, discount, applyTax, isTaxIncluded]);
+  }, [items, discount, applyTax, isTaxIncluded, settings?.main?.financial?.vatRate]);
 
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -416,6 +450,7 @@ export default function PurchaseInvoicePage() {
             items: invoiceItems, subtotal, discount, tax, total, paidAmount,
             paidFromAccountId, notes, createdById: user?.id, createdByName: user?.name,
             batchNumber: batchNumberToSave, fromPoId: originalPoId, isTaxIncluded,
+            customerBalanceBefore: selectedSupplierBalance, // Store balance at time of issuance
         };
 
         const path = `purchaseInvoices`;
@@ -476,7 +511,7 @@ export default function PurchaseInvoicePage() {
   }
   
   const handleItemSelect = (itemId: string) => {
-    const selectedItem = allItems.find((i: Item) => i.id === itemId);
+    const selectedItem = availableItemsForWarehouse.find((i: Item) => i.id === itemId);
     if (selectedItem) {
         const baseUnitOption: SecondaryUnitOption = { 
             value: 'base', 
@@ -557,16 +592,27 @@ export default function PurchaseInvoicePage() {
                 <div className="grid md:grid-cols-3 gap-6">
                     <div className="space-y-2">
                         <Label htmlFor="supplier">المورد (المستحقات الحالية تظهر بجانب الاسم)</Label>
-                        <div className="flex gap-2">
-                             <Combobox
-                              options={suppliersForCombobox}
-                              value={supplierId}
-                              onValueChange={setSupplierId}
-                              placeholder="اختر موردًا..."
-                              emptyMessage="لم يتم العثور على المورد."
-                              className="w-full"
-                            />
-                            <Button type="button" variant="outline" size="icon" onClick={() => setIsQuickSupplierOpen(true)}><PlusCircle className="h-4 w-4"/></Button>
+                        <div className="flex flex-col gap-2">
+                            <div className="flex gap-2">
+                                <Combobox
+                                    options={suppliersForCombobox}
+                                    value={supplierId}
+                                    onValueChange={setSupplierId}
+                                    placeholder="اختر موردًا..."
+                                    emptyMessage="لم يتم العثور على المورد."
+                                    className="w-full"
+                                />
+                                <Button type="button" variant="outline" size="icon" onClick={() => setIsQuickSupplierOpen(true)}><PlusCircle className="h-4 w-4"/></Button>
+                            </div>
+                            {supplierId && (
+                                <div className="flex items-center gap-2 p-2 rounded bg-muted/50 border border-primary/20">
+                                    <Wallet className="h-4 w-4 text-primary" />
+                                    <span className="text-xs font-semibold">المستحق للمورد حالياً:</span>
+                                    <Badge variant={selectedSupplierBalance > 0 ? "destructive" : "outline"} className="text-xs">
+                                        {selectedSupplierBalance.toLocaleString()} ج.م
+                                    </Badge>
+                                </div>
+                            )}
                         </div>
                     </div>
                     <div className="space-y-2">
@@ -614,8 +660,8 @@ export default function PurchaseInvoicePage() {
                                 <TableCell className="w-32 p-1 bg-green-50 dark:bg-green-900/20"><Input type="number" value={item.sellingPrice} className="text-center" onChange={e => handleUpdateItem(item.uniqueId, 'sellingPrice', Number(e.target.value))} /></TableCell>
                                 <TableCell className="w-40 p-1"><Input type="date" value={item.expiryDate || ''} className="text-center" onChange={e => handleUpdateItem(item.uniqueId, 'expiryDate', e.target.value)} /></TableCell>
                                 <TableCell className="text-center">ج.م {item.total.toFixed(2)}</TableCell>
-                                <TableCell className="text-center no-print">
-                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.uniqueId)}>
+                                <TableCell className="text-center no-print p-1">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleRemoveItem(item.uniqueId)}>
                                     <Trash2 className="h-4 w-4 text-destructive" />
                                     </Button>
                                 </TableCell>
@@ -643,16 +689,16 @@ export default function PurchaseInvoicePage() {
                                 />
                             </TableCell>
                             <TableCell className="p-2 w-24">
-                                <Input type="number" placeholder="الكمية" value={newItem.qty} onChange={e => setNewItem({...newItem, qty: parseInt(e.target.value) || 1})} className="text-center" onFocus={e => e.target.select()} />
+                                <Input type="number" placeholder="الكمية" value={newItem.qty} onChange={e => setNewItem({...newItem, qty: parseInt(e.target.value) || 1})} className="text-center h-9" onFocus={e => e.target.select()} />
                             </TableCell>
                             <TableCell className="p-2 w-32">
-                                <Input type="number" placeholder="التكلفة" value={newItem.cost || ''} onChange={e => setNewItem({...newItem, cost: parseFloat(e.target.value) || 0})} className="text-center" onFocus={e => e.target.select()} />
+                                <Input type="number" placeholder="التكلفة" value={newItem.cost || ''} onChange={e => setNewItem({...newItem, cost: parseFloat(e.target.value) || 0})} className="text-center h-9" onFocus={e => e.target.select()} />
                             </TableCell>
-                             <TableCell className="p-2 w-32">
-                                <Input type="number" placeholder="البيع" value={newItem.sellingPrice || ''} onChange={e => setNewItem({...newItem, sellingPrice: parseFloat(e.target.value) || 0})} className="text-center" onFocus={e => e.target.select()} />
+                             <TableCell className="p-2 w-32 bg-green-50 dark:bg-green-900/20">
+                                <Input type="number" placeholder="البيع" value={newItem.sellingPrice || ''} onChange={e => setNewItem({...newItem, sellingPrice: parseFloat(e.target.value) || 0})} className="text-center h-9" onFocus={e => e.target.select()} />
                             </TableCell>
                              <TableCell className="p-2 w-40">
-                                <Input type="date" value={newItem.expiryDate} onChange={e => setNewItem({...newItem, expiryDate: e.target.value})} className="text-center" />
+                                <Input type="date" value={newItem.expiryDate} onChange={e => setNewItem({...newItem, expiryDate: e.target.value})} className="text-center h-9" />
                             </TableCell>
                             <TableCell></TableCell>
                             <TableCell className="text-center p-2">
@@ -703,13 +749,13 @@ export default function PurchaseInvoicePage() {
                             <div className="flex justify-between font-bold text-base border-t pt-2"><span>الإجمالي الكلي</span><span>ج.م {total.toFixed(2)}</span></div>
                         </div>
                         <div className="space-y-2 border-t pt-4">
-                            <div className="flex justify-between items-center"><Label htmlFor="paidAmount" className="font-semibold">المبلغ المدفوع</Label><Input id="paidAmount" type="number" value={paidAmount} onFocus={e => e.target.select()} onChange={e => setPaidAmount(parseFloat(e.target.value) || 0)} className="h-8 max-w-[120px] text-left" placeholder="0.00"/></div>
+                            <div className="flex justify-between items-center"><Label htmlFor="paidAmount" className="font-semibold text-lg">المبلغ المسدد الآن</Label><Input id="paidAmount" type="number" value={paidAmount} onFocus={e => e.target.select()} onChange={e => setPaidAmount(parseFloat(e.target.value) || 0)} className="h-10 max-w-[150px] text-left text-lg font-bold border-primary/50" placeholder="0.00"/></div>
                              {paidAmount > 0 && <div className="space-y-2">
-                                <Label htmlFor="paidFromAccount">الدفع من</Label>
+                                <Label htmlFor="paidFromAccount">خصم من (الخزينة/البنك)</Label>
                                 <Combobox options={cashAccountOptions} value={paidFromAccountId} onValueChange={setPaidFromAccountId} placeholder="اختر حساب الدفع..." emptyMessage="لم يتم العثور على حساب." />
-                                {!isBalanceSufficient && paidFromAccountId && <p className="text-xs text-destructive">رصيد هذا الحساب غير كافٍ.</p>}
+                                {!isBalanceSufficient && paidFromAccountId && <p className="text-xs text-destructive font-bold flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> رصيد هذا الحساب غير كافٍ.</p>}
                             </div>}
-                            <div className="flex justify-between font-bold text-base text-destructive"><span>المبلغ المتبقي</span><span>ج.م {(total - paidAmount).toFixed(2)}</span></div>
+                            <div className="flex justify-between font-bold text-base text-destructive border-t pt-2"><span>باقي الفاتورة (للمورد)</span><span>ج.م {(total - paidAmount).toFixed(2)}</span></div>
                         </div>
                     </div>
                 </div>
@@ -726,7 +772,7 @@ export default function PurchaseInvoicePage() {
                 <AlertDialogTrigger asChild>
                     <Button size="lg" disabled={loading || isSaving || !isBalanceSufficient}>
                         {isSaving ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Save className="ml-2 h-4 w-4" />}
-                        تسجيل الفاتورة
+                        تسجيل فاتورة الشراء
                     </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
