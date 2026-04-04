@@ -1,4 +1,3 @@
-
 "use client";
 
 import PageHeader from "@/components/page-header";
@@ -8,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Trash2, Save, Loader2, Info } from "lucide-react";
+import { PlusCircle, Trash2, Save, Loader2, Info, Wallet, AlertTriangle } from "lucide-react";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useData } from "@/contexts/data-provider";
 import { useToast } from "@/hooks/use-toast";
@@ -171,7 +170,7 @@ export default function PurchaseInvoicePage() {
   } = allDataContext;
 
   const purchaseWorkflow = useMemo(() => settings?.main?.financial?.purchaseWorkflow || 'direct', [settings]);
-  const inventoryValuationMethod = useMemo(() => settings?.main?.financial?.inventoryValuationMethod || 'last_purchase', [settings]);
+  const inventoryValuationMethod = useMemo(() => settings?.main?.financial?.inventoryValuationMethod || 'average', [settings]);
 
   useEffect(() => {
     const fromPO = searchParams.get('from_po');
@@ -468,7 +467,7 @@ export default function PurchaseInvoicePage() {
 
         if (updatePrices) {
             for (const item of invoiceItems) {
-                const masterItem = allItems.find((i:Item) => i.id === item.id);
+                const masterItem = allItems.find((i:any) => i.id === item.id);
                 let finalCost = item.cost;
 
                 if (inventoryValuationMethod === 'average' && masterItem) {
@@ -735,23 +734,23 @@ export default function PurchaseInvoicePage() {
                         </Alert>
                     </div>
                     <div className="w-full md:max-w-sm space-y-4">
-                        <div className="space-y-2">
-                            <div className="flex justify-between"><span>الإجمالي الفرعي</span><span>ج.م {subtotal.toFixed(2)}</span></div>
-                            <div className="flex justify-between items-center"><span>الخصم</span><Input type="number" value={discount} onFocus={e => e.target.select()} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} className="h-8 max-w-[120px] text-left" placeholder="0.00"/></div>
-                            <div className="flex justify-between items-center"><span>تطبيق ضريبة القيمة المضافة (14%)</span><Switch checked={applyTax} onCheckedChange={setApplyTax} /></div>
+                        <div className="space-y-2 p-4 border rounded-lg bg-muted/30">
+                            <div className="flex justify-between text-sm"><span>الإجمالي الفرعي</span><span>ج.م {subtotal.toFixed(2)}</span></div>
+                            <div className="flex justify-between items-center text-sm"><span>الخصم</span><Input type="number" value={discount} onFocus={e => e.target.select()} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} className="h-8 max-w-[120px] text-left" placeholder="0.00"/></div>
+                            <div className="flex justify-between items-center text-sm"><span>تطبيق ضريبة القيمة المضافة (14%)</span><Switch checked={applyTax} onCheckedChange={setApplyTax} /></div>
                             {applyTax && (
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm text-muted-foreground">الأسعار شاملة الضريبة</span>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-xs text-muted-foreground">الأسعار شاملة الضريبة</span>
                                     <Switch checked={isTaxIncluded} onCheckedChange={setIsTaxIncluded} />
                                 </div>
                             )}
-                            <div className="flex justify-between"><span>ضريبة القيمة المضافة (14%)</span><span>ج.م {tax.toFixed(2)}</span></div>
-                            <div className="flex justify-between font-bold text-base border-t pt-2"><span>الإجمالي الكلي</span><span>ج.م {total.toFixed(2)}</span></div>
+                            <div className="flex justify-between text-sm"><span>قيمة الضريبة</span><span>ج.م {tax.toFixed(2)}</span></div>
+                            <div className="flex justify-between font-bold text-base border-t pt-2 mt-2"><span>الإجمالي الكلي</span><span>ج.م {total.toFixed(2)}</span></div>
                         </div>
                         <div className="space-y-2 border-t pt-4">
                             <div className="flex justify-between items-center"><Label htmlFor="paidAmount" className="font-semibold text-lg">المبلغ المسدد الآن</Label><Input id="paidAmount" type="number" value={paidAmount} onFocus={e => e.target.select()} onChange={e => setPaidAmount(parseFloat(e.target.value) || 0)} className="h-10 max-w-[150px] text-left text-lg font-bold border-primary/50" placeholder="0.00"/></div>
                              {paidAmount > 0 && <div className="space-y-2">
-                                <Label htmlFor="paidFromAccount">خصم من (الخزينة/البنك)</Label>
+                                <Label htmlFor="paidFromAccount" className="text-xs">خصم من (الخزينة/البنك)</Label>
                                 <Combobox options={cashAccountOptions} value={paidFromAccountId} onValueChange={setPaidFromAccountId} placeholder="اختر حساب الدفع..." emptyMessage="لم يتم العثور على حساب." />
                                 {!isBalanceSufficient && paidFromAccountId && <p className="text-xs text-destructive font-bold flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> رصيد هذا الحساب غير كافٍ.</p>}
                             </div>}
