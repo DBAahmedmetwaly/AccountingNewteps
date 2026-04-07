@@ -212,7 +212,7 @@ export default function PayrollPage() {
             profitDistributions.filter((pd: any) => pd.paidFromAccountId === account.id).forEach((pd: any) => balance -= pd.amount);
             treasuryTransactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: any) => balance -= tx.amount);
             (payrollRecords || []).filter((pr: any) => pr.paidFromAccountId === account.id).forEach((pr: any) => {
-                balance -= pr.payrollData.reduce((sum: number, p: any) => sum + p.netSalary, 0);
+                balance -= (pr.payrollData || []).reduce((sum: number, p: any) => sum + p.netSalary, 0);
             });
 
             balances.set(account.id, balance);

@@ -232,7 +232,7 @@ export default function TreasuryPage() {
             profitDistributions.filter((pd: any) => pd.paidFromAccountId === account.id).forEach((pd: any) => balance -= pd.amount);
             transactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: any) => balance -= tx.amount);
             (payrollRecords || []).filter((pr: any) => pr.paidFromAccountId === account.id).forEach((pr: any) => {
-                balance -= pr.payrollData.reduce((sum: number, p: any) => sum + p.netSalary, 0);
+                balance -= (pr.payrollData || []).reduce((sum: number, p: any) => sum + p.netSalary, 0);
             });
             salesReturns.filter((r:any) => r.paidFromAccountId === account.id).forEach((r:any) => balance -= (r.paidAmount || 0));
             posReturns.forEach((r:any) => {
