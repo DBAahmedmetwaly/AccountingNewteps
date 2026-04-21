@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, List, Wallet, AlertTriangle, Info, CheckCircle, Save, Search, History, ShoppingBag, Tag, Barcode, X } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, List, Wallet, AlertTriangle, Info, CheckCircle, Save, Search, History, ShoppingBag, Tag, Barcode, X, Lock } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -23,7 +23,6 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  TableFooter,
 } from "@/components/ui/table";
 import {
   DropdownMenu,
@@ -476,6 +475,17 @@ const CustomerForm = ({ customer, onSave, onClose, allCustomers, hasInvoices }: 
     customer || { name: "", openingBalance: 0, creditLimit: 0, phone: "", address: "", allowCredit: false }
   );
   const { toast } = useToast();
+  const [isBalanceUnlocked, setIsBalanceUnlocked] = useState(false);
+
+  const handleUnlock = () => {
+    const pass = prompt("أدخل كلمة المرور لتعديل الرصيد الافتتاحي:");
+    if (pass === 'metoomar') {
+        setIsBalanceUnlocked(true);
+        toast({ title: "تم فك القفل", description: "يمكنك الآن تعديل الرصيد الافتتاحي." });
+    } else if (pass !== null) {
+        toast({ variant: "destructive", title: "خطأ", description: "كلمة المرور غير صحيحة." });
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -522,8 +532,15 @@ const CustomerForm = ({ customer, onSave, onClose, allCustomers, hasInvoices }: 
           <Input id="customer-address" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="opening-balance" className={hasInvoices ? "text-muted-foreground" : ""}>رصيد أول المدة</Label>
-          <Input id="opening-balance" type="number" value={formData.openingBalance} onChange={(e) => setFormData({...formData, openingBalance: Number(e.target.value)})} disabled={hasInvoices} className={hasInvoices ? "bg-muted" : ""} />
+          <div className="flex items-center justify-between">
+            <Label htmlFor="opening-balance" className={hasInvoices && !isBalanceUnlocked ? "text-muted-foreground" : ""}>رصيد أول المدة</Label>
+            {hasInvoices && !isBalanceUnlocked && (
+                <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[10px] gap-1 text-amber-600 hover:text-amber-700 hover:bg-amber-50" onClick={handleUnlock}>
+                    <Lock className="h-3.5 w-3.5" /> تعديل الرصيد المحمي
+                </Button>
+            )}
+          </div>
+          <Input id="opening-balance" type="number" value={formData.openingBalance} onChange={(e) => setFormData({...formData, openingBalance: Number(e.target.value)})} disabled={hasInvoices && !isBalanceUnlocked} className={hasInvoices && !isBalanceUnlocked ? "bg-muted" : ""} />
         </div>
          <div className="space-y-2">
           <Label htmlFor="credit-limit">حد الائتمان</Label>
