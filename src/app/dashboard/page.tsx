@@ -545,7 +545,7 @@ export default function DashboardPage() {
             </CardContent>
         </Card>
         
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
             <Dialog open={isCashBreakdownOpen} onOpenChange={setIsCashBreakdownOpen}>
                 <DialogTrigger asChild>
                     <Card className="cursor-pointer hover:bg-muted/50 transition-colors border-primary/20 shadow-sm">
@@ -680,6 +680,7 @@ export default function DashboardPage() {
             </Dialog>
 
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">مستحقات الموردين</CardTitle><Building className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold text-destructive">{kpiData.accountsPayable.toLocaleString()} ج.م</div></CardContent></Card>
+            
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">قيمة المخزون (بالتكلفة)</CardTitle>
@@ -690,6 +691,74 @@ export default function DashboardPage() {
                     <p className="text-[10px] text-muted-foreground mt-1">يتم احتسابه آلياً بناءً على الأرصدة الحقيقية</p>
                 </CardContent>
             </Card>
+
+            <Dialog open={isNetProfitBreakdownOpen} onOpenChange={setIsNetProfitBreakdownOpen}>
+                <DialogTrigger asChild>
+                    <Card className="cursor-pointer hover:bg-muted/50 transition-all border-green-600/30 bg-green-500/5 shadow-md">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-bold text-green-700 dark:text-green-400">صافي الربح التقديري</CardTitle>
+                            <TrendingUp className="h-4 w-4 text-green-600" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className={cn("text-2xl font-black tracking-tight", kpiData.netProfit >= 0 ? "text-green-600" : "text-destructive")}>
+                                {kpiData.netProfit.toLocaleString()} ج.م
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-1">انقر لعرض ملخص تحليل الأرباح</p>
+                        </CardContent>
+                    </Card>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Calculator className="h-5 w-5 text-green-600"/>
+                            تحليل صافي الربح للفترة
+                        </DialogTitle>
+                        <DialogDescription>توضيح لكيفية احتساب صافي الربح النهائي بعد خصم كافة المصاريف والتكاليف.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span>إجمالي المبيعات (الإيرادات):</span>
+                                <span className="font-semibold">+{kpiData.totalRevenue.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm text-muted-foreground">
+                                <span>(-) تكلفة البضاعة المباعة (COGS):</span>
+                                <span className="font-semibold text-destructive">-{kpiData.totalCOGS.toLocaleString()}</span>
+                            </div>
+                            <Separator />
+                            <div className="flex justify-between font-bold text-sm">
+                                <span>(=) مجمل الربح:</span>
+                                <span className="text-green-600">{kpiData.grossProfit.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm text-muted-foreground italic">
+                                <span>(-) أرباح المرتجعات غير المحققة:</span>
+                                <span className="font-semibold">-{kpiData.unrealizedProfit.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm text-muted-foreground">
+                                <span>(-) إجمالي المصروفات التشغيلية:</span>
+                                <span className="font-semibold text-destructive">-{kpiData.totalExpenses.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm text-muted-foreground">
+                                <span>(+) دخل استثنائي / متنوع:</span>
+                                <span className="font-semibold text-green-600">+{kpiData.totalExtraIncome.toLocaleString()}</span>
+                            </div>
+                        </div>
+                        <div className={cn(
+                            "p-5 rounded-xl flex justify-between items-center border-2",
+                            kpiData.netProfit >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
+                        )}>
+                            <span className="font-black text-xl">صافي الربح النهائي:</span>
+                            <span className={cn("font-black text-2xl", kpiData.netProfit >= 0 ? "text-green-600" : "text-destructive")}>
+                                {kpiData.netProfit.toLocaleString()} ج.م
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2 p-2 bg-muted/50 rounded text-[10px] text-muted-foreground">
+                            <Info className="h-3 w-3 shrink-0" />
+                            <span>يتم احتساب الربح بناءً على أسعار التكلفة المسجلة في الأصناف وقت البيع.</span>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
         
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">

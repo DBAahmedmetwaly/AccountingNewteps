@@ -144,6 +144,8 @@ const UserForm = ({
     canOpenOwnShift: user?.canOpenOwnShift || false,
   });
 
+  const licenseKeyToDisplay = user?.themeSettings?.licenseKey || currentLicenseKey || 'بدون ترخيص';
+
   const warehouseOptions = React.useMemo(() => {
     const licenseKey = user?.themeSettings?.licenseKey || currentLicenseKey;
     const currentLicense = licenseKey ? licenses.find((l: any) => l.key === licenseKey) : null;
@@ -272,6 +274,15 @@ const UserForm = ({
             />
           </div>
         </div>
+
+        <div className="p-3 rounded-lg border bg-background flex flex-col gap-1">
+            <span className="text-[10px] text-muted-foreground uppercase font-bold">مفتاح الترخيص المطبق</span>
+            <div className="flex items-center gap-2 text-primary font-mono text-xs">
+                <KeyRound className="h-3 w-3" />
+                {licenseKeyToDisplay}
+            </div>
+        </div>
+
         <div className="flex flex-wrap items-center gap-4 pt-2">
           <div className="flex items-center space-x-2 rtl:space-x-reverse">
             <Checkbox
@@ -421,13 +432,15 @@ export default function UsersPage() {
         
         if (targetWarehouses.includes('all')) {
              const globalLicense = activeLicenses.find((l: any) => !l.assignedWarehouseIds || l.assignedWarehouseIds.length === 0);
-             if (!globalLicense) {
+             if (!globalLicense && user?.id !== 'superadmin') {
                  return toast({ variant: "destructive", title: "خطأ في الترخيص", description: "لا توجد رخصة عامة سارية لتغطية خيار 'كل الفروع'." });
              }
              
-             const totalUsers = users.filter((u: any) => !u.isDisabled && u.id !== userData.id).length;
-             if (totalUsers + 1 > (globalLicense.maxUsers || 5)) {
-                 return toast({ variant: "destructive", title: "تجاوز الحد المسموح", description: `عفواً، تم تجاوز الحد الأقصى للمستخدمين (${globalLicense.maxUsers}) المسموح به في الرخصة العامة.` });
+             if (globalLicense) {
+                 const totalUsers = users.filter((u: any) => !u.isDisabled && u.id !== userData.id && u.themeSettings?.licenseKey === globalLicense.key).length;
+                 if (totalUsers + 1 > (globalLicense.maxUsers || 5)) {
+                     return toast({ variant: "destructive", title: "تجاوز الحد المسموح", description: `عفواً، تم تجاوز الحد الأقصى للمستخدمين (${globalLicense.maxUsers}) المسموح به في الرخصة العامة.` });
+                 }
              }
         } else {
             for (const warehouseId of targetWarehouses) {
@@ -436,25 +449,26 @@ export default function UsersPage() {
                     license = activeLicenses.find((l: any) => !l.assignedWarehouseIds || l.assignedWarehouseIds.length === 0);
                 }
 
-                if (!license) {
+                if (!license && user?.id !== 'superadmin') {
                      const warehouseName = warehouses.find((w: any) => w.id === warehouseId)?.name || warehouseId;
                      return toast({ variant: "destructive", title: "خطأ في الترخيص", description: `لا توجد رخصة سارية تغطي الفرع: ${warehouseName}` });
                 }
 
-                const coveredWarehouses = license.assignedWarehouseIds || []; 
-                
-                const usersConsumingLicense = users.filter((u: any) => {
-                    if (u.isDisabled) return false;
-                    if (u.id === userData.id) return false;
-                    const uWarehouses = u.warehouseIds || [];
-                    if (coveredWarehouses.length === 0) return true;
-                    if (uWarehouses.includes('all')) return true;
-                    return uWarehouses.some((id: string) => coveredWarehouses.includes(id));
-                });
+                if (license) {
+                    const coveredWarehouses = license.assignedWarehouseIds || []; 
+                    const usersConsumingLicense = users.filter((u: any) => {
+                        if (u.isDisabled) return false;
+                        if (u.id === userData.id) return false;
+                        const uWarehouses = u.warehouseIds || [];
+                        if (coveredWarehouses.length === 0) return true;
+                        if (uWarehouses.includes('all')) return true;
+                        return uWarehouses.some((id: string) => coveredWarehouses.includes(id));
+                    });
 
-                if (usersConsumingLicense.length + 1 > (license.maxUsers || 5)) {
-                     const warehouseName = warehouses.find((w: any) => w.id === warehouseId)?.name || warehouseId;
-                     return toast({ variant: "destructive", title: "تجاوز الحد المسموح", description: `لا يمكن إضافة المستخدم للفرع (${warehouseName}). تم الوصول للحد الأقصى (${license.maxUsers}) للرخصة المطبقة.` });
+                    if (usersConsumingLicense.length + 1 > (license.maxUsers || 5)) {
+                        const warehouseName = warehouses.find((w: any) => w.id === warehouseId)?.name || warehouseId;
+                        return toast({ variant: "destructive", title: "تجاوز الحد المسموح", description: `لا يمكن إضافة المستخدم للفرع (${warehouseName}). تم الوصول للحد الأقصى (${license.maxUsers}) للرخصة المطبقة.` });
+                    }
                 }
             }
         }
@@ -502,7 +516,11 @@ export default function UsersPage() {
             let userRecord: any = { 
                 ...userData, 
                 uid: `db_${Date.now()}`,
-                themeSettings: userData.themeSettings || (creatorLicenseKey ? { licenseKey: creatorLicenseKey, licenseStatus: 'active' } : undefined)
+                themeSettings: userData.themeSettings || { 
+                    theme: 'dark', 
+                    licenseKey: creatorLicenseKey || '', 
+                    licenseStatus: creatorLicenseKey ? 'active' : 'inactive' 
+                }
             };
 
             const newUserId = await dbAction("users", "add", userRecord) as string;
@@ -519,7 +537,8 @@ export default function UsersPage() {
             toast({ title: "تمت إضافة المستخدم بنجاح" });
         }
     } catch (error: any) {
-        toast({ variant: "destructive", title: "خطأ في الحفظ", description: "فشل حفظ بيانات المستخدم." });
+        console.error("Save error:", error);
+        toast({ variant: "destructive", title: "فشل الحفظ", description: error.message || "حدث خطأ غير متوقع أثناء الحفظ." });
     }
   };
 
@@ -731,7 +750,7 @@ export default function UsersPage() {
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
-                                    <DropdownMenuLabel>إجراءات المستخدم</DropdownMenuLabel>
+                                    <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
                                     {can("edit", moduleName) && (
                                       <DropdownMenuItem onSelect={() => handleEditClick(u)}>
                                         <Edit className="ml-2 h-4 w-4" />

@@ -104,6 +104,19 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 const SYNC_QUEUE_KEY = 'firebase-sync-queue';
 
+// Helper to remove undefined properties recursively to prevent Firebase errors
+const sanitize = (obj: any): any => {
+  if (Array.isArray(obj)) return obj.map(sanitize);
+  if (obj !== null && typeof obj === 'object') {
+    return Object.fromEntries(
+      Object.entries(obj)
+        .filter(([_, v]) => v !== undefined)
+        .map(([k, v]) => [k, sanitize(v)])
+    );
+  }
+  return obj;
+};
+
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [allData, setAllData] = useState<any>({});
     const [isOnline, setIsOnline] = useState(true);
@@ -140,13 +153,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const { path, action, payload, id } = queuedItem;
             try {
                 let originalId: string | undefined;
+                const sanitizedPayload = sanitize(payload);
+
                 if (action === 'add') {
                     const refToSet = id ? ref(database, `${path}/${id}`) : fbPush(ref(database, path));
                     originalId = id;
-                    await fbSet(refToSet, payload);
+                    await fbSet(refToSet, sanitizedPayload);
                 } else if (action === 'update') {
                     originalId = payload.id;
-                    await fbUpdate(ref(database, `${path}/${payload.id}`), payload.data);
+                    await fbUpdate(ref(database, `${path}/${payload.id}`), sanitizedPayload.data);
                 } else if (action === 'remove') {
                     originalId = payload.id;
                     const finalPath = payload.root ? path : `${path}/${payload.id}`;
@@ -492,6 +507,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [isOnline, allData?.counters, updateQueueCount]);
 
     const dbAction = useCallback(async (path: string, action: 'add' | 'update' | 'remove' | 'transaction', payload?: any, priority: 'high' | 'normal' | 'low' = 'normal'): Promise<string | void> => {
+        const sanitizedPayload = sanitize(payload);
+
         const performAction = async (db: Database | null) => {
             if (!db) {
                 throw new Error("Database not initialized");
@@ -499,11 +516,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
             if (action === 'add') {
                 const newRef = fbPush(ref(db, path));
-                await fbSet(newRef, payload);
+                await fbSet(newRef, sanitizedPayload);
                 return newRef.key || undefined;
             } else if (action === 'update') {
                 const updatePath = `${path}/${payload.id}`;
-                await fbUpdate(ref(db, updatePath), payload.data);
+                await fbUpdate(ref(db, updatePath), sanitizedPayload.data);
             } else if (action === 'remove') {
                 const finalPath = payload.root ? path : `${path}/${payload.id}`;
                 await fbRemove(ref(db, finalPath));
@@ -520,9 +537,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const timestamp = new Date().toISOString();
             if (action === 'add') {
                 newId = `offline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                queue.push({ path, action, payload, id: newId, timestamp, priority });
+                queue.push({ path, action, payload: sanitizedPayload, id: newId, timestamp, priority });
             } else {
-                 queue.push({ path, action, payload, timestamp, priority });
+                 queue.push({ path, action, payload: sanitizedPayload, timestamp, priority });
             }
             await localforage.setItem(SYNC_QUEUE_KEY, queue);
             await updateQueueCount();
@@ -532,10 +549,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const newData = JSON.parse(JSON.stringify(prev));
                 if (action === 'add' && newId) {
                     if (!newData[path]) newData[path] = {};
-                    newData[path][newId] = payload;
+                    newData[path][newId] = sanitizedPayload;
                 } else if (action === 'update') {
                     if (newData[path] && newData[path][payload.id]) {
-                        newData[path][payload.id] = { ...newData[path][payload.id], ...payload.data };
+                        newData[path][payload.id] = { ...newData[path][payload.id], ...sanitizedPayload.data };
                     }
                 } else if (action === 'remove') {
                     if (payload.root) {
@@ -570,10 +587,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const effectiveId = action === 'add' ? (result as string) : payload?.id;
 
                 if (action === 'add' && effectiveId) {
-                    newData[path][effectiveId] = payload;
+                    newData[path][effectiveId] = sanitizedPayload;
                 } else if (action === 'update' && effectiveId) {
                     if (newData[path][effectiveId]) {
-                        newData[path][effectiveId] = { ...newData[path][effectiveId], ...payload.data };
+                        newData[path][effectiveId] = { ...newData[path][effectiveId], ...sanitizedPayload.data };
                     }
                 } else if (action === 'remove') {
                     if (payload.root) {
