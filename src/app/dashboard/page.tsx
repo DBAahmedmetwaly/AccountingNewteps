@@ -82,6 +82,16 @@ export default function DashboardPage() {
     const [isReceivablesBreakdownOpen, setIsReceivablesBreakdownOpen] = useState(false);
     
     useEffect(() => {
+        const cleanup = () => {
+            document.body.style.pointerEvents = 'auto';
+            document.body.style.overflow = 'auto';
+        };
+        cleanup();
+        const timer = setTimeout(cleanup, 500);
+        return () => clearTimeout(timer);
+    }, [isNetProfitBreakdownOpen, isCashBreakdownOpen, isReceivablesBreakdownOpen]);
+
+    useEffect(() => {
         if (user?.warehouseIds?.length === 1 && user.warehouseIds[0] !== 'all') {
             setFilters(prev => ({...prev, warehouseId: user.warehouseIds[0]}));
         }
@@ -745,7 +755,7 @@ export default function DashboardPage() {
                         </div>
                         <div className={cn(
                             "p-5 rounded-xl flex justify-between items-center border-2",
-                            kpiData.netProfit >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
+                            kpiData.netProfit >= 0 ? "bg-background border-green-200" : "bg-background border-red-200"
                         )}>
                             <span className="font-black text-xl">صافي الربح النهائي:</span>
                             <span className={cn("font-black text-2xl", kpiData.netProfit >= 0 ? "text-green-600" : "text-destructive")}>
@@ -872,7 +882,7 @@ export default function DashboardPage() {
                 </CardContent>
             </Card>
             <Card>
-                <CardHeader><CardTitle className="flex items-center gap-2"><AlertTriangle className="text-amber-500" />أصناف وصلت لحد الطلب</CardTitle></CardHeader>
+                <CardHeader className="flex items-center gap-2"><AlertTriangle className="text-amber-500" />أصناف وصلت لحد الطلب</CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader><TableRow><TableHead>الصنف</TableHead><TableHead>الفرع</TableHead><TableHead className="text-center">الرصيد</TableHead><TableHead className="text-center">حد الطلب</TableHead></TableRow></TableHeader>
