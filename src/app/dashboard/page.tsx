@@ -215,9 +215,10 @@ export default function DashboardPage() {
             if (filteredCashAccountIds.has(i.paidToAccountId)) extraIncomeTotal += Number(i.amount) || 0;
         });
         
-        treasuryTransactions.filter((tx: TreasuryTransaction) => tx.type === 'deposit' && !tx.linkedTransaction).forEach((tx: TreasuryTransaction) => {
-            if (filteredCashAccountIds.has(tx.accountId)) treasuryDeposits += Number(tx.amount) || 0;
-        });
+        treasuryDeposits = treasuryTransactions.filter((tx: TreasuryTransaction) => tx.type === 'deposit' && !tx.linkedTransaction).reduce((sum, tx) => {
+            if (filteredCashAccountIds.has(tx.accountId)) return sum + (Number(tx.amount) || 0);
+            return sum;
+        }, 0);
 
         purchaseReturns.forEach((r: any) => {
             if (filteredCashAccountIds.has(r.paidToAccountId)) purchaseReturnsCash += Number(r.paidAmount) || 0;
@@ -272,9 +273,10 @@ export default function DashboardPage() {
             if (filteredCashAccountIds.has(pd.paidFromAccountId)) profitDistributionsOut += Number(pd.amount) || 0;
         });
         
-        treasuryTransactions.filter((tx: any) => tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: any) => {
-            if (filteredCashAccountIds.has(tx.accountId)) treasuryWithdrawalsOut += Number(tx.amount) || 0;
-        });
+        treasuryWithdrawalsOut = treasuryTransactions.filter((tx: any) => tx.type === 'withdrawal' && !tx.linkedTransaction).reduce((sum, tx) => {
+            if (filteredCashAccountIds.has(tx.accountId)) return sum + (Number(tx.amount) || 0);
+            return sum;
+        }, 0);
 
         payrollRecords?.forEach((pr: any) => {
             if (filteredCashAccountIds.has(pr.paidFromAccountId)) {
@@ -804,6 +806,39 @@ export default function DashboardPage() {
             </Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي المصروفات</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold text-destructive">{kpiData.totalExpenses.toLocaleString()} ج.م</div></CardContent></Card>
             <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">إجمالي المرتجعات</CardTitle><TrendingDown className="h-4 w-4 text-muted-foreground"/></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{kpiData.totalSalesReturns.toLocaleString()} ج.م</div></CardContent></Card>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">إجمالي العملاء</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground text-blue-500"/>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{kpiData.customersCount}</div>
+                    <p className="text-[10px] text-muted-foreground mt-1">عدد العملاء المسجلين</p>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">إجمالي الموردين</CardTitle>
+                    <Building className="h-4 w-4 text-muted-foreground text-orange-500"/>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{kpiData.suppliersCount}</div>
+                    <p className="text-[10px] text-muted-foreground mt-1">عدد الموردين المسجلين</p>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">إجمالي الأصناف</CardTitle>
+                    <Boxes className="h-4 w-4 text-muted-foreground text-purple-500"/>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{kpiData.productsCount}</div>
+                    <p className="text-[10px] text-muted-foreground mt-1">إجمالي دليل الأصناف</p>
+                </CardContent>
+            </Card>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
