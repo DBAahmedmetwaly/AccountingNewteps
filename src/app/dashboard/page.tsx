@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import PageHeader from "@/components/page-header";
 import {
   Card,
@@ -21,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useData } from "@/contexts/data-provider";
-import { Loader2, DollarSign, Users, Building, Package, TrendingUp, TrendingDown, AlertTriangle, Clock, ShoppingCart, Calculator, Info, Banknote, Tag, Wallet, ArrowUpCircle, ArrowDownCircle, Minus, Plus, Boxes } from "lucide-react";
+import { Loader2, DollarSign, Users, Building, Package, TrendingUp, TrendingDown, AlertTriangle, Clock, ShoppingCart, Calculator, Info, Banknote, Tag, Wallet, ArrowUpCircle, ArrowDownCircle, Minus, Plus, Boxes, Printer } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Combobox } from "@/components/ui/combobox";
@@ -38,7 +38,7 @@ import { Separator } from "@/components/ui/separator";
 interface Item { id: string; name: string; cost?: number; reorderPoint?: number; }
 interface Sale { id: string; date: string; warehouseId?: string; total: number; items: { id: string; qty: number; cost?: number; }[]; discount: number; subtotal: number; paidAmount?: number; paidToAccountId?: string; }
 interface Purchase { id: string; date: string; warehouseId: string; total: number; paidAmount?: number; }
-interface Customer { id: string; name: string; openingBalance: number; }
+interface Customer { id: string; name: string; openingBalance: number; phone?: string; }
 interface Supplier { id: string; name: string; openingBalance: number; }
 interface CustomerPayment { amount: number; paidToAccountId: string; invoiceId?: string; customerId: string; }
 interface SupplierPayment { amount: number; paidFromAccountId: string; invoiceId?: string; supplierId: string; }
@@ -428,6 +428,94 @@ export default function DashboardPage() {
         salesInvoices, posSales, salesReturns, suppliers, purchaseReturns, items, warehouses, filters.warehouseId, user, filteredData, posReturns, payrollRecords
     ]);
 
+    const handlePrintCustomersReport = () => {
+        const userWarehouseIds = user?.warehouseIds || [];
+        const isSuperAdmin = userWarehouseIds.includes('all');
+        const activeWarehouseId = filters.warehouseId;
+        
+        const isWarehouseAllowed = (wId?: string) => {
+            if (activeWarehouseId !== 'all') return wId === activeWarehouseId;
+            if (isSuperAdmin) return true;
+            return userWarehouseIds.includes(wId || '');
+        };
+
+        const customerDetailedBalances = customers.map((customer: Customer) => {
+            let balance = Number(customer.openingBalance) || 0;
+            
+            salesInvoices.filter((s: any) => s.status === 'approved' && s.customerId === customer.id && isWarehouseAllowed(s.warehouseId))
+                .forEach((s: any) => balance += (Number(s.total) - Number(s.paidAmount || 0)));
+            
+            posSales.filter((s: any) => s.customerId === customer.id && isWarehouseAllowed(s.warehouseId))
+                .forEach((s: any) => balance += (Number(s.total) - Number(s.paidAmount || 0)));
+            
+            customerPayments.filter((p: any) => p.customerId === customer.id && !p.invoiceId)
+                .forEach((p: any) => balance -= Number(p.amount));
+            
+            salesReturns.filter((r: any) => r.customerId === customer.id && isWarehouseAllowed(r.warehouseId))
+                .forEach((r: any) => balance -= (Number(r.total) - Number(r.paidAmount || 0)));
+            
+            posReturns.filter((r: any) => r.customerId === customer.id && isWarehouseAllowed(r.warehouseId))
+                .forEach((r: any) => balance -= (Number(r.total) - Number(r.paidAmount || 0)));
+
+            return {
+                name: customer.name,
+                phone: (customer as any).phone || '-',
+                balance
+            };
+        }).filter(c => Math.abs(c.balance) > 0.01).sort((a,b) => b.balance - a.balance);
+
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+
+        const tableHtml = `
+            <html dir="rtl" lang="ar">
+            <head>
+                <title>تقرير مديونيات العملاء</title>
+                <style>
+                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; }
+                    h1 { text-align: center; color: #333; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th, td { border: 1px solid #ddd; padding: 12px; text-align: right; }
+                    th { bg-color: #f4f4f4; font-weight: bold; }
+                    .total { font-weight: bold; font-size: 1.2em; margin-top: 20px; text-align: left; }
+                    .negative { color: #d32f2f; }
+                    .positive { color: #2e7d32; }
+                    @media print { .no-print { display: none; } }
+                </style>
+            </head>
+            <body>
+                <h1>تقرير أرصدة ومديونيات العملاء</h1>
+                <p>التاريخ: ${new Date().toLocaleString('ar-EG')}</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>اسم العميل</th>
+                            <th>رقم الهاتف</th>
+                            <th>الرصيد الحالي</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${customerDetailedBalances.map((c, i) => `
+                            <tr>
+                                <td>${i + 1}</td>
+                                <td>${c.name}</td>
+                                <td>${c.phone}</td>
+                                <td class="${c.balance > 0 ? 'negative' : 'positive'}">${c.balance.toLocaleString()} ج.م</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <div class="total">إجمالي المديونيات المستحقة: ${kpiData.accountsReceivable.toLocaleString()} ج.م</div>
+                <script>window.onload = () => { window.print(); window.close(); }</script>
+            </body>
+            </html>
+        `;
+
+        printWindow.document.write(tableHtml);
+        printWindow.document.close();
+    };
+
     const salesAndProfitChartData = useMemo(() => {
         const dailyData: { [date: string]: { sales: number; profit: number } } = {};
         filteredData.sales.forEach((sale: any) => {
@@ -809,14 +897,14 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <Card>
+            <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={handlePrintCustomersReport}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">إجمالي العملاء</CardTitle>
                     <Users className="h-4 w-4 text-muted-foreground text-blue-500"/>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{kpiData.customersCount}</div>
-                    <p className="text-[10px] text-muted-foreground mt-1">عدد العملاء المسجلين</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">انقر لطباعة تقرير مديونيات العملاء</p>
                 </CardContent>
             </Card>
             <Card>
