@@ -1,7 +1,6 @@
-
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   SidebarProvider,
   Sidebar,
@@ -98,7 +97,8 @@ import {
   Lightbulb,
   Archive,
   MapPin,
-  HeartHandshake
+  HeartHandshake,
+  X
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
