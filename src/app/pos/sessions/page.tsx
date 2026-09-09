@@ -56,12 +56,12 @@ interface CashierSession {
     difference?: number;
     remittedToAccountId?: string;
     custodyFromAccountId?: string;
-    sessionWarehouseId?: string; // Warehouse for this specific session
-    posTerminalId?: string; // Terminal for this session
+    sessionWarehouseId?: string; 
+    posTerminalId?: string; 
     invoiceCounter?: number;
-    // New fields for payment method totals
     totalSalesByMethod?: Record<string, number>;
     totalReturnsByMethod?: Record<string, number>;
+    totalTips?: number; // New field
 }
 
 
@@ -182,16 +182,15 @@ const CloseCashierSessionDialog = ({ cashierSession, onConfirm, onClose }: { cas
         <div className="space-y-4">
             <p className='text-lg'>إقفال وردية الكاشير: <span className="font-bold">{cashierSession.cashierName}</span></p>
             <div className="grid grid-cols-2 gap-4 text-center">
-                 <div className="p-4 bg-muted rounded-lg"><p className="text-sm text-muted-foreground">النقدية المتوقعة</p><p className="text-2xl font-bold">{cashierSession.expectedCash.toFixed(2)}</p></div>
+                 <div className="p-4 bg-muted rounded-lg"><p className="text-sm text-muted-foreground">النقدية المتوقعة (مبيعات + إكراميات)</p><p className="text-2xl font-bold">{cashierSession.expectedCash.toFixed(2)}</p></div>
                  <div className="p-4 bg-muted rounded-lg"><p className="text-sm text-muted-foreground">النقدية الفعلية (الجرد)</p><Input className="text-2xl font-bold h-12 text-center" value={actualCash} onChange={e => setActualCash(Number(e.target.value))} /></div>
             </div>
-            {/* Payment Methods Summary */}
              <div className="border p-2 rounded-md">
-                <h4 className="text-sm font-semibold mb-2">ملخص طرق الدفع</h4>
+                <h4 className="text-sm font-semibold mb-2">ملخص طرق الدفع والإكراميات</h4>
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>طريقة الدفع</TableHead>
+                            <TableHead>البيان</TableHead>
                             <TableHead className="text-left">المبلغ</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -203,6 +202,12 @@ const CloseCashierSessionDialog = ({ cashierSession, onConfirm, onClose }: { cas
                                 <TableCell className="text-left font-semibold">{Number(amount).toLocaleString()}</TableCell>
                             </TableRow>
                         ))}
+                        {cashierSession.totalTips > 0 && (
+                            <TableRow className="bg-primary/5">
+                                <TableCell className="font-bold text-primary">إجمالي الإكراميات (Tips)</TableCell>
+                                <TableCell className="text-left font-bold text-primary">{Number(cashierSession.totalTips).toLocaleString()}</TableCell>
+                            </TableRow>
+                        )}
                     </TableBody>
                 </Table>
             </div>
@@ -235,7 +240,7 @@ export default function PosSessionsPage() {
         loading,
         customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions,
         expenses, supplierPayments, employeeAdvances, posSales, users, posTerminals,
-        posReturns, warehouses, paymentMethods, 
+        posReturns, warehouses, paymentMethods, gratuityLogs,
         posSessions: allPosSessions,
         unreconciledDeliveryCount,
         settings,
@@ -254,8 +259,10 @@ export default function PosSessionsPage() {
         if (openDay && openDay.cashierSessions) {
             const activeCashierSessions = Object.values(openDay.cashierSessions).filter((cs: any) => !cs.isClosed);
             sessionsData = activeCashierSessions.map((cs: any) => {
-                const sessionSales = posSales.filter((sale: any) => sale.cashierId === cs.cashierId && new Date(sale.date) >= new Date(cs.startTime));
-                const sessionReturns = posReturns.filter((ret: any) => ret.cashierId === cs.cashierId && new Date(ret.date) >= new Date(cs.startTime));
+                const sessionStart = new Date(cs.startTime);
+                const sessionSales = posSales.filter((sale: any) => sale.cashierId === cs.cashierId && new Date(sale.date) >= sessionStart);
+                const sessionReturns = posReturns.filter((ret: any) => ret.cashierId === cs.cashierId && new Date(ret.date) >= sessionStart);
+                const sessionTips = gratuityLogs.filter((log: any) => log.cashierId === cs.cashierId && new Date(log.date) >= sessionStart);
 
                 const totalSalesByMethod: Record<string, number> = {};
                 sessionSales.forEach((sale: any) => {
@@ -272,6 +279,7 @@ export default function PosSessionsPage() {
                 const cashMethodName = paymentMethods.find((pm: any) => pm.name.toLowerCase().includes('cash') || pm.name.toLowerCase().includes('نقد'))?.name || 'نقدي';
                 const totalCashSales = totalSalesByMethod[cashMethodName] || 0;
                 const totalReturnsValue = sessionReturns.reduce((sum: number, ret: any) => sum + ret.total, 0);
+                const totalTips = sessionTips.reduce((sum: number, log: any) => sum + log.amount, 0);
 
                 const warehouse = warehouses.find((w: any) => w.id === cs.sessionWarehouseId);
                 const terminal = posTerminals.find((t: any) => t.id === cs.posTerminalId);
@@ -280,8 +288,9 @@ export default function PosSessionsPage() {
                     totalSalesByMethod,
                     totalCashSales,
                     totalReturnsValue,
+                    totalTips,
                     transactionCount: sessionSales.length,
-                    expectedCash: cs.openingBalance + totalCashSales - totalReturnsValue,
+                    expectedCash: cs.openingBalance + totalCashSales - totalReturnsValue + totalTips,
                     warehouseName: warehouse?.name || 'غير محدد',
                     terminalName: terminal?.name || 'غير محدد'
                 };
@@ -298,7 +307,7 @@ export default function PosSessionsPage() {
             allSessionsClosed: sessionsAreClosed,
             canCloseWorkDay: sessionsAreClosed && allUnreconciledDelivery
         };
-    }, [allPosSessions, posSales, posReturns, warehouses, posTerminals, paymentMethods, unreconciledDeliveryCount]);
+    }, [allPosSessions, posSales, posReturns, warehouses, posTerminals, paymentMethods, unreconciledDeliveryCount, gratuityLogs]);
 
     const [isPosting, setIsPosting] = useState(false);
     
@@ -306,7 +315,6 @@ export default function PosSessionsPage() {
         const balances = new Map<string, number>();
         cashAccounts.forEach((account: any) => {
             let balance = account.openingBalance || 0;
-            // Add other transactions to calculate current balance
              customerPayments.forEach((p:any) => { if(p.paidToAccountId === account.id) balance += p.amount });
              salesInvoices.filter((s:any) => s.status === 'approved').forEach((s: any) => { if (s.paidToAccountId === account.id) balance += (s.paidAmount || 0) });
              exceptionalIncomes.forEach((i:any) => { if (i.paidToAccountId === account.id) balance += i.amount });
@@ -355,17 +363,15 @@ export default function PosSessionsPage() {
             startTime: new Date().toISOString(),
             openingBalance: openingBalance,
             isClosed: false,
-            sessionWarehouseId: sessionWarehouseId, // Derived from terminal
+            sessionWarehouseId: sessionWarehouseId, 
             posTerminalId: posTerminalId,
-            invoiceCounter: 0, // Initialize invoice counter
+            invoiceCounter: 0, 
         };
         
-        // Only add custodyFromAccountId if it has a value
         if (fromAccountId) {
             newCashierSession.custodyFromAccountId = fromAccountId;
         }
 
-        // Record the expense for giving custody only if amount > 0
         if (openingBalance > 0 && fromAccountId) {
             await dbAction('expenses', 'add', {
                 date: new Date().toISOString(),
@@ -397,14 +403,14 @@ export default function PosSessionsPage() {
             actualCash: actualCash,
             difference: difference,
             remittedToAccountId: toAccountId,
-            totalSalesByMethod: sessionToClose.totalSalesByMethod, // Save the breakdown
+            totalSalesByMethod: sessionToClose.totalSalesByMethod,
+            totalTips: sessionToClose.totalTips, // Save tips in session record
         };
         
         const updatedSessions = { ...openWorkDay.cashierSessions, [cashierId]: closedSessionData };
         
         await dbAction('posSessions', 'update', { id: openWorkDay.id, data: { cashierSessions: updatedSessions } });
 
-        // Accounting entries
         if (difference !== 0) {
             if (difference > 0) {
                 await dbAction('exceptionalIncomes', 'add', { date: new Date().toISOString(), amount: difference, paidToAccountId: toAccountId, description: `فائض وردية الكاشير ${sessionToClose.cashierName}` });
@@ -418,7 +424,7 @@ export default function PosSessionsPage() {
                 amount: actualCash,
                 accountId: toAccountId,
                 type: 'deposit',
-                description: `توريد من وردية الكاشير ${sessionToClose.cashierName}`,
+                description: `توريد من وردية الكاشير ${sessionToClose.cashierName} (شامل الإكراميات)`,
                 receiptNumber: `ح-خ-${await getNextId('treasuryTransaction')}`,
                 linkedTransaction: true,
             });
@@ -430,7 +436,6 @@ export default function PosSessionsPage() {
         if (!openWorkDay) return;
         await dbAction('posSessions', 'update', { id: openWorkDay.id, data: { isClosed: true, endTime: new Date().toISOString(), closedBy: user?.id, closedByName: user?.name } });
         
-        // Increment the work day
         const currentWorkDay = new Date(settings?.main?.posSettings?.workDay || new Date());
         currentWorkDay.setDate(currentWorkDay.getDate() + 1);
         const nextWorkDay = currentWorkDay.toISOString().split('T')[0];
@@ -464,7 +469,7 @@ export default function PosSessionsPage() {
                             <CardContent className="space-y-4">
                                 {cashierSessionsData.map(cs => (
                                     <Card key={cs.cashierId} className="p-4">
-                                        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-center">
+                                        <div className="grid grid-cols-2 md:grid-cols-7 gap-4 items-center">
                                             <div className="col-span-2 md:col-span-2">
                                                 <h3 className="font-bold flex items-center gap-2"><UserCheck />{cs.cashierName}</h3>
                                                 <p className="text-xs text-muted-foreground">بدأت في: {new Date(cs.startTime).toLocaleTimeString('ar-EG')}</p>
@@ -474,6 +479,10 @@ export default function PosSessionsPage() {
                                             <div className="text-center">
                                                 <p className="text-sm text-muted-foreground">مبيعات نقدية</p>
                                                 <p className="font-bold">{cs.totalCashSales.toLocaleString()} ج.م</p>
+                                            </div>
+                                             <div className="text-center">
+                                                <p className="text-sm text-muted-foreground">إكراميات (Tips)</p>
+                                                <p className="font-bold text-primary">{cs.totalTips.toLocaleString()} ج.م</p>
                                             </div>
                                              <div className="text-center">
                                                 <p className="text-sm text-muted-foreground">مرتجعات</p>
@@ -580,6 +589,7 @@ export default function PosSessionsPage() {
                                                                             <TableRow key={method}><TableCell className="pr-4">مبيعات ({method})</TableCell><TableCell className="text-left">{Number(amount).toLocaleString()}</TableCell></TableRow>
                                                                         ))}
                                                                         <TableRow className="font-bold bg-muted/30"><TableCell>إجمالي مبيعات الوردية</TableCell><TableCell className="text-left">{totalSessionSales.toLocaleString()}</TableCell></TableRow>
+                                                                        <TableRow className="bg-primary/5"><TableCell className="font-bold text-primary">إجمالي الإكراميات (Tips)</TableCell><TableCell className="text-left font-bold text-primary">{cs.totalTips?.toLocaleString() || '0'}</TableCell></TableRow>
                                                                         <TableRow><TableCell>النقدية المتوقعة</TableCell><TableCell className="text-left">{cs.expectedCash?.toLocaleString() || '-'}</TableCell></TableRow>
                                                                         <TableRow><TableCell>النقدية الفعلية</TableCell><TableCell className="text-left">{cs.actualCash?.toLocaleString() || '-'}</TableCell></TableRow>
                                                                         <TableRow><TableCell>الفرق</TableCell><TableCell className="text-left"> <Badge variant={cs.difference === 0 ? 'secondary' : (cs.difference ?? 0) > 0 ? 'default' : 'destructive'}>{cs.difference?.toLocaleString() || '0'}</Badge></TableCell></TableRow>

@@ -213,6 +213,7 @@ export const PosReceipt = ({ invoice, company, design, warehouse, customer, cust
       <div style={totalsStyle}>
         <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between' }}><span>الإجمالي:</span> <span>{(invoice?.subtotal || 0).toFixed(2)}</span></p>
         {design?.showDiscount !== false && invoice?.discount > 0 && <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between' }}><span>الخصم:</span> <span style={{color: '#d00'}}>- {invoice.discount.toFixed(2)}</span></p>}
+        {invoice?.tips > 0 && <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between' }}><span>الإكرامية (Tips):</span> <span>{invoice.tips.toFixed(2)}</span></p>}
         
         <p style={{ ...pStyle, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '16px', margin: '6px 0', borderTop: '1px solid #000', paddingTop: '4px' }}><span>الصافي:</span> <span>{totalAmount.toFixed(2)}</span></p>
         

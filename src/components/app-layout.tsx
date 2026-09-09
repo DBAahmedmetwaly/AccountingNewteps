@@ -98,6 +98,7 @@ import {
   Lightbulb,
   Archive,
   MapPin,
+  HeartHandshake
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -320,12 +321,13 @@ export const navStructure = [
         { type: 'link', href: '/purchases/returns/new', module: 'purchases_returns', title: dictionary.nav.purchaseReturns },
         { type: 'link', href: '/accounting/supplier-payments', module: 'accounting_supplierPayments', title: dictionary.nav.supplierPayments },
     ]},
-    { type: 'collapsible', title: dictionary.nav.accountingAndFinance, icon: <BookCopy />, modules: ['accounting_journal', 'accounting_expenses', 'accounting_exceptionalIncome', 'accounting_treasury', 'accounting_profitDistribution', 'accounting_assets', 'accounting_vat'], children: [
+    { type: 'collapsible', title: dictionary.nav.accountingAndFinance, icon: <BookCopy />, modules: ['accounting_journal', 'accounting_expenses', 'accounting_exceptionalIncome', 'accounting_treasury', 'accounting_profitDistribution', 'accounting_assets', 'accounting_vat', 'accounting_gratuity'], children: [
         { type: 'link', href: '/accounting/journal', module: 'accounting_journal', title: dictionary.nav.journal },
         { type: 'link', href: '/accounting/assets', module: 'accounting_assets', title: dictionary.nav.fixedAssets },
         { type: 'link', href: '/accounting/vat', module: 'accounting_vat', title: dictionary.nav.vatReport },
         { type: 'link', href: '/accounting/expenses', module: 'accounting_expenses', title: dictionary.nav.expensesAdmin },
         { type: 'link', href: '/accounting/exceptional-income', module: 'accounting_exceptionalIncome', title: dictionary.nav.exceptionalIncome },
+        { type: 'link', href: '/accounting/gratuity', module: 'accounting_gratuity', icon: <HeartHandshake />, title: "صندوق الإكراميات (Tips)" },
         { type: 'link', href: '/accounting/treasury', module: 'accounting_treasury', title: dictionary.nav.treasuryMovements },
         { type: 'link', href: '/accounting/profit-distribution', module: 'accounting_profitDistribution', title: dictionary.nav.profitDistribution },
     ]},
@@ -509,6 +511,8 @@ export function AppLayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [offlineReadiness, setOfflineReadiness] = useState<number | null>(null);
 
+  const [openTabs, setOpenTabs] = useState<{title: string, href: string}[]>([]);
+
   useEffect(() => {
         const checkReadiness = async () => {
             if (typeof window === 'undefined' || !('caches' in window)) return;
@@ -528,9 +532,6 @@ export function AppLayoutContent({ children }: { children: React.ReactNode }) {
             if (pagesToCheck.length === 0) return;
 
             let cachedCount = 0;
-            // Check in batches or parallel for speed? 
-            // Sequential is safer for browser limits, but for just checking existence 'match' is fast.
-            // Let's do simple sequential for now.
             for (const href of pagesToCheck) {
                 try {
                     const match = await caches.match(href, { ignoreSearch: true });
@@ -543,6 +544,32 @@ export function AppLayoutContent({ children }: { children: React.ReactNode }) {
 
         checkReadiness();
   }, [can]);
+
+  const findTitleForHref = useCallback((href: string) => {
+    const traverse = (items: readonly any[]): string | undefined => {
+      for (const item of items) {
+        if (item.href === href) return item.title;
+        if (item.children) {
+            const found = traverse(item.children);
+            if (found) return found;
+        }
+      }
+      return undefined;
+    };
+    return traverse(navStructure);
+  }, []);
+
+  useEffect(() => {
+    if (pathname && pathname !== '/' && pathname !== '/pos') {
+        const title = findTitleForHref(pathname);
+        if (title) {
+            setOpenTabs(prev => {
+                if (prev.some(tab => tab.href === pathname)) return prev;
+                return [...prev, { title, href: pathname }];
+            });
+        }
+    }
+  }, [pathname, findTitleForHref]);
 
   useEffect(() => {
       if (user && users) {
@@ -576,6 +603,15 @@ export function AppLayoutContent({ children }: { children: React.ReactNode }) {
 
   const isHubLayout = desktopLayout === 'modern_hub';
   const showHeader = pathname !== '/pos';
+
+  const handleCloseTab = (e: React.MouseEvent, href: string) => {
+      e.stopPropagation();
+      e.preventDefault();
+      setOpenTabs(prev => prev.filter(tab => tab.href !== href));
+      if (pathname === href) {
+          router.push('/');
+      }
+  };
 
 
   return (
@@ -677,7 +713,6 @@ export function AppLayoutContent({ children }: { children: React.ReactNode }) {
         </Sidebar>
       )}
 
-      {/* This renders the mobile sidebar trigger and content */}
       <MobileSidebar />
 
       <SidebarInset>
@@ -801,7 +836,37 @@ export function AppLayoutContent({ children }: { children: React.ReactNode }) {
             </header>
         )}
         
-        {children}
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+            <div className="flex-1 overflow-auto">
+                {children}
+            </div>
+
+            {/* Taskbar / Open Tabs Bar */}
+            {openTabs.length > 0 && pathname !== '/pos' && (
+                <div className="h-12 bg-muted/80 backdrop-blur-sm border-t flex items-center px-4 gap-2 overflow-x-auto shrink-0 no-print">
+                    {openTabs.map((tab) => (
+                        <div 
+                            key={tab.href}
+                            className={cn(
+                                "flex items-center gap-2 px-3 py-1.5 rounded-t-lg text-sm font-medium transition-all cursor-pointer whitespace-nowrap border-b-2 border-transparent",
+                                pathname === tab.href 
+                                    ? "bg-background text-primary border-primary shadow-sm" 
+                                    : "hover:bg-background/50 text-muted-foreground"
+                            )}
+                            onClick={() => router.push(tab.href)}
+                        >
+                            <span>{tab.title}</span>
+                            <button 
+                                onClick={(e) => handleCloseTab(e, tab.href)}
+                                className="hover:bg-muted p-0.5 rounded-full"
+                            >
+                                <X className="h-3 w-3" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
       </SidebarInset>
     </>
   );

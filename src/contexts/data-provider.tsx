@@ -41,8 +41,8 @@ interface DataContextType {
     licenses: any[];
     snoozedRecommendations: any[];
     syncHistory: any[];
-    customerVisits: any[]; // New
-    loginHistory: any[]; // New
+    customerVisits: any[]; 
+    loginHistory: any[]; 
 
     // Inventory
     stockInRecords: any[];
@@ -75,6 +75,8 @@ interface DataContextType {
     treasuryTransactions: any[];
     profitDistributions: any[];
     priceChangeLogs: any[];
+    gratuityLogs: any[]; // New: Tips log
+    gratuityDistributions: any[]; // New: Tips payouts
     
     // HR
     employees: any[];
@@ -94,7 +96,7 @@ interface DataContextType {
     loading: boolean;
     isOnline: boolean;
     syncQueueCount: number;
-    unreconciledDeliveryCount: number; // New
+    unreconciledDeliveryCount: number; 
     processSyncQueue: () => Promise<void>;
     allData: any;
     goOffline: () => void;
@@ -136,7 +138,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
         console.log(`Processing ${queue.length} items from sync queue.`);
 
-        // Sort queue by priority and timestamp
         const priorityMap: Record<string, number> = { high: 1, normal: 2, low: 3 };
         queue.sort((a, b) => {
             const pA = priorityMap[a.priority || 'normal'];
@@ -173,7 +174,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 console.log(`Successfully synced item ${i + 1}/${queue.length}.`);
                 successfullySynced.push({ ...queuedItem, originalId, syncedAt: new Date().toISOString() });
                 queue.shift(); 
-                i = 0; // Reset index
+                i = 0; 
             } catch (error) {
                 console.error("Failed to sync item, it will be retried later:", { path, action, payload }, error);
                 if (database) goOffline(database);
@@ -181,11 +182,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
         }
     
-        // Update localforage with the remaining (failed) items
         await localforage.setItem(SYNC_QUEUE_KEY, queue);
         await updateQueueCount();
 
-        // If any items were synced, add them to the syncHistory in Firebase
         if (successfullySynced.length > 0 && database) {
             const historyUpdates: any = {};
             successfullySynced.forEach(item => {
@@ -205,7 +204,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (database) {
             goOnline(database);
             setIsOnline(true);
-            console.log("Database connection manually set to online.");
             processSyncQueue();
         }
     }, [processSyncQueue]);
@@ -214,7 +212,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (database) {
             goOffline(database);
             setIsOnline(false);
-            console.log("Database connection manually set to offline.");
         }
     }, []);
 
@@ -223,7 +220,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const handleOnlineStatus = () => {
             if (isMounted) {
-                console.log("App is online. Processing sync queue...");
                 setIsOnline(true);
                 if (database) goOnline(database);
                 processSyncQueue();
@@ -231,7 +227,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
         const handleOfflineStatus = () => {
              if (isMounted) {
-                console.log("App is offline.");
                 setIsOnline(false);
                  if (database) goOffline(database);
              }
@@ -264,10 +259,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!isOnline) return;
         const interval = setInterval(() => {
             if (syncQueueCount > 0) {
-                console.log("Periodic sync check...");
                 processSyncQueue();
             }
-        }, 60000); // Check every minute
+        }, 60000); 
         return () => clearInterval(interval);
     }, [isOnline, syncQueueCount, processSyncQueue]);
 
@@ -305,7 +299,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
             
             if (!database) {
-                console.warn("Firebase database is not available. App is in offline-only mode.");
                 return;
             }
 
@@ -314,9 +307,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (!isMounted) return;
                 const firebaseData = snapshot.val() || {};
                 
-                setAllData(firebaseData); // Always update with fresh data from firebase
+                setAllData(firebaseData); 
                 
-                // Asynchronously update local cache without blocking UI
                 Object.keys(firebaseData).forEach(key => {
                     localforage.setItem(key, firebaseData[key]);
                 });
@@ -336,7 +328,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 unsubscribe();
             }
         };
-    }, [updateQueueCount]); // Removed allData from dependencies
+    }, [updateQueueCount]); 
     
     // Base memoized states from allData
     const allItems = useMemo(() => allData?.items ? Object.keys(allData.items).map(key => ({ id: key, ...allData.items[key] })) : [], [allData?.items]);
@@ -371,9 +363,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const syncHistory = useMemo(() => allData?.syncHistory ? Object.keys(allData.syncHistory).map(key => ({ id: key, ...allData.syncHistory[key] })) : [], [allData?.syncHistory]);
     const customerVisits = useMemo(() => allData?.customerVisits ? Object.keys(allData.customerVisits).map(key => ({ id: key, ...allData.customerVisits[key] })) : [], [allData?.customerVisits]);
     const loginHistory = useMemo(() => allData?.loginHistory ? Object.keys(allData.loginHistory).map(key => ({ id: key, ...allData.loginHistory[key] })) : [], [allData?.loginHistory]);
+    const gratuityLogs = useMemo(() => allData?.gratuityLogs ? Object.keys(allData.gratuityLogs).map(key => ({ id: key, ...allData.gratuityLogs[key] })) : [], [allData?.gratuityLogs]);
+    const gratuityDistributions = useMemo(() => allData?.gratuityDistributions ? Object.keys(allData.gratuityDistributions).map(key => ({ id: key, ...allData.gratuityDistributions[key] })) : [], [allData?.gratuityDistributions]);
 
     const warehouses = useMemo(() => allWarehouses, [allWarehouses]);
-    
     const inventoryZones = useMemo(() => allInventoryZones, [allInventoryZones]);
 
 
@@ -383,9 +376,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (dataNode) {
             Object.entries(dataNode).forEach(([key, value]: [string, any]) => {
                 if (value && typeof value === 'object') {
-                    if (value.date) { // Old structure (direct child)
+                    if (value.date) { 
                         records.push({ id: key, ...value });
-                    } else { // New date-grouped structure
+                    } else { 
                         Object.entries(value).forEach(([subKey, subValue]: [string, any]) => {
                             records.push({ id: subKey, ...subValue });
                         });
@@ -405,7 +398,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const inventoryClosings = useMemo(() => allData?.inventoryClosings ? Object.keys(allData.inventoryClosings).map(key => ({ id: key, ...allData.inventoryClosings[key] })) : [], [allData?.inventoryClosings]);
     const requisitions = useMemo(() => allData?.requisitions ? Object.keys(allData.requisitions).map(key => ({ id: key, ...allData.requisitions[key] })) : [], [allData?.requisitions]);
     
-    // Sales & Purchases
     const salesInvoices = useMemo(() => flattenGroupedData(allData?.salesInvoices), [allData?.salesInvoices]);
     const salesReturns = useMemo(() => allData?.salesReturns ? Object.keys(allData.salesReturns).map(key => ({ id: key, ...allData.salesReturns[key] })) : [], [allData?.salesReturns]);
     const purchaseInvoices = useMemo(() => flattenGroupedData(allData?.purchaseInvoices), [allData?.purchaseInvoices]);
@@ -544,7 +536,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await localforage.setItem(SYNC_QUEUE_KEY, queue);
             await updateQueueCount();
             
-            // Optimistic UI update
             setAllData((prev: any) => {
                 const newData = JSON.parse(JSON.stringify(prev));
                 if (action === 'add' && newId) {
@@ -608,7 +599,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [isOnline, updateQueueCount, database]);
 
     const value = {
-        allItems, items, customers, suppliers, warehouses, cashAccounts, partners, users, deliveryStaff, itemGroups, itemSections, itemCategories, itemSubCategories1, itemSubCategories2, inventoryZones, inventorySections, itemColors, itemSizes, barcodeDesigns, posTerminals, promotions, roles, settings, inventory, restaurantTables, paymentMethods, sellers, targets, licenses, snoozedRecommendations, syncHistory, customerVisits, loginHistory,
+        allItems, items, customers, suppliers, warehouses, cashAccounts, partners, users, deliveryStaff, itemGroups, itemSections, itemCategories, itemSubCategories1, itemSubCategories2, inventoryZones, inventorySections, itemColors, itemSizes, barcodeDesigns, posTerminals, promotions, roles, settings, inventory, restaurantTables, paymentMethods, sellers, targets, licenses, snoozedRecommendations, syncHistory, customerVisits, loginHistory, gratuityLogs, gratuityDistributions,
         stockInRecords, stockOutRecords, stockTransferRecords, stockAdjustmentRecords, stockIssuesToReps, stockReturnsFromReps, inventoryClosings, requisitions,
         salesInvoices, salesReturns, purchaseInvoices, purchaseReturns, posSales, posReturns, posSessions, posAuditLogs, heldInvoices, posCounters,
         expenses, exceptionalIncomes, customerPayments, supplierPayments, treasuryTransactions, profitDistributions, priceChangeLogs,

@@ -7,7 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trash2, ShoppingCart, XCircle, Printer, Grip, Dot, Search, Ban, PanelLeft, Boxes, SquareCheck, ListRestart, FileClock, Eye, Loader2, Undo2, PlusCircle, UserPlus, LogOut, Percent, Truck, ArrowLeft, Banknote, Landmark, Wallet, Phone, CircleDollarSign, FileText, CreditCard, UserRound, User as UserIcon, PlayCircle, History } from "lucide-react";
+import { Trash2, ShoppingCart, XCircle, Printer, Grip, Dot, Search, Ban, PanelLeft, Boxes, SquareCheck, ListRestart, FileClock, Eye, Loader2, Undo2, PlusCircle, UserPlus, LogOut, Percent, Truck, ArrowLeft, Banknote, Landmark, Wallet, Phone, CircleDollarSign, FileText, CreditCard, UserRound, User as UserIcon, PlayCircle, History, Coins } from "lucide-react";
 import { useData } from "@/contexts/data-provider";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/contexts/auth-context';
@@ -824,7 +824,6 @@ export default function PosPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     
-    // POS Settings
     const posSettings = useMemo(() => settings?.main?.posSettings || {}, [settings]);
     const financialSettings = useMemo(() => settings?.main?.financial || {}, [settings]);
     const companySettings = useMemo(() => settings?.main?.general || {}, [settings]);
@@ -888,6 +887,7 @@ export default function PosPage() {
     
     const [cart, setCart] = useState<PosItem[]>([]);
     const [discount, setDiscount] = useState(0);
+    const [tips, setTips] = useState(0); // New state for tips
     const [payments, setPayments] = useState<Payment[]>([]); 
     const [activeGroupId, setActiveGroupId] = useState<string | 'all'>('all');
     const [activeGroupType, setActiveGroupType] = useState<'category' | 'group' | 'all'>('all');
@@ -943,11 +943,10 @@ export default function PosPage() {
 
     const total = useMemo(() => {
         const netAmount = subtotal - promoDiscount - discount;
-        if (applyTax && !isTaxIncluded) {
-            return netAmount + taxAmount;
-        }
-        return netAmount;
-    }, [subtotal, promoDiscount, discount, applyTax, isTaxIncluded, taxAmount]);
+        const finalTax = (applyTax && !isTaxIncluded) ? taxAmount : 0;
+        // Total includes tips as it's what the customer pays
+        return netAmount + finalTax + Number(tips || 0);
+    }, [subtotal, promoDiscount, discount, applyTax, isTaxIncluded, taxAmount, tips]);
 
     const paidAmount = useMemo(() => payments.reduce((acc, p) => acc + Number(p.amount || 0), 0), [payments]);
     const change = useMemo(() => (paidAmount >= total ? paidAmount - total : 0), [paidAmount, total]);
@@ -966,6 +965,7 @@ export default function PosPage() {
     const resetCartAndPayments = useCallback(() => {
         setCart([]);
         setDiscount(0);
+        setTips(0); // Reset tips
         setPayments([]);
         setOrderReference('');
         setSelectedCustomerId(null);
@@ -1001,6 +1001,7 @@ export default function PosPage() {
                 setCurrentHeldInvoiceId(tableInvoice.id);
                 setCart(tableInvoice.cart || []);
                 setDiscount(tableInvoice.discount || 0);
+                setTips((tableInvoice as any).tips || 0); // Restore tips
                 setOrderReference(tableInvoice.orderReference || '');
             } else {
                 resetCartAndPayments();
@@ -1490,6 +1491,7 @@ export default function PosPage() {
             const paidAmt = saleData.paidAmount ?? totalAmount;
             const remainingDue = Math.max(0, totalAmount - paidAmt);
             lines.push({ left: 'الإجمالي:', right: totalAmount.toFixed(roundingPrecision) });
+            if(saleData.tips > 0) lines.push({ left: 'الإكرامية (Tips):', right: saleData.tips.toFixed(roundingPrecision) });
             lines.push({ left: 'المدفوع:', right: paidAmt.toFixed(roundingPrecision) });
             lines.push({ left: 'باقي المستحق على الفاتورة:', right: remainingDue.toFixed(roundingPrecision) });
             const title = companySettings.companyName ? `فاتورة - ${companySettings.companyName}` : 'فاتورة مبيعات';
@@ -1678,6 +1680,7 @@ export default function PosPage() {
                 items: cart.map(({ uniqueId, ...rest }) => ({...rest})),
                 subtotal,
                 discount,
+                tips: Number(tips || 0), // Added tips
                 total,
                 payments,
                 paidAmount: isDelivery ? 0 : paidAmount,
@@ -1707,6 +1710,19 @@ export default function PosPage() {
     
             const newSaleId = await dbAction(`posSales/${dateString}`, 'add', saleData) as string;
             if (!newSaleId) throw new Error("Failed to save POS sale");
+
+            // Record tips separately if exists
+            if (Number(tips) > 0) {
+                await dbAction('gratuityLogs', 'add', {
+                    date: date.toISOString(),
+                    amount: Number(tips),
+                    invoiceNumber: invoiceNumber,
+                    invoiceId: newSaleId,
+                    cashierId: user?.id,
+                    cashierName: user?.name,
+                    warehouseId: warehouseForSession.id,
+                });
+            }
             
             for (const cartItem of cart) {
                 const masterItem = allItems.find((i:any) => i.id === cartItem.id);
@@ -1805,6 +1821,7 @@ export default function PosPage() {
             total: total,
             cart: cart,
             discount: discount,
+            tips: Number(tips || 0), // Save tips for held invoices
             orderReference: orderReference,
         };
 
@@ -1831,7 +1848,7 @@ export default function PosPage() {
         } catch (error) {
             toast({ variant: 'destructive', title: 'خطأ', description: 'فشل حفظ الطلب المعلق.' });
         }
-    }, [user?.name, cart, total, discount, orderReference, tableId, tableData, currentHeldInvoiceId, dbAction, toast, router, resetSale]);
+    }, [user?.name, cart, total, discount, tips, orderReference, tableId, tableData, currentHeldInvoiceId, dbAction, toast, router, resetSale]);
 
 
     const handleStartMyShift = async (data: { posTerminalId: string, sessionWarehouseId: string }) => {
@@ -1860,6 +1877,7 @@ export default function PosPage() {
     const handleRetrieveInvoice = (invoice: HeldInvoice) => {
         setCart(invoice.cart);
         setDiscount(invoice.discount);
+        setTips((invoice as any).tips || 0); // Retrieve tips
         setOrderReference(invoice.orderReference || '');
         toast({ title: 'تم استرجاع الفاتورة', description: 'الفاتورة جاهزة للاستكمال.' });
     };
@@ -2298,6 +2316,10 @@ export default function PosPage() {
                                 <div className="flex justify-between items-center text-sm">
                                    <span>الخصم:</span>
                                    <Input type="number" value={discount} onChange={(e: any) => setDiscount(Number(e.target.value))} className="w-24 h-7 text-left font-semibold" onFocus={(e: any) => e.target.select()}/>
+                               </div>
+                               <div className="flex justify-between items-center text-sm">
+                                   <span className="flex items-center gap-1 text-primary"><Coins className="h-3 w-3"/> إكرامية (Tips):</span>
+                                   <Input type="number" value={tips} onChange={(e: any) => setTips(Number(e.target.value))} className="w-24 h-7 text-left font-bold border-primary/30" onFocus={(e: any) => e.target.select()}/>
                                </div>
                                
                                <div className="flex justify-between items-center text-sm border-t pt-1 mt-1">
