@@ -27,6 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { dictionary } from '@/lib/dictionary';
+import { calculateAccountBalance } from '@/lib/accounting-utils';
 
 interface SupplierPayment {
     id?: string;
@@ -177,7 +178,7 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices, suppli
                     <Combobox
                         options={supplierOptions}
                         value={formData.supplierId}
-                        onValueChange={v => setFormData({...formData, supplierId: v, invoiceId: ''})}
+                        onValueChange={v => setFormData({...formData, customerId: v, invoiceId: ''})}
                         placeholder="اختر المورد..."
                         emptyMessage="لم يتم العثور على المورد."
                     />
@@ -232,7 +233,7 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices, suppli
                 </div>
                 <div className="space-y-2">
                     <Label>ملاحظات</Label>
-                    <Textarea value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="اختياري..." className="h-20" />
+                    <Textarea value={formData.notes || ''} onChange={e => setNotes(e.target.value)} placeholder="اختياري..." className="h-20" />
                 </div>
             </div>
             <Button type="submit" disabled={!formData.paidFromAccountId || !formData.supplierId || formData.amount <= 0} className="w-full h-12 text-base font-bold">
@@ -244,19 +245,16 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices, suppli
 };
 
 export default function SupplierPaymentsPage() {
+    const allDataContext = useData();
     const { 
         supplierPayments: payments, 
         suppliers, 
         cashAccounts: rawCashAccounts, 
         purchaseInvoices, 
-        purchaseReturns,
-        customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions,
-        expenses, employeeAdvances, posSales, profitDistributions, payrollRecords,
-        warehouses,
         dbAction, 
         getNextId, 
         loading 
-    } = useData();
+    } = allDataContext;
 
     const { toast } = useToast();
     const { user } = useAuth();
@@ -268,42 +266,14 @@ export default function SupplierPaymentsPage() {
         toDate: new Date().toISOString().split('T')[0]
     });
 
+    // حساب الأرصدة الحقيقية لكل حساب نقدي باستخدام المحرك الموحد
     const cashAccounts: CashAccount[] = useMemo(() => {
         if (loading) return [];
         return rawCashAccounts.map((account: any) => {
-            let balance = Number(account.openingBalance) || 0;
-            customerPayments.filter((p:any) => p.paidToAccountId === account.id).forEach((p:any) => balance += p.amount);
-            salesInvoices.filter((s:any) => s.status === 'approved' && s.paidToAccountId === account.id).forEach((s: any) => {
-                const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
-                const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
-                if (initialCash > 0) balance += initialCash;
-            });
-            posSales.forEach((s: any) => {
-                const targetId = s.paidToAccountId || (account.warehouseId && s.warehouseId === account.warehouseId ? account.id : null);
-                if (targetId === account.id) {
-                    const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
-                    const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
-                    if (initialCash > 0) balance += initialCash;
-                }
-            });
-            exceptionalIncomes.filter((i:any) => i.paidToAccountId === account.id).forEach((i:any) => balance += i.amount);
-            treasuryTransactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'deposit' && !tx.linkedTransaction).forEach((tx: any) => balance += tx.amount);
-            payments.filter((sp: any) => sp.paidFromAccountId === account.id).forEach((sp: any) => balance -= sp.amount);
-            purchaseInvoices.filter((p: any) => p.paidFromAccountId === account.id).forEach((p: any) => {
-                const linkedPaymentsTotal = payments.filter(sp => sp.invoiceId === p.id).reduce((sum, sp) => sum + sp.amount, 0);
-                const initialPaid = (p.paidAmount || 0) - linkedPaymentsTotal;
-                if (initialPaid > 0) balance -= initialPaid;
-            });
-            expenses.filter((ex: any) => ex.paidFromAccountId === account.id).forEach((ex: any) => balance -= ex.amount);
-            employeeAdvances.filter((ea: any) => ea.paidFromAccountId === account.id).forEach((ea: any) => balance -= ea.amount);
-            profitDistributions.filter((pd: any) => pd.paidFromAccountId === account.id).forEach((pd: any) => balance -= pd.amount);
-            treasuryTransactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: any) => balance -= tx.amount);
-            (payrollRecords || []).filter((pr: any) => pr.paidFromAccountId === account.id).forEach((pr: any) => {
-                balance -= (pr.payrollData || []).reduce((sum: number, p: any) => sum + p.netSalary, 0);
-            });
-            return { ...account, currentBalance: balance };
+            const currentBalance = calculateAccountBalance(account, allDataContext);
+            return { ...account, currentBalance };
         });
-    }, [loading, rawCashAccounts, customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions, expenses, payments, employeeAdvances, posSales, purchaseInvoices, profitDistributions, payrollRecords]);
+    }, [loading, rawCashAccounts, allDataContext]);
     
     const getSupplierName = (supplierId: string) => {
         return suppliers.find((s: Supplier) => s.id === supplierId)?.name || "مورد غير معروف";
@@ -352,9 +322,6 @@ export default function SupplierPaymentsPage() {
 
         const newerInvoice = purchaseInvoices.find(inv => inv.supplierId === supplierId && new Date(inv.date).getTime() > paymentDate);
         if (newerInvoice) return false;
-
-        const newerReturn = purchaseReturns.find(ret => ret.supplierId === supplierId && new Date(ret.date).getTime() > paymentDate);
-        if (newerReturn) return false;
 
         return true;
     };
@@ -428,8 +395,8 @@ export default function SupplierPaymentsPage() {
                             cashAccounts={cashAccounts} 
                             purchaseInvoices={purchaseInvoices} 
                             supplierPayments={payments}
-                            purchaseReturns={purchaseReturns}
-                            warehouses={warehouses}
+                            purchaseReturns={allDataContext.purchaseReturns}
+                            warehouses={allDataContext.warehouses}
                         />
                     )}
                 </CardContent>
@@ -466,7 +433,7 @@ export default function SupplierPaymentsPage() {
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="p-0 sm:p-6">
+                <CardContent className="p-0 sm:p-6 sm:pt-0">
                     {loading ? (
                         <div className="flex justify-center items-center py-20">
                             <Loader2 className="h-8 w-8 animate-spin text-primary" />

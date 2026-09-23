@@ -26,6 +26,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useData } from '@/contexts/data-provider';
 import { Combobox } from '@/components/ui/combobox';
+import { calculateAccountBalance } from '@/lib/accounting-utils';
 
 
 // تعريف قائمة ثابتة بأنواع المصروفات
@@ -63,7 +64,6 @@ interface CashAccount {
     openingBalance?: number;
     currentBalance?: number;
 }
-interface PosSale { id: string; warehouseId: string; date: string; payments: { method: string, amount: number }[]; paidAmount?: number; total: number; }
 
 /**
  * مكون `ExpenseForm`
@@ -108,10 +108,9 @@ const ExpenseForm = ({ expense, onSave, onClose, warehouses, cashAccounts }: { e
         
         setAvailableCashAccounts(filtered);
 
-        // منطق التحديد التلقائي: إذا كانت القائمة تحتوي على خيارات ولا يوجد خيار محدد حالياً أو الخيار الحالي غير متاح
+        // منطق التحديد التلقائي
         if (filtered.length > 0) {
             if (!formData.paidFromAccountId || !filtered.find(a => a.id === formData.paidFromAccountId)) {
-                // لا نحدد تلقائياً إلا إذا كانت القائمة تحتوي على خيار واحد فقط لضمان دقة اختيار المستخدم
                 if (filtered.length === 1) {
                     setFormData(prev => ({...prev, paidFromAccountId: filtered[0].id}));
                 }
@@ -266,53 +265,24 @@ const PayExpenseDialog = ({ expense, onConfirm, onClose, cashAccounts }: { expen
 };
 
 export default function ExpensesPage() {
+    const allDataContext = useData();
     const { 
-        expenses, warehouses, cashAccounts: rawCashAccounts, 
-        customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions,
-        supplierPayments, employeeAdvances, posSales, profitDistributions, payrollRecords,
-        dbAction, getNextId, loading: dataLoading 
-    } = useData();
+        expenses, warehouses, cashAccounts: rawCashAccounts, dbAction, getNextId, loading: dataLoading 
+    } = allDataContext;
 
     const { toast } = useToast();
     const { user } = useAuth();
     
     const [payingExpense, setPayingExpense] = useState<Expense | null>(null);
 
-    // Calculate current balances for cash accounts
+    // حساب الأرصدة الحالية لجميع الحسابات باستخدام المحرك المركزي لضمان المطابقة
     const cashAccounts: CashAccount[] = useMemo(() => {
         if (dataLoading) return [];
         return rawCashAccounts.map((account: CashAccount) => {
-            let balance = account.openingBalance || 0;
-
-            customerPayments.filter((p:any) => p.paidToAccountId === account.id).forEach((p:any) => balance += p.amount);
-            salesInvoices.filter((s:any) => s.status === 'approved' && s.paidToAccountId === account.id).forEach((s: any) => {
-                const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
-                const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
-                if (initialCash > 0) balance += initialCash;
-            });
-            posSales.forEach((s: any) => {
-                const targetId = s.paidToAccountId || (account.warehouseId && s.warehouseId === account.warehouseId ? account.id : null);
-                if (targetId === account.id) {
-                    const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
-                    const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
-                    if (initialCash > 0) balance += initialCash;
-                }
-            });
-            exceptionalIncomes.filter((i:any) => i.paidToAccountId === account.id).forEach((i:any) => balance += i.amount);
-            treasuryTransactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'deposit' && !tx.linkedTransaction).forEach((tx: any) => balance += tx.amount);
-
-            expenses.filter((ex: any) => ex.paidFromAccountId === account.id && ex.status !== 'pending').forEach((ex: any) => balance -= ex.amount);
-            supplierPayments.filter((sp: any) => sp.paidFromAccountId === account.id).forEach((sp: any) => balance -= sp.amount);
-            employeeAdvances.filter((ea: any) => ea.paidFromAccountId === account.id).forEach((ea: any) => balance -= ea.amount);
-            profitDistributions.filter((pd: any) => pd.paidFromAccountId === account.id).forEach((pd: any) => balance -= pd.amount);
-            treasuryTransactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: any) => balance -= tx.amount);
-            (payrollRecords || []).filter((pr: any) => pr.paidFromAccountId === account.id).forEach((pr: any) => {
-                balance -= (pr.payrollData || []).reduce((sum: number, p: any) => sum + p.netSalary, 0);
-            });
-            
-            return { ...account, currentBalance: balance };
+            const currentBalance = calculateAccountBalance(account, allDataContext);
+            return { ...account, currentBalance };
         });
-    }, [dataLoading, rawCashAccounts, customerPayments, salesInvoices, exceptionalIncomes, treasuryTransactions, expenses, supplierPayments, employeeAdvances, posSales, profitDistributions, payrollRecords]);
+    }, [dataLoading, rawCashAccounts, allDataContext]);
 
     const getCashAccountName = (accountId: string) => {
         return cashAccounts.find((acc: CashAccount) => acc.id === accountId)?.name || 'غير معروف';
@@ -334,8 +304,6 @@ export default function ExpensesPage() {
 
         try {
             const receiptNumber = `م-${await getNextId('expense')}`;
-            
-            // Fix: Include current time
             const now = new Date();
             const [year, month, day] = data.date.split('-').map(Number);
             const finalDate = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds());

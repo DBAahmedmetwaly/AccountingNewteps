@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from '@/contexts/auth-context';
 import { useData } from '@/contexts/data-provider';
+import { calculateAccountBalance } from '@/lib/accounting-utils';
 
 
 // تعريف واجهات البيانات (Interfaces) لضمان تطابق أنواع البيانات لضمان تطابق أنواع البيانات
@@ -49,19 +50,6 @@ interface TreasuryTransaction {
     linkedTransaction?: boolean;
     isPayroll?: boolean;
 }
-
-interface Expense { id: string; amount: number; paidFromAccountId: string; expenseType: string; }
-interface SupplierPayment { id: string; amount: number; paidFromAccountId: string; invoiceId?: string; }
-interface EmployeeAdvance { id: string; amount: number; paidFromAccountId: string; date: string; }
-interface CustomerPayment { id: string; amount: number; paidToAccountId: string; invoiceId?: string; }
-interface SaleInvoice { id: string; paidAmount?: number; paidToAccountId?: string; status?: 'approved'|'pending' }
-interface PosSale { id: string; warehouseId: string; date: string; payments: { method: string, amount: number }[]; paidAmount?: number; total: number; paidToAccountId?: string; }
-interface PayrollRecord { id: string; date: string; paidFromAccountId: string; payrollData: { netSalary: number }[] }
-interface PurchaseInvoice { id: string; paidAmount?: number; paidFromAccountId?: string; }
-interface SalesReturn { id: string; paidAmount?: number; paidFromAccountId?: string; }
-interface PurchaseReturn { id: string; paidAmount?: number; paidToAccountId?: string; }
-interface PosReturn { id: string; warehouseId: string; paidAmount?: number; }
-
 
 /**
  * مكون `TransactionForm`
@@ -134,26 +122,14 @@ const TransactionForm = ({ onSave, cashAccounts, onClose }: { onSave: (data: Omi
 };
 
 export default function TreasuryPage() {
+    const allDataContext = useData();
     const { 
         treasuryTransactions: transactions, 
         cashAccounts: rawCashAccounts,
-        expenses, 
-        supplierPayments,
-        employeeAdvances,
-        customerPayments,
-        salesInvoices,
-        exceptionalIncomes,
-        posSales,
-        payrollRecords,
-        purchaseInvoices,
-        profitDistributions,
-        salesReturns,
-        purchaseReturns,
-        posReturns,
         dbAction, 
         getNextId,
         loading
-    } = useData();
+    } = allDataContext;
 
     const { toast } = useToast();
     const { user } = useAuth();
@@ -171,8 +147,6 @@ export default function TreasuryPage() {
     const handleSave = async (data: Omit<TreasuryTransaction, 'id' | 'receiptNumber'>) => {
         try {
             const receiptNumber = `ح-خ-${await getNextId('treasuryTransaction')}`;
-            
-            // Fix: Include current time
             const now = new Date();
             const [year, month, day] = data.date.split('-').map(Number);
             const finalDate = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds());
@@ -191,59 +165,13 @@ export default function TreasuryPage() {
         }
     };
 
-    // Corrected Balance Calculation logic to avoid double counting
+    // حساب الأرصدة الحالية باستخدام المحرك المركزي لضمان المطابقة مع لوحة التحكم
     const cashAccounts = useMemo(() => {
         return rawCashAccounts.map((account: CashAccount) => {
-            let balance = account.openingBalance || 0;
-
-            // --- INFLOWS ---
-            customerPayments.filter((p:any) => p.paidToAccountId === account.id).forEach((p:any) => balance += p.amount);
-            
-            salesInvoices.filter((s:any) => s.status === 'approved' && s.paidToAccountId === account.id).forEach((s: any) => {
-                const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
-                const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
-                if (initialCash > 0) balance += initialCash;
-            });
-
-            posSales.forEach((s: any) => {
-                const targetId = s.paidToAccountId || (account.warehouseId && s.warehouseId === account.warehouseId ? account.id : null);
-                if (targetId === account.id) {
-                    const linkedPaymentsTotal = customerPayments.filter(p => p.invoiceId === s.id).reduce((sum, p) => sum + p.amount, 0);
-                    const initialCash = (s.paidAmount || 0) - linkedPaymentsTotal;
-                    if (initialCash > 0) balance += initialCash;
-                }
-            });
-
-            exceptionalIncomes.filter((i:any) => i.paidToAccountId === account.id).forEach((i:any) => balance += i.amount);
-            transactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'deposit' && !tx.linkedTransaction).forEach((tx: any) => balance += tx.amount);
-            purchaseReturns.filter((r:any) => r.paidToAccountId === account.id).forEach((r:any) => balance += (r.paidAmount || 0));
-
-            // --- OUTFLOWS ---
-            supplierPayments.filter((sp: any) => sp.paidFromAccountId === account.id).forEach((sp: any) => balance -= sp.amount);
-
-            purchaseInvoices.filter((p: any) => p.paidFromAccountId === account.id).forEach((p: any) => {
-                const linkedPaymentsTotal = supplierPayments.filter(sp => sp.invoiceId === p.id).reduce((sum, sp) => sum + sp.amount, 0);
-                const initialPaid = (p.paidAmount || 0) - linkedPaymentsTotal;
-                if (initialPaid > 0) balance -= initialPaid;
-            });
-
-            expenses.filter((ex: any) => ex.paidFromAccountId === account.id).forEach((ex: any) => balance -= ex.amount);
-            employeeAdvances.filter((ea: any) => ea.paidFromAccountId === account.id).forEach((ea: any) => balance -= ea.amount);
-            profitDistributions.filter((pd: any) => pd.paidFromAccountId === account.id).forEach((pd: any) => balance -= pd.amount);
-            transactions.filter((tx: any) => tx.accountId === account.id && tx.type === 'withdrawal' && !tx.linkedTransaction).forEach((tx: any) => balance -= tx.amount);
-            (payrollRecords || []).filter((pr: any) => pr.paidFromAccountId === account.id).forEach((pr: any) => {
-                balance -= (pr.payrollData || []).reduce((sum: number, p: any) => sum + p.netSalary, 0);
-            });
-            salesReturns.filter((r:any) => r.paidFromAccountId === account.id).forEach((r:any) => balance -= (r.paidAmount || 0));
-            posReturns.forEach((r:any) => {
-                if (account.warehouseId && r.warehouseId === account.warehouseId) {
-                    balance -= (r.paidAmount || 0);
-                }
-            });
-
-            return { ...account, currentBalance: balance };
+            const currentBalance = calculateAccountBalance(account, allDataContext);
+            return { ...account, currentBalance };
         });
-    }, [rawCashAccounts, transactions, expenses, supplierPayments, employeeAdvances, customerPayments, salesInvoices, posSales, exceptionalIncomes, payrollRecords, purchaseInvoices, profitDistributions, salesReturns, purchaseReturns, posReturns]);
+    }, [rawCashAccounts, allDataContext]);
     
     const sortedTransactions = useMemo(() => {
         return [...transactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
