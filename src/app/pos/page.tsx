@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -114,6 +113,7 @@ interface HeldInvoice {
     total: number;
     cart: PosItem[];
     discount: number;
+    tips?: number;
     orderReference?: string;
     tableId?: string;
     tableName?: string;
@@ -1001,7 +1001,7 @@ export default function PosPage() {
                 setCurrentHeldInvoiceId(tableInvoice.id);
                 setCart(tableInvoice.cart || []);
                 setDiscount(tableInvoice.discount || 0);
-                setTips((tableInvoice as any).tips || 0); // Restore tips
+                setTips(tableInvoice.tips || 0); // Restore tips
                 setOrderReference(tableInvoice.orderReference || '');
             } else {
                 resetCartAndPayments();
@@ -1821,7 +1821,7 @@ export default function PosPage() {
             total: total,
             cart: cart,
             discount: discount,
-            tips: Number(tips || 0), // Save tips for held invoices
+            tips: Number(tips || 0), // Added tips to partial held invoice
             orderReference: orderReference,
         };
 
@@ -1877,7 +1877,7 @@ export default function PosPage() {
     const handleRetrieveInvoice = (invoice: HeldInvoice) => {
         setCart(invoice.cart);
         setDiscount(invoice.discount);
-        setTips((invoice as any).tips || 0); // Retrieve tips
+        setTips(invoice.tips || 0); // Restore tips
         setOrderReference(invoice.orderReference || '');
         toast({ title: 'تم استرجاع الفاتورة', description: 'الفاتورة جاهزة للاستكمال.' });
     };
@@ -2134,7 +2134,7 @@ export default function PosPage() {
                                 />
                                 <AddEntityDialog
                                     title="إضافة عميل جديد"
-                                    description="أضف عميلاً جديداً بسرعة."
+                                    description="أدخل عميلاً جديداً بسرعة."
                                     triggerButton={<Button size="icon" variant="outline"><UserPlus/></Button>}
                                 >
                                     <NewCustomerForm onSave={handleNewCustomerSave} onClose={() => {}} allCustomers={customers} />

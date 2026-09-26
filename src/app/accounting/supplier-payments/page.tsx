@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -178,7 +177,7 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices, suppli
                     <Combobox
                         options={supplierOptions}
                         value={formData.supplierId}
-                        onValueChange={v => setFormData({...formData, customerId: v, invoiceId: ''})}
+                        onValueChange={v => setFormData({...formData, supplierId: v, invoiceId: ''})}
                         placeholder="اختر المورد..."
                         emptyMessage="لم يتم العثور على المورد."
                     />
@@ -233,7 +232,7 @@ const PaymentForm = ({ onSave, suppliers, cashAccounts, purchaseInvoices, suppli
                 </div>
                 <div className="space-y-2">
                     <Label>ملاحظات</Label>
-                    <Textarea value={formData.notes || ''} onChange={e => setNotes(e.target.value)} placeholder="اختياري..." className="h-20" />
+                    <Textarea value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="اختياري..." className="h-20" />
                 </div>
             </div>
             <Button type="submit" disabled={!formData.paidFromAccountId || !formData.supplierId || formData.amount <= 0} className="w-full h-12 text-base font-bold">
