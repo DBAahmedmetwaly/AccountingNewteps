@@ -29,6 +29,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { calculateAccountBalance } from '@/lib/accounting-utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Badge } from '@/components/ui/badge';
+import { cn } from "@/lib/utils";
 
 
 // تعريف قائمة ثابتة بأنواع المصروفات
