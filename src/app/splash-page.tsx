@@ -38,7 +38,7 @@ export const SplashPage = () => {
                     {companyName}
                 </h1>
                 <div className="relative flex items-center justify-center my-8 gap-8">
-                    <Laptop className="h-28 w-28 text-primary" />
+                    <Laptop className="h-28 w-28 text-yellow-500" />
                     <Scale className="h-32 w-32 text-muted-foreground/80" />
                 </div>
                 

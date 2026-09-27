@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
@@ -129,8 +130,8 @@ const Logo = () => {
 
   return (
     <div className="flex items-center gap-2" >
-        <Scale className="h-7 w-7 text-primary"/>
-        <Laptop className="h-7 w-7 text-primary"/>
+        <Scale className="h-7 w-7 text-yellow-500"/>
+        <Laptop className="h-7 w-7 text-yellow-500"/>
         <div className="flex flex-col">
             <h1 className="text-lg font-bold text-primary leading-none">{companyName}</h1>
             {!isOnline && <span className="text-[10px] text-destructive font-semibold">وضع الأوفلاين</span>}

@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Loader2, MoreHorizontal, Edit, Trash2, Info } from "lucide-react";
+import { PlusCircle, Loader2, MoreHorizontal, Edit, Trash2, Info, CheckCircle, Wallet } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem } from '@/components/ui/dropdown-menu';
@@ -27,6 +27,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useData } from '@/contexts/data-provider';
 import { Combobox } from '@/components/ui/combobox';
 import { calculateAccountBalance } from '@/lib/accounting-utils';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Badge } from '@/components/ui/badge';
 
 
 // تعريف قائمة ثابتة بأنواع المصروفات
@@ -34,7 +36,7 @@ const EXPENSE_TYPES = [
     "إيجار", "رواتب", "كهرباء ومياه", "مواصلات", "تسويق وإعلان", "صيانة", "مستلزمات مكتبية", "مصروفات حكومية", "أخرى"
 ];
 
-// تعريف واجهات البيانات (Interfaces) لضمان تطابق أنواع البيانات لضمان تطابق أنواع البيانات
+// تعريف واجهات البيانات (Interfaces)
 interface Expense {
     id?: string;
     date: string;
@@ -219,7 +221,7 @@ const ExpenseForm = ({ expense, onSave, onClose, warehouses, cashAccounts }: { e
                 </div>
             </div>
             <div className="flex justify-end mt-4">
-                <Button type="submit">
+                <Button type="submit" className="w-full md:w-auto">
                     <PlusCircle className="ml-2 h-4 w-4" />
                     حفظ المصروف
                 </Button>
@@ -272,10 +274,11 @@ export default function ExpensesPage() {
 
     const { toast } = useToast();
     const { user } = useAuth();
+    const isMobile = useIsMobile();
     
     const [payingExpense, setPayingExpense] = useState<Expense | null>(null);
 
-    // حساب الأرصدة الحالية لجميع الحسابات باستخدام المحرك المركزي لضمان المطابقة
+    // حساب الأرصدة الحالية لجميع الحسابات
     const cashAccounts: CashAccount[] = useMemo(() => {
         if (dataLoading) return [];
         return rawCashAccounts.map((account: CashAccount) => {
@@ -355,113 +358,169 @@ export default function ExpensesPage() {
   return (
     <>
       <PageHeader title="إدارة المصروفات" />
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">
-        <div className="grid gap-6 md:grid-cols-5">
-            <Card className="md:col-span-2">
-            <CardHeader>
-                <CardTitle>إضافة مصروف جديد</CardTitle>
-                <CardDescription>
-                سجل المصروفات وصنفها وقم بتحميلها على الفروع إن أمكن.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                {dataLoading ? <Loader2 className='animate-spin' /> : <ExpenseForm onSave={handleSave} onClose={()=>{}} warehouses={warehouses} cashAccounts={cashAccounts} />}
-                 <Alert className="mt-4">
-                    <Info className="h-4 w-4" />
-                    <AlertTitle>القيد المحاسبي المتوقع</AlertTitle>
-                    <AlertDescription>
-                        من ح/ المصروفات (مدين) <br/>
-                        إلى ح/ النقدية أو البنك (دائن)
-                    </AlertDescription>
-                </Alert>
-            </CardContent>
+      <main className="flex flex-1 flex-col gap-4 p-2 md:p-6">
+        <div className="grid gap-6 md:grid-cols-5 items-start">
+            <Card className="md:col-span-2 shadow-md">
+                <CardHeader>
+                    <CardTitle>إضافة مصروف جديد</CardTitle>
+                    <CardDescription>
+                    سجل المصروفات وصنفها وقم بتحميلها على الفروع إن أمكن.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {dataLoading ? <div className="flex justify-center py-10"><Loader2 className='animate-spin text-primary' /></div> : <ExpenseForm onSave={handleSave} onClose={()=>{}} warehouses={warehouses} cashAccounts={cashAccounts} />}
+                    <Alert className="mt-4 bg-muted/50 border-primary/20">
+                        <Info className="h-4 w-4" />
+                        <AlertTitle>القيد المحاسبي المتوقع</AlertTitle>
+                        <AlertDescription className="text-xs">
+                            من ح/ المصروفات (مدين) <br/>
+                            إلى ح/ النقدية أو البنك (دائن)
+                        </AlertDescription>
+                    </Alert>
+                </CardContent>
             </Card>
             
-            <Card className="md:col-span-3">
+            <Card className="md:col-span-3 shadow-md">
                 <CardHeader>
                     <CardTitle>سجل المصروفات</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-0 md:p-6 md:pt-0">
                     {dataLoading ? (
-                        <div className="flex justify-center items-center py-10">
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        <div className="flex justify-center items-center py-20">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
                         </div>
                     ) : (
-                        <div className="w-full overflow-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>النوع</TableHead>
-                                        <TableHead>الوصف</TableHead>
-                                        <TableHead>الحالة</TableHead>
-                                        <TableHead>مدفوع من</TableHead>
-                                        <TableHead className="text-center">المبلغ</TableHead>
-                                        <TableHead className="text-center w-[100px]">الإجراءات</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {expenses.map((expense: Expense) => (
-                                        <TableRow key={expense.id}>
-                                            <TableCell>
-                                                <div className="font-medium">{expense.expenseType}</div>
-                                                <div className="text-sm text-muted-foreground">{new Date(expense.date).toLocaleDateString('ar-EG')}</div>
-                                                <div className="text-xs text-muted-foreground">بواسطة: {expense.createdByName || 'غير معروف'}</div>
-                                            </TableCell>
-                                            <TableCell>{expense.description}</TableCell>
-                                            <TableCell>
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                                    expense.status === 'pending' 
-                                                    ? 'bg-yellow-100 text-yellow-800' 
-                                                    : 'bg-green-100 text-green-800'
-                                                }`}>
-                                                    {expense.status === 'pending' ? 'مستحق (غير مدفوع)' : 'مدفوع'}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell>{getCashAccountName(expense.paidFromAccountId)}</TableCell>
-                                            <TableCell className="text-center">{expense.amount.toLocaleString()}</TableCell>
-                                            <TableCell className="text-center">
-                                                <AlertDialog>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button aria-haspopup="true" size="icon" variant="ghost">
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                                <span className="sr-only">قائمة</span>
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
-                                                            {expense.status === 'pending' && (
-                                                                <DropdownMenuItem onSelect={() => setPayingExpense(expense)}>
-                                                                    <PlusCircle className="ml-2 h-4 w-4" />
-                                                                    دفع المصروف
-                                                                </DropdownMenuItem>
-                                                            )}
+                        <div className="w-full">
+                            {isMobile ? (
+                                <div className="space-y-3 p-3">
+                                    {expenses.length > 0 ? [...expenses].reverse().map((expense: Expense) => (
+                                        <Card key={expense.id} className="relative overflow-hidden border-r-4 border-r-primary shadow-sm">
+                                            <CardContent className="p-4">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div>
+                                                        <h4 className="font-bold text-base leading-tight">{expense.expenseType}</h4>
+                                                        <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-1">
+                                                            <CheckCircle className="h-3 w-3" />
+                                                            {new Date(expense.date).toLocaleDateString('ar-EG')}
+                                                            <span className="mx-1">•</span>
+                                                            بواسطة: {expense.createdByName || 'غير معروف'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-lg font-black text-primary">{expense.amount.toLocaleString()} <span className="text-[10px]">ج.م</span></p>
+                                                        {expense.taxAmount ? <p className="text-[9px] text-muted-foreground">شامل ضريبة: {expense.taxAmount.toFixed(2)}</p> : null}
+                                                    </div>
+                                                </div>
+                                                <p className="text-sm text-muted-foreground mb-3 bg-muted/30 p-2 rounded italic">"{expense.description}"</p>
+                                                <div className="flex justify-between items-center pt-3 border-t">
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge variant={expense.status === 'pending' ? 'outline' : 'default'} className={cn("text-[10px] px-2 h-5", expense.status === 'pending' ? "text-amber-600 border-amber-600" : "bg-green-600")}>
+                                                            {expense.status === 'pending' ? 'مستحق (لم يدفع)' : 'مدفوع'}
+                                                        </Badge>
+                                                        <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                                            <Wallet className="h-3 w-3"/>
+                                                            {getCashAccountName(expense.paidFromAccountId)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex gap-1">
+                                                        {expense.status === 'pending' && (
+                                                            <Button size="sm" variant="outline" className="h-8 text-[10px] bg-green-500 hover:bg-green-600 text-white" onClick={() => setPayingExpense(expense)}>دفع الآن</Button>
+                                                        )}
+                                                        <AlertDialog>
                                                             <AlertDialogTrigger asChild>
-                                                                <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
-                                                                    <Trash2 className="ml-2 h-4 w-4" />
-                                                                    حذف
-                                                                </DropdownMenuItem>
+                                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/10">
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
                                                             </AlertDialogTrigger>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>هل أنت متأكد تمامًا؟</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                هذا الإجراء سيحذف السجل بشكل دائم. لا يمكن التراجع عن هذا الإجراء.
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => handleDelete(expense.id!)}>متابعة</AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                                                            <AlertDialogContent>
+                                                                <AlertDialogHeader>
+                                                                    <AlertDialogTitle>حذف المصروف؟</AlertDialogTitle>
+                                                                    <AlertDialogDescription>سيتم حذف سجل المصروف بشكل نهائي من الدفاتر المالية.</AlertDialogDescription>
+                                                                </AlertDialogHeader>
+                                                                <AlertDialogFooter>
+                                                                    <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                                                    <AlertDialogAction onClick={() => handleDelete(expense.id!)} className="bg-destructive hover:bg-destructive/90">حذف نهائي</AlertDialogAction>
+                                                                </AlertDialogFooter>
+                                                            </AlertDialogContent>
+                                                        </AlertDialog>
+                                                    </div>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    )) : <div className="text-center py-20 text-muted-foreground italic">لا توجد مصروفات مسجلة بعد.</div>}
+                                </div>
+                            ) : (
+                                <div className="w-full overflow-auto border rounded-lg">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="bg-muted/50">
+                                                <TableHead>النوع والتاريخ</TableHead>
+                                                <TableHead>الوصف</TableHead>
+                                                <TableHead>الحالة</TableHead>
+                                                <TableHead>مدفوع من</TableHead>
+                                                <TableHead className="text-center">المبلغ</TableHead>
+                                                <TableHead className="text-center w-[100px]">الإجراءات</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {expenses.map((expense: Expense) => (
+                                                <TableRow key={expense.id} className="hover:bg-muted/30">
+                                                    <TableCell>
+                                                        <div className="font-bold">{expense.expenseType}</div>
+                                                        <div className="text-[10px] text-muted-foreground">{new Date(expense.date).toLocaleDateString('ar-EG')}</div>
+                                                    </TableCell>
+                                                    <TableCell className="max-w-[200px] truncate text-xs" title={expense.description}>{expense.description}</TableCell>
+                                                    <TableCell>
+                                                        <Badge variant={expense.status === 'pending' ? 'outline' : 'default'} className={cn("text-[10px]", expense.status === 'pending' ? "text-amber-600 border-amber-600" : "bg-green-600")}>
+                                                            {expense.status === 'pending' ? 'مستحق' : 'مدفوع'}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs font-medium">{getCashAccountName(expense.paidFromAccountId)}</TableCell>
+                                                    <TableCell className="text-center font-black text-primary">{expense.amount.toLocaleString()}</TableCell>
+                                                    <TableCell className="text-center">
+                                                        <AlertDialog>
+                                                            <DropdownMenu modal={false}>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                                        <MoreHorizontal className="h-4 w-4" />
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end">
+                                                                    <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
+                                                                    {expense.status === 'pending' && (
+                                                                        <DropdownMenuItem onSelect={() => setPayingExpense(expense)} className="text-green-600 font-bold">
+                                                                            <CheckCircle className="ml-2 h-4 w-4" />
+                                                                            دفع المصروف
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                    <AlertDialogTrigger asChild>
+                                                                        <DropdownMenuItem className="text-destructive font-semibold" onSelect={(e) => e.preventDefault()}>
+                                                                            <Trash2 className="ml-2 h-4 w-4" />
+                                                                            حذف
+                                                                        </DropdownMenuItem>
+                                                                    </AlertDialogTrigger>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
+                                                            <AlertDialogContent>
+                                                                <AlertDialogHeader>
+                                                                    <AlertDialogTitle>هل أنت متأكد تمامًا؟</AlertDialogTitle>
+                                                                    <AlertDialogDescription>
+                                                                        هذا الإجراء سيحذف السجل بشكل دائم من الدفاتر المالية. لا يمكن التراجع عنه.
+                                                                    </AlertDialogDescription>
+                                                                </AlertDialogHeader>
+                                                                <AlertDialogFooter>
+                                                                    <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                                                    <AlertDialogAction onClick={() => handleDelete(expense.id!)} className="bg-destructive hover:bg-destructive/90">تأكيد الحذف</AlertDialogAction>
+                                                                </AlertDialogFooter>
+                                                            </AlertDialogContent>
+                                                        </AlertDialog>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            )}
                         </div>
                     )}
                 </CardContent>
