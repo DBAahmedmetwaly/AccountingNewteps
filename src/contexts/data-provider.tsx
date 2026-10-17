@@ -1,12 +1,55 @@
 
 "use client";
 
-import React, { createContext, useContext, ReactNode, useEffect, useMemo, useState, useCallback } from 'react';
+import React, { createContext, useContext, ReactNode, useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
-import { ref, onValue, set as fbSet, push as fbPush, remove as fbRemove, update as fbUpdate, runTransaction, Database, goOffline, goOnline } from 'firebase/database';
+import { ref, onValue, set as fbSet, push as fbPush, remove as fbRemove, update as fbUpdate, runTransaction, Database, goOffline, goOnline, off } from 'firebase/database';
 import { database } from '@/lib/firebase';
 import localforage from 'localforage';
 
+// --- Configuration for Partitioned Operational Data ---
+export const PARTITION_CONFIG: Record<string, string> = {
+    salesInvoices: 'date',
+    posSales: 'date',
+    salesReturns: 'date',
+    posReturns: 'date',
+    purchaseInvoices: 'date',
+    purchaseReturns: 'date',
+    purchaseOrders: 'date',
+    stockInRecords: 'date',
+    stockOutRecords: 'date',
+    stockTransferRecords: 'date',
+    stockAdjustmentRecords: 'date',
+    stockIssuesToReps: 'date',
+    stockReturnsFromReps: 'date',
+    expenses: 'date',
+    customerPayments: 'date',
+    supplierPayments: 'date',
+    treasuryTransactions: 'date',
+    profitDistributions: 'date',
+    employeeAdvances: 'date',
+    employeeAdjustments: 'date',
+    repRemittances: 'date',
+    payrollRecords: 'date',
+    priceChangeLogs: 'timestamp',
+    gratuityLogs: 'date',
+    gratuityDistributions: 'date',
+    customerVisits: 'timestamp',
+    loginHistory: 'timestamp',
+    syncHistory: 'timestamp',
+    posAuditLogs: 'date',
+    depreciationRecords: 'date',
+    inventoryClosings: 'closingDate'
+};
+
+const STATIC_NODES = [
+    'users', 'roles', 'warehouses', 'settings', 'cashAccounts', 'licenses',
+    'items', 'customers', 'suppliers', 'partners', 'itemGroups', 'itemSections',
+    'itemCategories', 'itemSubCategories1', 'itemSubCategories2', 'inventoryZones',
+    'inventorySections', 'itemColors', 'itemSizes', 'barcodeDesigns', 'posTerminals',
+    'paymentMethods', 'sellers', 'restaurantTables', 'targets', 'snoozedRecommendations',
+    'counters', 'inventory', 'heldInvoices', 'posCounters', 'fixedAssets'
+];
 
 interface DataContextType {
     // Master Data
@@ -75,8 +118,8 @@ interface DataContextType {
     treasuryTransactions: any[];
     profitDistributions: any[];
     priceChangeLogs: any[];
-    gratuityLogs: any[]; // New: Tips log
-    gratuityDistributions: any[]; // New: Tips payouts
+    gratuityLogs: any[];
+    gratuityDistributions: any[];
     
     // HR
     employees: any[];
@@ -106,7 +149,7 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 const SYNC_QUEUE_KEY = 'firebase-sync-queue';
 
-// Helper to remove undefined properties recursively to prevent Firebase errors
+// Helper to remove undefined properties recursively
 const sanitize = (obj: any): any => {
   if (Array.isArray(obj)) return obj.map(sanitize);
   if (obj !== null && typeof obj === 'object') {
@@ -119,11 +162,21 @@ const sanitize = (obj: any): any => {
   return obj;
 };
 
+// Helper for partition path
+export const getPartitionRelativePath = (collection: string, dateStr: string) => {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    const yearMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const day = `${yearMonth}-${String(d.getDate()).padStart(2, '0')}`;
+    return `${yearMonth}/${day}`;
+};
+
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [allData, setAllData] = useState<any>({});
     const [isOnline, setIsOnline] = useState(true);
     const [isLoading, setIsLoading] = useState(true);
     const [syncQueueCount, setSyncQueueCount] = useState(0);
+    const idPathMap = useRef<Map<string, string>>(new Map());
 
     const updateQueueCount = useCallback(async () => {
         const queue = await localforage.getItem<any[]>(SYNC_QUEUE_KEY) || [];
@@ -136,8 +189,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         let queue = await localforage.getItem<any[]>(SYNC_QUEUE_KEY) || [];
         if (queue.length === 0) return;
     
-        console.log(`Processing ${queue.length} items from sync queue.`);
-
         const priorityMap: Record<string, number> = { high: 1, normal: 2, low: 3 };
         queue.sort((a, b) => {
             const pA = priorityMap[a.priority || 'normal'];
@@ -171,12 +222,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     await runTransaction(ref(database, path), (currentValue) => (currentValue || 0) + 1);
                 }
     
-                console.log(`Successfully synced item ${i + 1}/${queue.length}.`);
                 successfullySynced.push({ ...queuedItem, originalId, syncedAt: new Date().toISOString() });
                 queue.shift(); 
                 i = 0; 
             } catch (error) {
-                console.error("Failed to sync item, it will be retried later:", { path, action, payload }, error);
+                console.error("Failed to sync item:", { path, action, payload }, error);
                 if (database) goOffline(database);
                 break; 
             }
@@ -215,63 +265,43 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, []);
 
-    useEffect(() => {
-        let isMounted = true;
+    const flattenGroupedData = useCallback((node: any, collectionName: string) => {
+        const records: any[] = [];
+        if (!node || typeof node !== 'object') return records;
 
-        const handleOnlineStatus = () => {
-            if (isMounted) {
-                setIsOnline(true);
-                if (database) goOnline(database);
-                processSyncQueue();
-            }
-        };
-        const handleOfflineStatus = () => {
-             if (isMounted) {
-                setIsOnline(false);
-                 if (database) goOffline(database);
-             }
-        };
-        
-        if (typeof window !== 'undefined') {
-            const initialOnlineStatus = navigator.onLine;
-            setIsOnline(initialOnlineStatus);
-            window.addEventListener('online', handleOnlineStatus);
-            window.addEventListener('offline', handleOfflineStatus);
+        const dateKeys = ['date', 'timestamp', 'startTime', 'heldAt', 'purchaseDate', 'closingDate'];
+
+        const traverse = (current: any, id: string, currentPath: string) => {
+            if (!current || typeof current !== 'object') return;
             
-            if (initialOnlineStatus) {
-                handleOnlineStatus();
-            } else {
-                handleOfflineStatus();
+            // Check if this is a leaf node (a record)
+            const dateKey = dateKeys.find(k => current[k]);
+            
+            if (dateKey) {
+                records.push({ id: id, ...current });
+                idPathMap.current.set(id, currentPath);
+                return;
             }
-        }
-        
-        return () => {
-            isMounted = false;
-            if (typeof window !== 'undefined') {
-                window.removeEventListener('online', handleOnlineStatus);
-                window.removeEventListener('offline', handleOfflineStatus);
-            }
+
+            // Otherwise keep digging
+            Object.entries(current).forEach(([key, value]) => {
+                traverse(value, key, `${currentPath}/${key}`);
+            });
         };
-    }, [processSyncQueue]);
 
+        // We start traversal from the top level children of the collection node
+        Object.entries(node).forEach(([key, value]) => {
+            traverse(value, key, `${collectionName}/${key}`);
+        });
 
-    useEffect(() => {
-        if (!isOnline) return;
-        const interval = setInterval(() => {
-            if (syncQueueCount > 0) {
-                processSyncQueue();
-            }
-        }, 60000); 
-        return () => clearInterval(interval);
-    }, [isOnline, syncQueueCount, processSyncQueue]);
-
+        return records;
+    }, []);
 
     useEffect(() => {
         let isMounted = true;
-        let unsubscribe: (() => void) | undefined;
-        let initialLoadComplete = false;
+        const listeners: any[] = [];
 
-        const hydrateAndListen = async () => {
+        const setupListeners = async () => {
              await updateQueueCount();
             try {
                 const keys = await localforage.keys();
@@ -284,58 +314,46 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 if (isMounted && Object.keys(dataFromCache).length > 0) {
                     setAllData(dataFromCache);
-                    if (!initialLoadComplete) {
-                        setIsLoading(false);
-                        initialLoadComplete = true;
-                    }
+                    setIsLoading(false);
                 }
             } catch (error) {
                 console.warn("Could not hydrate from localforage", error);
             } finally {
-                 if (isMounted && !initialLoadComplete) {
-                    setIsLoading(false);
-                    initialLoadComplete = true;
-                }
+                 if (isMounted) setIsLoading(false);
             }
             
-            if (!database) {
-                return;
-            }
+            if (!database) return;
 
-            const dbRef = ref(database, '/');
-            unsubscribe = onValue(dbRef, (snapshot) => {
-                if (!isMounted) return;
-                const firebaseData = snapshot.val() || {};
-                
-                setAllData(firebaseData); 
-                
-                Object.keys(firebaseData).forEach(key => {
-                    localforage.setItem(key, firebaseData[key]);
+            const allNodes = [...STATIC_NODES, ...Object.keys(PARTITION_CONFIG), 'counters', 'syncHistory', 'payrollRecords'];
+            
+            allNodes.forEach(nodePath => {
+                const dbRef = ref(database, nodePath);
+                const unsubscribe = onValue(dbRef, (snapshot) => {
+                    if (!isMounted) return;
+                    const data = snapshot.val();
+                    setAllData((prev: any) => ({ ...prev, [nodePath]: data }));
+                    localforage.setItem(nodePath, data);
+                }, (error) => {
+                     console.error(`Firebase read failed for ${nodePath}:`, error.message);
                 });
-                
-            }, (error) => {
-                 if (isMounted) {
-                    console.error("Firebase read failed (likely offline):", error.message);
-                 }
+                listeners.push({ ref: dbRef, unsubscribe });
             });
         };
 
-        hydrateAndListen();
+        setupListeners();
 
         return () => {
             isMounted = false;
-            if (unsubscribe) {
-                unsubscribe();
-            }
+            listeners.forEach(l => off(l.ref));
         };
     }, [updateQueueCount]); 
     
-    // Base memoized states from allData
+    // Memoized states
     const allItems = useMemo(() => allData?.items ? Object.keys(allData.items).map(key => ({ id: key, ...allData.items[key] })) : [], [allData?.items]);
     const items = useMemo(() => allItems.filter(item => !item.isDisabled), [allItems]);
     const customers = useMemo(() => allData?.customers ? Object.keys(allData.customers).map(key => ({ id: key, ...allData.customers[key] })) : [], [allData?.customers]);
     const suppliers = useMemo(() => allData?.suppliers ? Object.keys(allData.suppliers).map(key => ({ id: key, ...allData.suppliers[key] })) : [], [allData?.suppliers]);
-    const allWarehouses = useMemo(() => allData?.warehouses ? Object.keys(allData.warehouses).map(key => ({ id: key, ...allData.warehouses[key] })) : [], [allData?.warehouses]);
+    const warehouses = useMemo(() => allData?.warehouses ? Object.keys(allData.warehouses).map(key => ({ id: key, ...allData.warehouses[key] })) : [], [allData?.warehouses]);
     const cashAccounts = useMemo(() => allData?.cashAccounts ? Object.keys(allData.cashAccounts).map(key => ({ id: key, ...allData.cashAccounts[key] })) : [], [allData?.cashAccounts]);
     const partners = useMemo(() => allData?.partners ? Object.keys(allData.partners).map(key => ({ id: key, ...allData.partners[key] })) : [], [allData?.partners]);
     const users = useMemo(() => allData?.users ? Object.keys(allData.users).map(key => ({ id: key, ...allData.users[key] })) : [], [allData?.users]);
@@ -345,7 +363,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const itemCategories = useMemo(() => allData?.itemCategories ? Object.keys(allData.itemCategories).map(key => ({ id: key, ...allData.itemCategories[key] })) : [], [allData?.itemCategories]);
     const itemSubCategories1 = useMemo(() => allData?.itemSubCategories1 ? Object.keys(allData.itemSubCategories1).map(key => ({ id: key, ...allData.itemSubCategories1[key] })) : [], [allData?.itemSubCategories1]);
     const itemSubCategories2 = useMemo(() => allData?.itemSubCategories2 ? Object.keys(allData.itemSubCategories2).map(key => ({ id: key, ...allData.itemSubCategories2[key] })) : [], [allData?.itemSubCategories2]);
-    const allInventoryZones = useMemo(() => allData?.inventoryZones ? Object.keys(allData.inventoryZones).map(key => ({ id: key, ...allData.inventoryZones[key] })) : [], [allData?.inventoryZones]);
+    const inventoryZones = useMemo(() => allData?.inventoryZones ? Object.keys(allData.inventoryZones).map(key => ({ id: key, ...allData.inventoryZones[key] })) : [], [allData?.inventoryZones]);
     const inventorySections = useMemo(() => allData?.inventorySections ? Object.keys(allData.inventorySections).map(key => ({ id: key, ...allData.inventorySections[key] })) : [], [allData?.inventorySections]);
     const itemColors = useMemo(() => allData?.itemColors ? Object.keys(allData.itemColors).map(key => ({ id: key, ...allData.itemColors[key] })) : [], [allData?.itemColors]);
     const itemSizes = useMemo(() => allData?.itemSizes ? Object.keys(allData.itemSizes).map(key => ({ id: key, ...allData.itemSizes[key] })) : [], [allData?.itemSizes]);
@@ -363,87 +381,49 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const syncHistory = useMemo(() => allData?.syncHistory ? Object.keys(allData.syncHistory).map(key => ({ id: key, ...allData.syncHistory[key] })) : [], [allData?.syncHistory]);
     const customerVisits = useMemo(() => allData?.customerVisits ? Object.keys(allData.customerVisits).map(key => ({ id: key, ...allData.customerVisits[key] })) : [], [allData?.customerVisits]);
     const loginHistory = useMemo(() => allData?.loginHistory ? Object.keys(allData.loginHistory).map(key => ({ id: key, ...allData.loginHistory[key] })) : [], [allData?.loginHistory]);
-    const gratuityLogs = useMemo(() => allData?.gratuityLogs ? Object.keys(allData.gratuityLogs).map(key => ({ id: key, ...allData.gratuityLogs[key] })) : [], [allData?.gratuityLogs]);
-    const gratuityDistributions = useMemo(() => allData?.gratuityDistributions ? Object.keys(allData.gratuityDistributions).map(key => ({ id: key, ...allData.gratuityDistributions[key] })) : [], [allData?.gratuityDistributions]);
+    const gratuityLogs = useMemo(() => flattenGroupedData(allData?.gratuityLogs, 'gratuityLogs'), [allData?.gratuityLogs, flattenGroupedData]);
+    const gratuityDistributions = useMemo(() => flattenGroupedData(allData?.gratuityDistributions, 'gratuityDistributions'), [allData?.gratuityDistributions, flattenGroupedData]);
 
-    const warehouses = useMemo(() => allWarehouses, [allWarehouses]);
-    const inventoryZones = useMemo(() => allInventoryZones, [allInventoryZones]);
-
-
-    // Inventory (Flatten date-grouped structures)
-    const flattenGroupedData = (dataNode: any) => {
-        const records: any[] = [];
-        if (dataNode) {
-            Object.entries(dataNode).forEach(([key, value]: [string, any]) => {
-                if (value && typeof value === 'object') {
-                    if (value.date) { 
-                        records.push({ id: key, ...value });
-                    } else { 
-                        Object.entries(value).forEach(([subKey, subValue]: [string, any]) => {
-                            records.push({ id: subKey, ...subValue });
-                        });
-                    }
-                }
-            });
-        }
-        return records;
-    }
-
-    const stockInRecords = useMemo(() => flattenGroupedData(allData?.stockInRecords), [allData?.stockInRecords]);
-    const stockOutRecords = useMemo(() => flattenGroupedData(allData?.stockOutRecords), [allData?.stockOutRecords]);
-    const stockTransferRecords = useMemo(() => flattenGroupedData(allData?.stockTransferRecords), [allData?.stockTransferRecords]);
-    const stockAdjustmentRecords = useMemo(() => flattenGroupedData(allData?.stockAdjustmentRecords), [allData?.stockAdjustmentRecords]);
-    const stockIssuesToReps = useMemo(() => flattenGroupedData(allData?.stockIssuesToReps), [allData?.stockIssuesToReps]);
-    const stockReturnsFromReps = useMemo(() => flattenGroupedData(allData?.stockReturnsFromReps), [allData?.stockReturnsFromReps]);
+    const stockInRecords = useMemo(() => flattenGroupedData(allData?.stockInRecords, 'stockInRecords'), [allData?.stockInRecords, flattenGroupedData]);
+    const stockOutRecords = useMemo(() => flattenGroupedData(allData?.stockOutRecords, 'stockOutRecords'), [allData?.stockOutRecords, flattenGroupedData]);
+    const stockTransferRecords = useMemo(() => flattenGroupedData(allData?.stockTransferRecords, 'stockTransferRecords'), [allData?.stockTransferRecords, flattenGroupedData]);
+    const stockAdjustmentRecords = useMemo(() => flattenGroupedData(allData?.stockAdjustmentRecords, 'stockAdjustmentRecords'), [allData?.stockAdjustmentRecords, flattenGroupedData]);
+    const stockIssuesToReps = useMemo(() => flattenGroupedData(allData?.stockIssuesToReps, 'stockIssuesToReps'), [allData?.stockIssuesToReps, flattenGroupedData]);
+    const stockReturnsFromReps = useMemo(() => flattenGroupedData(allData?.stockReturnsFromReps, 'stockReturnsFromReps'), [allData?.stockReturnsFromReps, flattenGroupedData]);
     const inventoryClosings = useMemo(() => allData?.inventoryClosings ? Object.keys(allData.inventoryClosings).map(key => ({ id: key, ...allData.inventoryClosings[key] })) : [], [allData?.inventoryClosings]);
     const requisitions = useMemo(() => allData?.requisitions ? Object.keys(allData.requisitions).map(key => ({ id: key, ...allData.requisitions[key] })) : [], [allData?.requisitions]);
     
-    const salesInvoices = useMemo(() => flattenGroupedData(allData?.salesInvoices), [allData?.salesInvoices]);
-    const salesReturns = useMemo(() => allData?.salesReturns ? Object.keys(allData.salesReturns).map(key => ({ id: key, ...allData.salesReturns[key] })) : [], [allData?.salesReturns]);
-    const purchaseInvoices = useMemo(() => flattenGroupedData(allData?.purchaseInvoices), [allData?.purchaseInvoices]);
-    const purchaseReturns = useMemo(() => allData?.purchaseReturns ? Object.keys(allData.purchaseReturns).map(key => ({ id: key, ...allData.purchaseReturns[key] })) : [], [allData?.purchaseReturns]);
-    const purchaseOrders = useMemo(() => allData?.purchaseOrders ? Object.keys(allData.purchaseOrders).map(key => ({ id: key, ...allData.purchaseOrders[key] })) : [], [allData?.purchaseOrders]);
-    const posSales = useMemo(() => flattenGroupedData(allData?.posSales), [allData?.posSales]);
-    const posReturns = useMemo(() => {
-        if (!allData?.posReturns) return [];
-        const returns: any[] = [];
-        Object.entries(allData.posReturns).forEach(([key, value]: [string, any]) => {
-            if (value && typeof value === 'object' && value.date) {
-                returns.push({ id: key, ...value });
-            } else if (value && typeof value === 'object') {
-                Object.entries(value).forEach(([subKey, subValue]: [string, any]) => {
-                     if (subValue && typeof subValue === 'object') {
-                        returns.push({ id: subKey, ...subValue });
-                    }
-                });
-            }
-        });
-        return returns;
-    }, [allData?.posReturns]);
+    const salesInvoices = useMemo(() => flattenGroupedData(allData?.salesInvoices, 'salesInvoices'), [allData?.salesInvoices, flattenGroupedData]);
+    const salesReturns = useMemo(() => flattenGroupedData(allData?.salesReturns, 'salesReturns'), [allData?.salesReturns, flattenGroupedData]);
+    const purchaseInvoices = useMemo(() => flattenGroupedData(allData?.purchaseInvoices, 'purchaseInvoices'), [allData?.purchaseInvoices, flattenGroupedData]);
+    const purchaseReturns = useMemo(() => flattenGroupedData(allData?.purchaseReturns, 'purchaseReturns'), [allData?.purchaseReturns, flattenGroupedData]);
+    const purchaseOrders = useMemo(() => flattenGroupedData(allData?.purchaseOrders, 'purchaseOrders'), [allData?.purchaseOrders, flattenGroupedData]);
+    const posSales = useMemo(() => flattenGroupedData(allData?.posSales, 'posSales'), [allData?.posSales, flattenGroupedData]);
+    const posReturns = useMemo(() => flattenGroupedData(allData?.posReturns, 'posReturns'), [allData?.posReturns, flattenGroupedData]);
     const posSessions = useMemo(() => allData?.posSessions ? Object.keys(allData.posSessions).map(key => ({ id: key, ...allData.posSessions[key] })) : [], [allData?.posSessions]);
-    const posAuditLogs = useMemo(() => allData?.posAuditLogs ? Object.keys(allData.posAuditLogs).map(key => ({ id: key, ...allData.posAuditLogs[key] })) : [], [allData?.posAuditLogs]);
+    const posAuditLogs = useMemo(() => flattenGroupedData(allData?.posAuditLogs, 'posAuditLogs'), [allData?.posAuditLogs, flattenGroupedData]);
     const heldInvoices = useMemo(() => allData?.heldInvoices ? Object.keys(allData.heldInvoices).map(key => ({ id: key, ...allData.heldInvoices[key] })) : [], [allData?.heldInvoices]);
     const posCounters = useMemo(() => allData?.posCounters || {}, [allData?.posCounters]);
     
     // Accounting
-    const expenses = useMemo(() => allData?.expenses ? Object.keys(allData.expenses).map(key => ({ id: key, ...allData.expenses[key] })) : [], [allData?.expenses]);
-    const exceptionalIncomes = useMemo(() => allData?.exceptionalIncomes ? Object.keys(allData.exceptionalIncomes).map(key => ({ id: key, ...allData.exceptionalIncomes[key] })) : [], [allData?.exceptionalIncomes]);
-    const customerPayments = useMemo(() => allData?.customerPayments ? Object.keys(allData.customerPayments).map(key => ({ id: key, ...allData.customerPayments[key] })) : [], [allData?.customerPayments]);
-    const supplierPayments = useMemo(() => allData?.supplierPayments ? Object.keys(allData.supplierPayments).map(key => ({ id: key, ...allData.supplierPayments[key] })) : [], [allData?.supplierPayments]);
-    const treasuryTransactions = useMemo(() => allData?.treasuryTransactions ? Object.keys(allData.treasuryTransactions).map(key => ({ id: key, ...allData.treasuryTransactions[key] })) : [], [allData?.treasuryTransactions]);
-    const profitDistributions = useMemo(() => allData?.profitDistributions ? Object.keys(allData.profitDistributions).map(key => ({ id: key, ...allData.profitDistributions[key] })) : [], [allData?.profitDistributions]);
-    const priceChangeLogs = useMemo(() => allData?.priceChangeLogs ? Object.keys(allData.priceChangeLogs).map(key => ({ id: key, ...allData.priceChangeLogs[key] })) : [], [allData?.priceChangeLogs]);
+    const expenses = useMemo(() => flattenGroupedData(allData?.expenses, 'expenses'), [allData?.expenses, flattenGroupedData]);
+    const exceptionalIncomes = useMemo(() => flattenGroupedData(allData?.exceptionalIncomes, 'exceptionalIncomes'), [allData?.exceptionalIncomes, flattenGroupedData]);
+    const customerPayments = useMemo(() => flattenGroupedData(allData?.customerPayments, 'customerPayments'), [allData?.customerPayments, flattenGroupedData]);
+    const supplierPayments = useMemo(() => flattenGroupedData(allData?.supplierPayments, 'supplierPayments'), [allData?.supplierPayments, flattenGroupedData]);
+    const treasuryTransactions = useMemo(() => flattenGroupedData(allData?.treasuryTransactions, 'treasuryTransactions'), [allData?.treasuryTransactions, flattenGroupedData]);
+    const profitDistributions = useMemo(() => flattenGroupedData(allData?.profitDistributions, 'profitDistributions'), [allData?.profitDistributions, flattenGroupedData]);
+    const priceChangeLogs = useMemo(() => flattenGroupedData(allData?.priceChangeLogs, 'priceChangeLogs'), [allData?.priceChangeLogs, flattenGroupedData]);
     
     // HR
     const employees = useMemo(() => allData?.employees ? Object.keys(allData.employees).map(key => ({ id: key, ...allData.employees[key] })) : [], [allData?.employees]);
-    const employeeAdvances = useMemo(() => allData?.employeeAdvances ? Object.keys(allData.employeeAdvances).map(key => ({ id: key, ...allData.employeeAdvances[key] })) : [], [allData?.employeeAdvances]);
-    const employeeAdjustments = useMemo(() => allData?.employeeAdjustments ? Object.keys(allData.employeeAdjustments).map(key => ({ id: key, ...allData.employeeAdjustments[key] })) : [], [allData?.employeeAdjustments]);
-    const repRemittances = useMemo(() => allData?.repRemittances ? Object.keys(allData.repRemittances).map(key => ({ id: key, ...allData.repRemittances[key] })) : [], [allData?.repRemittances]);
-    const payrollRecords = useMemo(() => allData?.payrollRecords ? Object.keys(allData.payrollRecords).map(key => ({ id: key, ...allData.payrollRecords[key] })) : [], [allData?.payrollRecords]);
+    const employeeAdvances = useMemo(() => flattenGroupedData(allData?.employeeAdvances, 'employeeAdvances'), [allData?.employeeAdvances, flattenGroupedData]);
+    const employeeAdjustments = useMemo(() => flattenGroupedData(allData?.employeeAdjustments, 'employeeAdjustments'), [allData?.employeeAdjustments, flattenGroupedData]);
+    const repRemittances = useMemo(() => flattenGroupedData(allData?.repRemittances, 'repRemittances'), [allData?.repRemittances, flattenGroupedData]);
+    const payrollRecords = useMemo(() => flattenGroupedData(allData?.payrollRecords, 'payrollRecords'), [allData?.payrollRecords, flattenGroupedData]);
     
     // Assets
-    const fixedAssets = useMemo(() => allData?.fixedAssets ? Object.keys(allData.fixedAssets).map(key => ({ id: key, ...allData.fixedAssets[key] })) : [], [allData?.fixedAssets]);
-    const depreciationRecords = useMemo(() => allData?.depreciationRecords ? Object.keys(allData.depreciationRecords).map(key => ({ id: key, ...allData.depreciationRecords[key] })) : [], [allData?.depreciationRecords]);
+    const fixedAssets = useMemo(() => flattenGroupedData(allData?.fixedAssets, 'fixedAssets'), [allData?.fixedAssets, flattenGroupedData]);
+    const depreciationRecords = useMemo(() => flattenGroupedData(allData?.depreciationRecords, 'depreciationRecords'), [allData?.depreciationRecords, flattenGroupedData]);
 
     const inventory = useMemo(() => {
         if (!allData?.inventory) return [];
@@ -452,12 +432,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             Object.keys(allData.inventory[warehouseId]).forEach(sectionId => {
                 const sectionData = allData.inventory[warehouseId][sectionId];
                 if (sectionData && typeof sectionData === 'object') {
-                    result.push({
-                        id: `${warehouseId}-${sectionId}`,
-                        warehouseId: warehouseId,
-                        sectionId: sectionId,
-                        items: sectionData
-                    });
+                    result.push({ id: `${warehouseId}-${sectionId}`, warehouseId, sectionId, items: sectionData });
                 }
             });
         });
@@ -493,110 +468,65 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           });
           return committed ? snapshot.val() : null;
         } catch (e: any) {
-            console.error('Failed to get next ID from Firebase:', e);
+            console.error('Failed to get next ID:', e);
             return null;
         }
     }, [isOnline, allData?.counters, updateQueueCount]);
 
     const dbAction = useCallback(async (path: string, action: 'add' | 'update' | 'remove' | 'transaction', payload?: any, priority: 'high' | 'normal' | 'low' = 'normal'): Promise<string | void> => {
         const sanitizedPayload = sanitize(payload);
+        let finalPath = path;
+
+        // Auto-partitioning logic for 'add'
+        if (action === 'add' && PARTITION_CONFIG[path]) {
+            const dateKey = PARTITION_CONFIG[path];
+            const dateVal = sanitizedPayload[dateKey];
+            if (dateVal) {
+                const partitionRel = getPartitionRelativePath(path, dateVal);
+                if (partitionRel) finalPath = `${path}/${partitionRel}`;
+            }
+        }
+
+        // Resolved path logic for 'update' and 'remove'
+        if ((action === 'update' || action === 'remove') && !payload.root) {
+             const resolved = idPathMap.current.get(payload.id);
+             if (resolved) finalPath = resolved;
+             else if (action === 'update') finalPath = `${path}/${payload.id}`;
+        }
 
         const performAction = async (db: Database | null) => {
-            if (!db) {
-                throw new Error("Database not initialized");
-            }
-    
+            if (!db) throw new Error("Database not initialized");
             if (action === 'add') {
-                const newRef = fbPush(ref(db, path));
+                const newRef = fbPush(ref(db, finalPath));
                 await fbSet(newRef, sanitizedPayload);
                 return newRef.key || undefined;
             } else if (action === 'update') {
-                const updatePath = `${path}/${payload.id}`;
-                await fbUpdate(ref(db, updatePath), sanitizedPayload.data);
+                await fbUpdate(ref(db, finalPath), sanitizedPayload.data);
             } else if (action === 'remove') {
-                const finalPath = payload.root ? path : `${path}/${payload.id}`;
-                await fbRemove(ref(db, finalPath));
+                const p = payload.root ? finalPath : (idPathMap.current.get(payload.id) || `${finalPath}/${payload.id}`);
+                await fbRemove(ref(db, p));
             } else if (action === 'transaction') {
-                const counterRef = ref(db, payload.path);
-                await runTransaction(counterRef, (currentValue) => (currentValue || 0) + 1);
+                await runTransaction(ref(db, payload.path), (cv) => (cv || 0) + 1);
             }
         };
 
         if (!isOnline) {
-            console.log(`Action queued for offline sync: ${action} on ${path}`);
             const queue = await localforage.getItem<any[]>(SYNC_QUEUE_KEY) || [];
             let newId: any;
             const timestamp = new Date().toISOString();
             if (action === 'add') {
                 newId = `offline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                queue.push({ path, action, payload: sanitizedPayload, id: newId, timestamp, priority });
+                queue.push({ path: finalPath, action, payload: sanitizedPayload, id: newId, timestamp, priority });
             } else {
-                 queue.push({ path, action, payload: sanitizedPayload, timestamp, priority });
+                 queue.push({ path: finalPath, action, payload: sanitizedPayload, timestamp, priority });
             }
             await localforage.setItem(SYNC_QUEUE_KEY, queue);
             await updateQueueCount();
-            
-            setAllData((prev: any) => {
-                const newData = JSON.parse(JSON.stringify(prev));
-                if (action === 'add' && newId) {
-                    if (!newData[path]) newData[path] = {};
-                    newData[path][newId] = sanitizedPayload;
-                } else if (action === 'update') {
-                    if (newData[path] && newData[path][payload.id]) {
-                        newData[path][payload.id] = { ...newData[path][payload.id], ...sanitizedPayload.data };
-                    }
-                } else if (action === 'remove') {
-                    if (payload.root) {
-                        delete newData[path];
-                    } else if (newData[path] && newData[path][payload.id]) {
-                        delete newData[path][payload.id];
-                    }
-                }
-
-                if (newData[path]) {
-                     localforage.setItem(path, newData[path]).catch(console.error);
-                } else {
-                     localforage.removeItem(path).catch(console.error);
-                }
-
-                return newData;
-            });
-
             return newId;
         } else {
-            const result = await performAction(database);
-
-            setAllData((prev: any) => {
-                const newData = { ...prev };
-                if ((action === 'add' || action === 'update') && !newData[path]) {
-                    newData[path] = {};
-                }
-                if (newData[path]) {
-                    newData[path] = { ...newData[path] };
-                }
-
-                const effectiveId = action === 'add' ? (result as string) : payload?.id;
-
-                if (action === 'add' && effectiveId) {
-                    newData[path][effectiveId] = sanitizedPayload;
-                } else if (action === 'update' && effectiveId) {
-                    if (newData[path][effectiveId]) {
-                        newData[path][effectiveId] = { ...newData[path][effectiveId], ...sanitizedPayload.data };
-                    }
-                } else if (action === 'remove') {
-                    if (payload.root) {
-                        delete newData[path];
-                    } else if (effectiveId && newData[path] && newData[path][effectiveId]) {
-                        delete newData[path][effectiveId];
-                    }
-                }
-                
-                return newData;
-            });
-
-            return result;
+            return performAction(database);
         }
-    }, [isOnline, updateQueueCount, database]);
+    }, [isOnline, updateQueueCount]);
 
     const value = {
         allItems, items, customers, suppliers, warehouses, cashAccounts, partners, users, deliveryStaff, itemGroups, itemSections, itemCategories, itemSubCategories1, itemSubCategories2, inventoryZones, inventorySections, itemColors, itemSizes, barcodeDesigns, posTerminals, promotions, roles, settings, inventory, restaurantTables, paymentMethods, sellers, targets, licenses, snoozedRecommendations, syncHistory, customerVisits, loginHistory, gratuityLogs, gratuityDistributions,
@@ -604,8 +534,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         salesInvoices, salesReturns, purchaseInvoices, purchaseReturns, posSales, posReturns, posSessions, posAuditLogs, heldInvoices, posCounters,
         expenses, exceptionalIncomes, customerPayments, supplierPayments, treasuryTransactions, profitDistributions, priceChangeLogs,
         purchaseOrders,
-         employees, employeeAdvances, employeeAdjustments, repRemittances, payrollRecords, fixedAssets, depreciationRecords,
-         dbAction, getNextId,
+        employees, employeeAdvances, employeeAdjustments, repRemittances, payrollRecords, fixedAssets, depreciationRecords,
+        dbAction, getNextId,
         loading: isLoading,
         isOnline,
         syncQueueCount,
@@ -617,25 +547,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     
     if (isLoading && !Object.keys(allData).length) {
-         return (
-            <div className="flex h-screen w-full items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin" />
-                <p className="mr-2">جارٍ تحميل البيانات الأولية للتطبيق...</p>
-            </div>
-        );
+         return <div className="flex h-screen w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /><p className="mr-2">جارٍ التحميل...</p></div>;
     }
 
-    return (
-        <DataContext.Provider value={value}>
-            {children}
-        </DataContext.Provider>
-    );
+    return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };
 
 export const useData = (): DataContextType => {
   const context = useContext(DataContext);
-  if (context === undefined) {
-    throw new Error('useData must be used within a DataProvider');
-  }
+  if (context === undefined) throw new Error('useData must be used within a DataProvider');
   return context;
 };
