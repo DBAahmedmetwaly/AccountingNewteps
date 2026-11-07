@@ -36,8 +36,8 @@ const Logo = () => {
         <div className="flex flex-col items-center justify-center gap-2 mb-10">
             <h1 className="text-4xl font-bold text-primary">{companyName}</h1>
              <div className="relative flex items-center justify-center gap-8 mt-8">
-                <Scale className="h-20 w-20 text-muted-foreground/80" />
-                <Laptop className="h-20 w-20 text-yellow-500" />
+                <Scale className="h-20 w-20 text-green-500/80" />
+                <Laptop className="h-20 w-20 text-green-500" />
             </div>
         </div>
     );
