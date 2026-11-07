@@ -15,13 +15,13 @@ import { getMessaging } from "firebase/messaging";
 //   appId: "1:152457207026:web:c7cbac5d940ddaf87f046b"
 // };
 const firebaseConfig = {
-  apiKey: "AIzaSyB5eWTzBcT7WFXEpUd0MavS4rhrpciyxi4",
-  authDomain: "multibranch-accounting.firebaseapp.com",
-  databaseURL: "https://multibranch-accounting-default-rtdb.firebaseio.com",
-  projectId: "multibranch-accounting",
-  storageBucket: "multibranch-accounting.appspot.com",
-  messagingSenderId: "152457207026",
-  appId: "1:152457207026:web:c7cbac5d940ddaf87f046b"
+  apiKey: "AIzaSyDSJdpoRR3U8rIjCLmhkVBvN2DKFkJ91Ns",
+  authDomain: "meto-pos.firebaseapp.com",
+  databaseURL: "https://meto-pos-default-rtdb.firebaseio.com",
+  projectId: "meto-pos",
+  storageBucket: "meto-pos.firebasestorage.app",
+  messagingSenderId: "800263991208",
+  appId: "1:800263991208:web:d1be71624dbf263106b79d"
 };
 
 // تهيئة تطبيق Firebase
