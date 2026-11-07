@@ -8,13 +8,13 @@ import { useData, PARTITION_CONFIG, getPartitionRelativePath } from "@/contexts/
 import { Loader2, RefreshCw, AlertTriangle, Trash2, Database } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { ref, get, set, remove } from 'firebase/database';
+import { ref, get, update } from 'firebase/database';
 import { database } from '@/lib/firebase';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function DatabaseReEngineeringPage() {
-    const { allData, isOnline, dbAction } = useData();
+    const { allData, isOnline } = useData();
     const { toast } = useToast();
     const [status, setStatus] = useState<'idle' | 'scanning' | 'migrating' | 'completed' | 'error'>('idle');
     const [progress, setProgress] = useState(0);
@@ -55,8 +55,9 @@ export default function DatabaseReEngineeringPage() {
                 const data = snapshot.val();
                 const entries = Object.entries(data);
                 
-                // Filter entries that are NOT already in the new structure (they have a date field at top level)
-                const flatEntries = entries.filter(([, val]: [string, any]) => val && val[dateKey]);
+                // Filter entries that are at the root level (not yet partitioned)
+                // These entries will have the dateKey directly on the value object
+                const flatEntries = entries.filter(([, val]: [string, any]) => val && typeof val === 'object' && val[dateKey]);
 
                 if (flatEntries.length === 0) {
                     addLog(`${collectionName} منظمة بالفعل.`);
@@ -64,7 +65,8 @@ export default function DatabaseReEngineeringPage() {
                     addLog(`تم العثور على ${flatEntries.length} سجل غير منظم في ${collectionName}.`);
                     setStatus('migrating');
 
-                    const batchSize = 20;
+                    // Batch processing for atomic move (Update new path + Null old path)
+                    const batchSize = 25; 
                     for (let j = 0; j < flatEntries.length; j += batchSize) {
                         const batch = flatEntries.slice(j, j + batchSize);
                         const updates: any = {};
@@ -73,16 +75,19 @@ export default function DatabaseReEngineeringPage() {
                             const dateVal = val[dateKey];
                             const relativePath = getPartitionRelativePath(collectionName, dateVal);
                             if (relativePath) {
-                                updates[`${collectionName}/${relativePath}/${id}`] = val;
+                                // 1. Set data in the new partitioned path
+                                updates[`${relativePath}/${id}`] = val;
+                                // 2. Delete data from the old flat path (set to null)
+                                updates[id] = null;
                             }
                         });
 
-                        // 1. Copy to new structure
-                        for (const [path, content] of Object.entries(updates)) {
-                            await set(ref(database, path), content);
+                        // Apply the move atomically on the collection root
+                        if (Object.keys(updates).length > 0) {
+                            await update(ref(database, collectionName), updates);
                         }
                         
-                        addLog(`تم نقل الدفعة ${Math.floor(j/batchSize) + 1} من ${collectionName}.`);
+                        addLog(`تم نقل وحذف الدفعة ${Math.floor(j/batchSize) + 1} من ${collectionName}.`);
                     }
                 }
                 
@@ -91,43 +96,12 @@ export default function DatabaseReEngineeringPage() {
 
             setStatus('completed');
             addLog("اكتملت عملية إعادة هندسة قاعدة البيانات بنجاح.");
-            toast({ title: 'نجاح', description: 'تم تنظيم البيانات في الهيكل الزمني الجديد.' });
+            toast({ title: 'نجاح', description: 'تم تنظيم البيانات وحذف السجلات القديمة بنجاح.' });
         } catch (error: any) {
             console.error(error);
             setStatus('error');
             addLog(`خطأ: ${error.message}`);
             toast({ variant: 'destructive', title: 'خطأ في العملية', description: error.message });
-        }
-    };
-
-    const cleanupOldData = async () => {
-        if (!confirm('سيتم حذف البيانات من المسارات القديمة (المسطحة). تأكد من اكتمال عملية النقل أولاً. هل تريد المتابعة؟')) return;
-        
-        setStatus('migrating');
-        addLog("بدء عملية تنظيف المسارات القديمة...");
-        
-        try {
-            if (!database) return;
-            for (const collectionName of collectionsToProcess) {
-                const dateKey = PARTITION_CONFIG[collectionName];
-                const collRef = ref(database, collectionName);
-                const snapshot = await get(collRef);
-                
-                if (snapshot.exists()) {
-                    const data = snapshot.val();
-                    const flatEntries = Object.entries(data).filter(([, val]: [string, any]) => val && val[dateKey]);
-                    
-                    for (const [id] of flatEntries) {
-                        await remove(ref(database, `${collectionName}/${id}`));
-                    }
-                    if (flatEntries.length > 0) addLog(`تم تنظيف ${flatEntries.length} سجل من ${collectionName}.`);
-                }
-            }
-            addLog("تم الانتهاء من التنظيف.");
-            setStatus('completed');
-        } catch (e: any) {
-            addLog(`خطأ في التنظيف: ${e.message}`);
-            setStatus('error');
         }
     };
 
@@ -139,15 +113,15 @@ export default function DatabaseReEngineeringPage() {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2"><Database className="text-primary"/> تنظيم البيانات التشغيلية</CardTitle>
                         <CardDescription>
-                            تقوم هذه الأداة بإعادة تنظيم الفواتير، الحركات، والعمليات المالية في هيكل زمني (سنة-شهر/يوم) لتحسين سرعة البحث والتقارير.
+                            تقوم هذه الأداة بإعادة تنظيم الفواتير، الحركات، والعمليات المالية في هيكل زمني (سنة-شهر/يوم) لتحسين سرعة البحث والتقارير وحذف البيانات المكررة.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                        <Alert className="bg-amber-50 dark:bg-amber-900/20 border-amber-200 text-amber-900 dark:text-amber-100">
+                        <Alert variant="destructive" className="bg-amber-50 dark:bg-amber-900/20 border-amber-200 text-amber-900 dark:text-amber-100">
                             <AlertTriangle className="h-4 w-4" />
                             <AlertTitle>تنبيه هام</AlertTitle>
                             <AlertDescription>
-                                هذه العملية تقوم بتعديل هيكلية البيانات في قاعدة البيانات السحابية. يرجى التأكد من استقرار الاتصال بالإنترنت قبل البدء. لن يتم حذف أي بيانات قديمة إلا بعد اكتمال النقل بنجاح.
+                                هذه العملية تقوم بنقل السجلات فعلياً من المسارات القديمة إلى المسارات الجديدة المنظمة. سيتم حذف البيانات من المسارات القديمة فور نجاح كتابتها في المسار الجديد.
                             </AlertDescription>
                         </Alert>
 
@@ -169,14 +143,7 @@ export default function DatabaseReEngineeringPage() {
                             {logs.length === 0 && <p className="text-center text-muted-foreground py-10 italic">سجل العمليات سيظهر هنا...</p>}
                         </ScrollArea>
                     </CardContent>
-                    <CardFooter className="flex justify-between border-t p-4 gap-4">
-                        <Button 
-                            variant="destructive" 
-                            onClick={cleanupOldData} 
-                            disabled={status !== 'completed'}
-                        >
-                            <Trash2 className="ml-2 h-4 w-4"/> حذف المسارات القديمة (تنظيف)
-                        </Button>
+                    <CardFooter className="flex justify-end border-t p-4">
                         <Button 
                             size="lg" 
                             onClick={handleReEngineer} 
@@ -184,7 +151,7 @@ export default function DatabaseReEngineeringPage() {
                             className="min-w-[200px]"
                         >
                             {status === 'migrating' || status === 'scanning' ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <RefreshCw className="ml-2 h-4 w-4" />}
-                            {status === 'migrating' ? 'جاري النقل...' : 'بدء إعادة الهندسة'}
+                            {status === 'migrating' ? 'جاري النقل والحذف...' : 'بدء إعادة الهندسة'}
                         </Button>
                     </CardFooter>
                 </Card>
