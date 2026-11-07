@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -6,14 +5,16 @@ import PageHeader from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useData, PARTITION_CONFIG, getPartitionRelativePath } from "@/contexts/data-provider";
-import { Loader2, RefreshCw, AlertTriangle, CheckCircle, Database } from "lucide-react";
+import { Loader2, RefreshCw, AlertTriangle, Trash2, Database } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { ref, get, set, remove } from 'firebase/database';
 import { database } from '@/lib/firebase';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function DatabaseReEngineeringPage() {
-    const { allData, isOnline } = useData();
+    const { allData, isOnline, dbAction } = useData();
     const { toast } = useToast();
     const [status, setStatus] = useState<'idle' | 'scanning' | 'migrating' | 'completed' | 'error'>('idle');
     const [progress, setProgress] = useState(0);
@@ -43,7 +44,6 @@ export default function DatabaseReEngineeringPage() {
                 
                 addLog(`فحص المجموعة: ${collectionName}...`);
                 
-                // Fetch direct child nodes of the collection
                 const collRef = ref(database, collectionName);
                 const snapshot = await get(collRef);
                 
@@ -56,7 +56,7 @@ export default function DatabaseReEngineeringPage() {
                 const entries = Object.entries(data);
                 
                 // Filter entries that are NOT already in the new structure (they have a date field at top level)
-                const flatEntries = entries.filter(([, val]: [any, any]) => val && val[dateKey]);
+                const flatEntries = entries.filter(([, val]: [string, any]) => val && val[dateKey]);
 
                 if (flatEntries.length === 0) {
                     addLog(`${collectionName} منظمة بالفعل.`);
@@ -64,36 +64,24 @@ export default function DatabaseReEngineeringPage() {
                     addLog(`تم العثور على ${flatEntries.length} سجل غير منظم في ${collectionName}.`);
                     setStatus('migrating');
 
-                    // Process in batches of 20 to avoid timeouts
                     const batchSize = 20;
                     for (let j = 0; j < flatEntries.length; j += batchSize) {
                         const batch = flatEntries.slice(j, j + batchSize);
                         const updates: any = {};
-                        const deletes: any = {};
 
-                        batch.forEach(([id, val]) => {
+                        batch.forEach(([id, val]: [string, any]) => {
                             const dateVal = val[dateKey];
                             const relativePath = getPartitionRelativePath(collectionName, dateVal);
                             if (relativePath) {
                                 updates[`${collectionName}/${relativePath}/${id}`] = val;
-                                deletes[`${collectionName}/${id}`] = null; // Prepare for deletion from old path
                             }
                         });
 
                         // 1. Copy to new structure
-                        await set(ref(database), { ...allData, ...updates }); // This is a simplified merge, ideally use individual sets or a large update object
-                        
-                        // In Realtime DB, we can use a multi-path update for efficiency
-                        const rootRef = ref(database);
-                        await set(ref(database), { ...updates }); // Note: 'set' at subpaths is better
-                        
-                        // For safety in this script, we'll use individual set/remove or a combined update if supported
                         for (const [path, content] of Object.entries(updates)) {
                             await set(ref(database, path), content);
                         }
                         
-                        // 2. Deliberately NOT deleting in Phase 1 for safety. 
-                        // The user can run a separate cleanup or we do it after full validation.
                         addLog(`تم نقل الدفعة ${Math.floor(j/batchSize) + 1} من ${collectionName}.`);
                     }
                 }
@@ -119,17 +107,18 @@ export default function DatabaseReEngineeringPage() {
         addLog("بدء عملية تنظيف المسارات القديمة...");
         
         try {
+            if (!database) return;
             for (const collectionName of collectionsToProcess) {
                 const dateKey = PARTITION_CONFIG[collectionName];
-                const collRef = ref(database!, collectionName);
+                const collRef = ref(database, collectionName);
                 const snapshot = await get(collRef);
                 
                 if (snapshot.exists()) {
                     const data = snapshot.val();
-                    const flatEntries = Object.entries(data).filter(([, val]: [any, any]) => val && val[dateKey]);
+                    const flatEntries = Object.entries(data).filter(([, val]: [string, any]) => val && val[dateKey]);
                     
                     for (const [id] of flatEntries) {
-                        await remove(ref(database!, `${collectionName}/${id}`));
+                        await remove(ref(database, `${collectionName}/${id}`));
                     }
                     if (flatEntries.length > 0) addLog(`تم تنظيف ${flatEntries.length} سجل من ${collectionName}.`);
                 }
@@ -154,7 +143,7 @@ export default function DatabaseReEngineeringPage() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                        <Alert variant="warning" className="bg-amber-50 dark:bg-amber-900/20 border-amber-200">
+                        <Alert className="bg-amber-50 dark:bg-amber-900/20 border-amber-200 text-amber-900 dark:text-amber-100">
                             <AlertTriangle className="h-4 w-4" />
                             <AlertTitle>تنبيه هام</AlertTitle>
                             <AlertDescription>
@@ -194,7 +183,7 @@ export default function DatabaseReEngineeringPage() {
                             disabled={status === 'migrating' || status === 'scanning' || !isOnline}
                             className="min-w-[200px]"
                         >
-                            {status === 'migrating' || status === 'scanning' ? <Loader2 className="animate-spin ml-2 h-4 w-4"/> : <RefreshCw className="ml-2 h-4 w-4"/>}
+                            {status === 'migrating' || status === 'scanning' ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <RefreshCw className="ml-2 h-4 w-4" />}
                             {status === 'migrating' ? 'جاري النقل...' : 'بدء إعادة الهندسة'}
                         </Button>
                     </CardFooter>

@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { createContext, useContext, ReactNode, useEffect, useMemo, useState, useCallback, useRef } from 'react';
@@ -327,6 +326,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const allNodes = [...STATIC_NODES, ...Object.keys(PARTITION_CONFIG), 'counters', 'syncHistory', 'payrollRecords'];
             
             allNodes.forEach(nodePath => {
+                if (!database) return;
                 const dbRef = ref(database, nodePath);
                 const unsubscribe = onValue(dbRef, (snapshot) => {
                     if (!isMounted) return;
@@ -348,7 +348,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
     }, [updateQueueCount]); 
     
-    // Memoized states
+    // Master Data
     const allItems = useMemo(() => allData?.items ? Object.keys(allData.items).map(key => ({ id: key, ...allData.items[key] })) : [], [allData?.items]);
     const items = useMemo(() => allItems.filter(item => !item.isDisabled), [allItems]);
     const customers = useMemo(() => allData?.customers ? Object.keys(allData.customers).map(key => ({ id: key, ...allData.customers[key] })) : [], [allData?.customers]);

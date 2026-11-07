@@ -5,6 +5,15 @@ import { getAuth } from "firebase/auth";
 import { getMessaging } from "firebase/messaging";
 
 // Your web app's Firebase configuration
+// const firebaseConfig = {
+//   apiKey: "AIzaSyB5eWTzBcT7WFXEpUd0MavS4rhrpciyxi4",
+//   authDomain: "multibranch-accounting.firebaseapp.com",
+//   databaseURL: "https://multibranch-accounting-default-rtdb.firebaseio.com",
+//   projectId: "multibranch-accounting",
+//   storageBucket: "multibranch-accounting.appspot.com",
+//   messagingSenderId: "152457207026",
+//   appId: "1:152457207026:web:c7cbac5d940ddaf87f046b"
+// };
 const firebaseConfig = {
   apiKey: "AIzaSyB5eWTzBcT7WFXEpUd0MavS4rhrpciyxi4",
   authDomain: "multibranch-accounting.firebaseapp.com",
